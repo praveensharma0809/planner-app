@@ -8,7 +8,6 @@ interface Subject {
   id: string;
   user_id: string;
   name: string;
-  exam_deadline: string | null;
   created_at: string;
   study_units?: StudyUnit[];
 }
@@ -18,8 +17,9 @@ interface StudyUnit {
   user_id: string;
   subject_id: string;
   title: string;
-  total_lectures: number;
-  average_duration_minutes: number;
+  estimated_minutes: number;
+  deadline: string | null;
+  priority: number;
   created_at: string;
 }
 
@@ -33,35 +33,15 @@ export function SubjectCard({ subject, onDeleteSubject, onStudyUnitsChange }: Su
   const [isExpanded, setIsExpanded] = useState(false);
   const [isAddingUnit, setIsAddingUnit] = useState(false);
   const [unitTitle, setUnitTitle] = useState("");
-  const [totalLectures, setTotalLectures] = useState(10);
-  const [averageDuration, setAverageDuration] = useState(45);
+  const [estimatedMinutes, setEstimatedMinutes] = useState(60);
+  const [unitDeadline, setUnitDeadline] = useState("");
+  const [priority, setPriority] = useState(3);
 
   const studyUnits = subject.study_units || [];
   const totalStudyTime = studyUnits.reduce(
-    (acc, unit) => acc + (unit.total_lectures * unit.average_duration_minutes),
+    (acc, unit) => acc + unit.estimated_minutes,
     0
   );
-
-  const formatDeadline = (dateStr: string | null) => {
-    if (!dateStr) return null;
-    const date = new Date(dateStr);
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(date);
-  };
-
-  const getDaysUntilDeadline = (dateStr: string | null) => {
-    if (!dateStr) return null;
-    const deadline = new Date(dateStr);
-    const today = new Date();
-    const diffTime = deadline.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
-  const daysUntil = getDaysUntilDeadline(subject.exam_deadline);
 
   const handleAddStudyUnit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,8 +54,9 @@ export function SubjectCard({ subject, onDeleteSubject, onStudyUnitsChange }: Su
         user_id: subject.user_id,
         subject_id: subject.id,
         title: unitTitle.trim(),
-        total_lectures: totalLectures,
-        average_duration_minutes: averageDuration,
+        estimated_minutes: estimatedMinutes,
+        deadline: unitDeadline || null,
+        priority,
       });
 
       if (error) {
@@ -84,8 +65,9 @@ export function SubjectCard({ subject, onDeleteSubject, onStudyUnitsChange }: Su
       }
 
       setUnitTitle("");
-      setTotalLectures(10);
-      setAverageDuration(45);
+      setEstimatedMinutes(60);
+      setUnitDeadline("");
+      setPriority(3);
       onStudyUnitsChange();
     } catch (error) {
       console.error("Error adding study unit:", error);
@@ -107,31 +89,9 @@ export function SubjectCard({ subject, onDeleteSubject, onStudyUnitsChange }: Su
       <div className="p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-2">
-              <h3 className="text-xl font-medium text-neutral-100">
-                {subject.name}
-              </h3>
-              {daysUntil !== null && (
-                <span
-                  className={`
-                    text-xs px-2.5 py-1 rounded-full border font-medium
-                    ${
-                      daysUntil < 7
-                        ? "bg-red-500/10 text-red-400 border-red-500/20"
-                        : daysUntil < 30
-                        ? "bg-orange-500/10 text-orange-400 border-orange-500/20"
-                        : "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                    }
-                  `}
-                >
-                  {daysUntil < 0
-                    ? "Passed"
-                    : daysUntil === 0
-                    ? "Today"
-                    : `${daysUntil}d left`}
-                </span>
-              )}
-            </div>
+            <h3 className="text-xl font-medium text-neutral-100 mb-2">
+              {subject.name}
+            </h3>
 
             <div className="flex items-center gap-4 text-sm text-neutral-400">
               <span className="flex items-center gap-1.5">
@@ -164,26 +124,6 @@ export function SubjectCard({ subject, onDeleteSubject, onStudyUnitsChange }: Su
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
                   {Math.round(totalStudyTime / 60)}h {totalStudyTime % 60}m total
-                </span>
-              )}
-
-              {subject.exam_deadline && (
-                <span className="flex items-center gap-1.5">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                    <line x1="3" y1="10" x2="21" y2="10"></line>
-                  </svg>
-                  {formatDeadline(subject.exam_deadline)}
                 </span>
               )}
             </div>
@@ -264,14 +204,14 @@ export function SubjectCard({ subject, onDeleteSubject, onStudyUnitsChange }: Su
               />
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs text-neutral-500 mb-1.5">Total Lectures</label>
+                <label className="block text-xs text-neutral-500 mb-1.5">Estimated Minutes</label>
                 <input
                   type="number"
                   min="1"
-                  value={totalLectures}
-                  onChange={(e) => setTotalLectures(Number(e.target.value))}
+                  value={estimatedMinutes}
+                  onChange={(e) => setEstimatedMinutes(Number(e.target.value))}
                   className="
                     w-full px-3 py-2 bg-neutral-900/50 border border-neutral-800 
                     rounded-lg text-neutral-100 text-sm
@@ -281,12 +221,11 @@ export function SubjectCard({ subject, onDeleteSubject, onStudyUnitsChange }: Su
                 />
               </div>
               <div>
-                <label className="block text-xs text-neutral-500 mb-1.5">Avg. Duration (min)</label>
+                <label className="block text-xs text-neutral-500 mb-1.5">Deadline (Optional)</label>
                 <input
-                  type="number"
-                  min="1"
-                  value={averageDuration}
-                  onChange={(e) => setAverageDuration(Number(e.target.value))}
+                  type="date"
+                  value={unitDeadline}
+                  onChange={(e) => setUnitDeadline(e.target.value)}
                   className="
                     w-full px-3 py-2 bg-neutral-900/50 border border-neutral-800 
                     rounded-lg text-neutral-100 text-sm
@@ -294,6 +233,25 @@ export function SubjectCard({ subject, onDeleteSubject, onStudyUnitsChange }: Su
                     transition-all duration-200
                   "
                 />
+              </div>
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1.5">Priority</label>
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(Number(e.target.value))}
+                  className="
+                    w-full px-3 py-2 bg-neutral-900/50 border border-neutral-800 
+                    rounded-lg text-neutral-100 text-sm
+                    focus:outline-none focus:ring-2 focus:ring-neutral-700 focus:border-transparent
+                    transition-all duration-200 cursor-pointer
+                  "
+                >
+                  <option value={1}>High</option>
+                  <option value={2}>Medium-High</option>
+                  <option value={3}>Medium</option>
+                  <option value={4}>Medium-Low</option>
+                  <option value={5}>Low</option>
+                </select>
               </div>
             </div>
 

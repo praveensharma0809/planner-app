@@ -13,7 +13,6 @@ interface Subject {
   id: string;
   user_id: string;
   name: string;
-  exam_deadline: string | null;
   created_at: string;
   study_units?: StudyUnit[];
 }
@@ -23,8 +22,9 @@ interface StudyUnit {
   user_id: string;
   subject_id: string;
   title: string;
-  total_lectures: number;
-  average_duration_minutes: number;
+  estimated_minutes: number;
+  deadline: string | null;
+  priority: number;
   created_at: string;
 }
 
@@ -36,7 +36,6 @@ export default function SubjectsPage() {
   
   // Form state
   const [subjectName, setSubjectName] = useState("");
-  const [examDeadline, setExamDeadline] = useState("");
 
   const fetchSubjects = useCallback(async (userId: string) => {
     const { data, error } = await supabase
@@ -46,8 +45,9 @@ export default function SubjectsPage() {
         study_units (
           id,
           title,
-          total_lectures,
-          average_duration_minutes
+          estimated_minutes,
+          deadline,
+          priority
         )
       `)
       .eq("user_id", userId)
@@ -89,7 +89,6 @@ export default function SubjectsPage() {
       const { error } = await supabase.from("subjects").insert({
         user_id: user.id,
         name: subjectName.trim(),
-        exam_deadline: examDeadline || null,
       });
 
       if (error) {
@@ -98,7 +97,6 @@ export default function SubjectsPage() {
       }
 
       setSubjectName("");
-      setExamDeadline("");
       await fetchSubjects(user.id);
     } catch (error) {
       console.error("Error adding subject:", error);
@@ -178,21 +176,6 @@ export default function SubjectsPage() {
                   className="
                     w-full px-4 py-3 bg-neutral-900/50 border border-neutral-800 
                     rounded-lg text-neutral-100 placeholder-neutral-600
-                    focus:outline-none focus:ring-2 focus:ring-neutral-700 focus:border-transparent
-                    transition-all duration-200
-                  "
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-neutral-400 mb-2">Exam Deadline (Optional)</label>
-                <input
-                  type="date"
-                  value={examDeadline}
-                  onChange={(e) => setExamDeadline(e.target.value)}
-                  className="
-                    w-full px-4 py-3 bg-neutral-900/50 border border-neutral-800 
-                    rounded-lg text-neutral-100
                     focus:outline-none focus:ring-2 focus:ring-neutral-700 focus:border-transparent
                     transition-all duration-200
                   "

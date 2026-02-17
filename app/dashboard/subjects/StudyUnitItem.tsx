@@ -8,8 +8,9 @@ interface StudyUnit {
   user_id: string;
   subject_id: string;
   title: string;
-  total_lectures: number;
-  average_duration_minutes: number;
+  estimated_minutes: number;
+  deadline: string | null;
+  priority: number;
   created_at: string;
 }
 
@@ -19,12 +20,29 @@ interface StudyUnitItemProps {
   onDelete: () => void;
 }
 
+const priorityConfig = {
+  1: { label: "High", className: "bg-red-500/10 text-red-400 border-red-500/20" },
+  2: { label: "Medium-High", className: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
+  3: { label: "Medium", className: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
+  4: { label: "Medium-Low", className: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+  5: { label: "Low", className: "bg-gray-500/10 text-gray-400 border-gray-500/20" },
+};
+
 export function StudyUnitItem({ unit, onDelete }: StudyUnitItemProps) {
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const totalDuration = unit.total_lectures * unit.average_duration_minutes;
-  const hours = Math.floor(totalDuration / 60);
-  const minutes = totalDuration % 60;
+  const priorityStyle = priorityConfig[unit.priority as keyof typeof priorityConfig];
+  const hours = Math.floor(unit.estimated_minutes / 60);
+  const minutes = unit.estimated_minutes % 60;
+
+  const formatDeadline = (dateStr: string | null) => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+    }).format(date);
+  };
 
   const handleDelete = async () => {
     if (!confirm("Are you sure you want to delete this study unit?")) {
@@ -61,24 +79,20 @@ export function StudyUnitItem({ unit, onDelete }: StudyUnitItemProps) {
       "
     >
       <div className="flex-1 min-w-0">
-        <h4 className="text-neutral-200 font-medium mb-1 truncate">
-          {unit.title}
-        </h4>
-        <div className="flex items-center gap-3 text-sm text-neutral-500">
-          <span className="flex items-center gap-1">
-            <svg
-              className="w-3.5 h-3.5"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-            </svg>
-            {unit.total_lectures} {unit.total_lectures === 1 ? "lecture" : "lectures"}
+        <div className="flex items-start gap-2 mb-1">
+          <h4 className="text-neutral-200 font-medium truncate">
+            {unit.title}
+          </h4>
+          <span
+            className={`
+              text-xs px-2 py-1 rounded-full border font-medium flex-shrink-0
+              ${priorityStyle.className}
+            `}
+          >
+            {priorityStyle.label}
           </span>
+        </div>
+        <div className="flex items-center gap-3 text-sm text-neutral-500">
           <span className="flex items-center gap-1">
             <svg
               className="w-3.5 h-3.5"
@@ -92,8 +106,27 @@ export function StudyUnitItem({ unit, onDelete }: StudyUnitItemProps) {
               <circle cx="12" cy="12" r="10"></circle>
               <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
-            {hours > 0 ? `${hours}h ` : ""}{minutes}m total
+            {hours > 0 ? `${hours}h ` : ""}{minutes}m
           </span>
+          {unit.deadline && (
+            <span className="flex items-center gap-1">
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+              {formatDeadline(unit.deadline)}
+            </span>
+          )}
         </div>
       </div>
 
