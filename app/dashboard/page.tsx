@@ -1,13 +1,30 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
+import { TaskCard } from "./TaskCard"
+
+interface User {
+  id: string
+  email?: string
+}
+
+interface Task {
+  id: string
+  user_id: string
+  title: string
+  duration_minutes: number
+  priority: number
+  completed: boolean
+  scheduled_date: string
+  created_at?: string
+}
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
-  const [tasks, setTasks] = useState<any[]>([])
+  const [user, setUser] = useState<User | null>(null)
+  const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
 
   const [title, setTitle] = useState("")
@@ -16,7 +33,7 @@ export default function DashboardPage() {
 
   const today = new Date().toISOString().split("T")[0]
 
-  const fetchTasks = async (userId: string) => {
+  const fetchTasks = useCallback(async (userId: string) => {
     const { data } = await supabase
       .from("tasks")
       .select("*")
@@ -24,8 +41,8 @@ export default function DashboardPage() {
       .eq("scheduled_date", today)
       .order("priority", { ascending: true })
 
-    if (data) setTasks(data)
-  }
+    if (data) setTasks(data as Task[])
+  }, [today])
 
   useEffect(() => {
     const init = async () => {
@@ -36,13 +53,13 @@ export default function DashboardPage() {
         return
       }
 
-      setUser(user)
+      setUser(user as User)
       await fetchTasks(user.id)
       setLoading(false)
     }
 
     init()
-  }, [])
+  }, [fetchTasks, router])
 
   const addTask = async () => {
     if (!title.trim()) return
@@ -71,102 +88,169 @@ export default function DashboardPage() {
     await fetchTasks(user.id)
   }
 
-  if (loading) return <div>Loading...</div>
+  const deleteTask = async (taskId: string) => {
+    await supabase
+      .from("tasks")
+      .delete()
+      .eq("id", taskId)
+
+    await fetchTasks(user.id)
+  }
+
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(date)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-neutral-700 border-t-neutral-400 rounded-full animate-spin"></div>
+          <p className="text-neutral-400 text-sm">Loading your day...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div style={{ padding: "40px", maxWidth: "600px" }}>
-      <h1>Today's Tasks</h1>
+    <div className="min-h-screen bg-neutral-950 text-neutral-100">
+      <div className="max-w-3xl mx-auto px-6 py-12 sm:px-8 lg:py-16">
+        <header className="mb-12">
+          <p className="text-sm text-neutral-500 mb-2 tracking-wide uppercase">
+            {formatDate(new Date())}
+          </p>
+          <h1 className="text-4xl sm:text-5xl font-light text-neutral-100 tracking-tight">
+            Today&apos;s Focus
+          </h1>
+        </header>
 
-      {/* ADD TASK FORM */}
-      <div style={{
-        marginBottom: "30px",
-        padding: "20px",
-        background: "#1e1e1e",
-        borderRadius: "10px"
-      }}>
-        <h3>Add Task</h3>
+        <div className="space-y-8">
+          <div className="bg-neutral-900/30 backdrop-blur-sm border border-neutral-800/50 rounded-2xl p-6 sm:p-8 shadow-xl">
+            <h2 className="text-lg font-medium text-neutral-200 mb-6">Add New Task</h2>
 
-        <input
-          placeholder="Task title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          style={{ width: "100%", padding: "10px", marginBottom: "10px" }}
-        />
+            <div className="space-y-4">
+              <div>
+                <input
+                  type="text"
+                  placeholder="What needs to be done?"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && title.trim()) {
+                      addTask()
+                    }
+                  }}
+                  className="
+                    w-full px-4 py-3 bg-neutral-900/50 border border-neutral-800 
+                    rounded-lg text-neutral-100 placeholder-neutral-600
+                    focus:outline-none focus:ring-2 focus:ring-neutral-700 focus:border-transparent
+                    transition-all duration-200
+                  "
+                />
+              </div>
 
-        <input
-          type="number"
-          placeholder="Duration (minutes)"
-          value={duration}
-          onChange={(e) => setDuration(Number(e.target.value))}
-          style={{ width: "100%", padding: "10px", marginBottom: "10px" }}
-        />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-neutral-400 mb-2">Duration</label>
+                  <input
+                    type="number"
+                    placeholder="60"
+                    value={duration}
+                    onChange={(e) => setDuration(Number(e.target.value))}
+                    className="
+                      w-full px-4 py-3 bg-neutral-900/50 border border-neutral-800 
+                      rounded-lg text-neutral-100 placeholder-neutral-600
+                      focus:outline-none focus:ring-2 focus:ring-neutral-700 focus:border-transparent
+                      transition-all duration-200
+                    "
+                  />
+                </div>
 
-        <select
-          value={priority}
-          onChange={(e) => setPriority(Number(e.target.value))}
-          style={{ width: "100%", padding: "10px", marginBottom: "10px" }}
-        >
-          <option value={1}>Priority 1 (High)</option>
-          <option value={2}>Priority 2</option>
-          <option value={3}>Priority 3</option>
-          <option value={4}>Priority 4</option>
-          <option value={5}>Priority 5 (Low)</option>
-        </select>
+                <div>
+                  <label className="block text-sm text-neutral-400 mb-2">Priority</label>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(Number(e.target.value))}
+                    className="
+                      w-full px-4 py-3 bg-neutral-900/50 border border-neutral-800 
+                      rounded-lg text-neutral-100
+                      focus:outline-none focus:ring-2 focus:ring-neutral-700 focus:border-transparent
+                      transition-all duration-200 cursor-pointer
+                    "
+                  >
+                    <option value={1}>High Priority</option>
+                    <option value={2}>Medium-High</option>
+                    <option value={3}>Medium</option>
+                    <option value={4}>Medium-Low</option>
+                    <option value={5}>Low Priority</option>
+                  </select>
+                </div>
+              </div>
 
-        <button
-          onClick={addTask}
-          style={{
-            padding: "10px 20px",
-            background: "white",
-            color: "black",
-            borderRadius: "6px",
-            border: "none",
-            cursor: "pointer"
-          }}
-        >
-          Add Task
-        </button>
-      </div>
-
-      {/* TASK LIST */}
-      {tasks.length === 0 && <p>No tasks for today.</p>}
-
-      {tasks.map(task => (
-        <div
-          key={task.id}
-          style={{
-            padding: "15px",
-            marginBottom: "10px",
-            background: "#1e1e1e",
-            borderRadius: "8px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center"
-          }}
-        >
-          <div>
-            <h3 style={{ margin: 0 }}>
-              {task.title}
-            </h3>
-            <small>
-              {task.duration_min} min | Priority {task.priority}
-            </small>
+              <button
+                onClick={addTask}
+                disabled={!title.trim()}
+                className="
+                  w-full sm:w-auto px-8 py-3 bg-neutral-100 text-neutral-900 
+                  rounded-lg font-medium
+                  hover:bg-white transition-all duration-200
+                  disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-neutral-100
+                  shadow-lg shadow-black/10 hover:shadow-xl hover:shadow-black/20
+                  transform hover:scale-[1.02] active:scale-[0.98]
+                "
+              >
+                Add Task
+              </button>
+            </div>
           </div>
 
-          <button
-            onClick={() => toggleComplete(task.id, task.completed)}
-            style={{
-              background: task.completed ? "green" : "gray",
-              padding: "8px 12px",
-              borderRadius: "6px",
-              border: "none",
-              cursor: "pointer"
-            }}
-          >
-            {task.completed ? "Done" : "Mark Done"}
-          </button>
+          <div>
+            {tasks.length === 0 ? (
+              <div className="bg-neutral-900/20 backdrop-blur-sm border border-neutral-800/30 rounded-2xl p-12 text-center">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-16 h-16 rounded-full bg-neutral-800/50 flex items-center justify-center">
+                    <svg
+                      className="w-8 h-8 text-neutral-600"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-medium text-neutral-300 mb-2">
+                      Your day is clear
+                    </h3>
+                    <p className="text-neutral-500 text-sm max-w-md mx-auto">
+                      Start by adding your first task above. Focus on what matters most.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {tasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onToggleComplete={toggleComplete}
+                    onDelete={deleteTask}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      ))}
+      </div>
     </div>
   )
 }
