@@ -63,6 +63,8 @@ export default function DashboardPage() {
 
   const addTask = async () => {
     if (!title.trim()) return
+    if (!user) return
+
 
     await supabase.from("tasks").insert({
       user_id: user.id,
@@ -75,7 +77,7 @@ export default function DashboardPage() {
     setTitle("")
     setDuration(60)
     setPriority(3)
-
+    
     await fetchTasks(user.id)
   }
 
@@ -85,6 +87,7 @@ export default function DashboardPage() {
       .update({ completed: !currentValue })
       .eq("id", taskId)
 
+    if (!user) return
     await fetchTasks(user.id)
   }
 
@@ -94,6 +97,7 @@ export default function DashboardPage() {
       .delete()
       .eq("id", taskId)
 
+    if (!user) return
     await fetchTasks(user.id)
   }
 
