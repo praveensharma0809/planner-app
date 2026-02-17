@@ -32,8 +32,6 @@ export function StudyUnitItem({ unit, onDelete }: StudyUnitItemProps) {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const priorityStyle = priorityConfig[unit.priority as keyof typeof priorityConfig];
-  const hours = Math.floor(unit.estimated_minutes / 60);
-  const minutes = unit.estimated_minutes % 60;
 
   const formatDeadline = (dateStr: string | null) => {
     if (!dateStr) return null;
@@ -106,7 +104,7 @@ export function StudyUnitItem({ unit, onDelete }: StudyUnitItemProps) {
               <circle cx="12" cy="12" r="10"></circle>
               <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
-            {hours > 0 ? `${hours}h ` : ""}{minutes}m
+            {unit.estimated_minutes} min
           </span>
           {unit.deadline && (
             <span className="flex items-center gap-1">
