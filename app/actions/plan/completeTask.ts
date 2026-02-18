@@ -8,7 +8,7 @@ export async function completeTask(taskId: string) {
 
   const { data: task } = await supabase
     .from("tasks")
-    .select("*")
+    .select("id, user_id, subject_id, title, scheduled_date, duration_minutes, priority, completed, is_plan_generated, created_at")
     .eq("id", taskId)
     .single()
 

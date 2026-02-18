@@ -2,18 +2,7 @@
 
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
-
-interface Subject {
-  id: string
-  user_id: string
-  name: string
-  total_items: number
-  completed_items: number
-  avg_duration_minutes: number
-  deadline: string
-  priority: number
-  mandatory: boolean
-}
+import { Subject } from "@/lib/types/db"
 
 interface Props {
   subject: Subject

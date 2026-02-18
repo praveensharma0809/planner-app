@@ -1,11 +1,7 @@
+import { Task } from "@/lib/types/db"
+
 interface TaskCardProps {
-  task: {
-    id: string
-    title: string
-    duration_minutes: number
-    priority: number
-    completed: boolean
-  }
+  task: Task
   onToggleComplete: (taskId: string, currentValue: boolean) => void
   onDelete: (taskId: string) => void
 }

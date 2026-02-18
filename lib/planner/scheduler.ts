@@ -1,8 +1,8 @@
-import { SubjectInput } from "./overloadAnalyzer"
+import type { Subject } from "@/lib/types/db"
 
 export type SchedulerMode = "strict" | "auto"
 
-export type GeneratedTask = {
+export interface ScheduledTask {
   subject_id: string
   scheduled_date: string
   duration_minutes: number
@@ -10,12 +10,17 @@ export type GeneratedTask = {
   priority: number
 }
 
+export interface SchedulerResult {
+  tasks: ScheduledTask[]
+  effectiveCapacity?: number
+}
+
 export function scheduler(
-  subjects: SubjectInput[],
+  subjects: Subject[],
   dailyAvailableMinutes: number,
-  mode: SchedulerMode,
+  mode: "strict" | "auto",
   today: Date
-) {
+): SchedulerResult {
   const active = subjects
     .map(s => {
       const remainingItems = s.total_items - s.completed_items
@@ -85,7 +90,7 @@ export function scheduler(
       ? Math.max(dailyAvailableMinutes, Math.ceil(burnRate))
       : dailyAvailableMinutes
 
-  const tasks: GeneratedTask[] = []
+  const tasks: ScheduledTask[] = []
 
   let currentDate = new Date(today)
 

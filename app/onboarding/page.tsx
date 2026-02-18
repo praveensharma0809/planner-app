@@ -24,7 +24,7 @@ export default function OnboardingPage() {
 
         const { data: profile } = await supabase
           .from("profiles")
-          .select("*")
+          .select("id, full_name, primary_exam, qualification, phone, daily_available_minutes, exam_date, created_at")
           .eq("id", user.id)
           .single();
 

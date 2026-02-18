@@ -3,15 +3,7 @@
 import { completeTask } from "@/app/actions/plan/completeTask"
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
-
-interface Task {
-  id: string
-  title: string
-  duration_minutes: number
-  priority: number
-  completed: boolean
-  scheduled_date: string
-}
+import { Task } from "@/lib/types/db"
 
 export default function DashboardPage() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -29,7 +21,7 @@ export default function DashboardPage() {
 
     const { data } = await supabase
       .from("tasks")
-      .select("*")
+      .select("id, user_id, subject_id, title, scheduled_date, duration_minutes, priority, completed, is_plan_generated, created_at")
       .eq("user_id", user.id)
       .eq("scheduled_date", today)
       .order("priority", { ascending: true })

@@ -1,9 +1,15 @@
-
 import { supabase } from "@/lib/supabase"
-import { overloadAnalyzer } from "@/lib/planner/overloadAnalyzer"
+import { overloadAnalyzer, type OverloadResult } from "@/lib/planner/overloadAnalyzer"
 import { scheduler } from "@/lib/planner/scheduler"
 
-export async function generatePlan(mode: "strict" | "auto") {
+type GeneratePlanResult =
+  | { status: "UNAUTHORIZED" }
+  | { status: "NO_PROFILE" }
+  | { status: "NO_SUBJECTS" }
+  | ({ status: "OVERLOAD" } & OverloadResult)
+  | { status: "SUCCESS"; taskCount: number }
+
+export async function generatePlan(mode: "strict" | "auto"): Promise<GeneratePlanResult> {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
@@ -24,7 +30,7 @@ export async function generatePlan(mode: "strict" | "auto") {
 
   const { data: subjects } = await supabase
     .from("subjects")
-    .select("*")
+    .select("id, user_id, name, total_items, completed_items, avg_duration_minutes, deadline, priority, mandatory, created_at")
     .eq("user_id", user.id)
 
   if (!subjects || subjects.length === 0) {

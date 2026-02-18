@@ -2,19 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
+import { Subject } from "@/lib/types/db"
 import { SubjectCard } from "./SubjectCard"
-
-interface Subject {
-  id: string
-  user_id: string
-  name: string
-  total_items: number
-  completed_items: number
-  avg_duration_minutes: number
-  deadline: string
-  priority: number
-  mandatory: boolean
-}
 
 export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([])
@@ -36,7 +25,7 @@ export default function SubjectsPage() {
 
     const { data } = await supabase
       .from("subjects")
-      .select("*")
+      .select("id, user_id, name, total_items, completed_items, avg_duration_minutes, deadline, priority, mandatory, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
 

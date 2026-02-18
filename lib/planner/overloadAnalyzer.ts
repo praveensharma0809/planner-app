@@ -1,33 +1,28 @@
-export type SubjectInput = {
-    id: string
-    total_items: number
-    completed_items: number
-    avg_duration_minutes: number
-    deadline: string
-    priority: number
-    mandatory: boolean
-  }
-  
-  export type OverloadResult =
-    | { overload: false }
-    | {
-        overload: true
-        burnRate: number
-        currentCapacity: number
-        suggestedCapacity: number
-      }
-  
-  export function overloadAnalyzer(
-    subjects: SubjectInput[],
-    dailyAvailableMinutes: number,
-    today: Date
-  ): OverloadResult {
+import type { Subject } from "@/lib/types/db"
+
+export interface OverloadResult {
+  overload: boolean
+  burnRate: number
+  currentCapacity: number
+  suggestedCapacity: number
+}
+
+export function overloadAnalyzer(
+  subjects: Subject[],
+  dailyAvailableMinutes: number,
+  today: Date
+): OverloadResult {
     const active = subjects.filter(
       s => s.total_items - s.completed_items > 0
     )
   
     if (active.length === 0) {
-      return { overload: false }
+      return {
+        overload: false,
+        burnRate: 0,
+        currentCapacity: dailyAvailableMinutes,
+        suggestedCapacity: dailyAvailableMinutes
+      }
     }
   
     let totalRemainingMinutes = 0
@@ -57,7 +52,12 @@ export type SubjectInput = {
     const burnRate = totalRemainingMinutes / totalDays
   
     if (burnRate <= dailyAvailableMinutes) {
-      return { overload: false }
+      return {
+        overload: false,
+        burnRate,
+        currentCapacity: dailyAvailableMinutes,
+        suggestedCapacity: dailyAvailableMinutes
+      }
     }
   
     return {
