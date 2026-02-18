@@ -41,6 +41,9 @@ export default function DashboardLayout({
             <a href="/dashboard/subjects" className="block hover:text-gray-300">
               Subjects
             </a>
+            <a href="/planner" className="block hover:text-gray-300">
+              Planner
+            </a>
           </nav>
         </aside>
 

@@ -1,160 +1,90 @@
-"use client";
+"use client"
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
-
-interface Subject {
-  id: string;
-  name: string;
-}
-
-interface StudyUnit {
-  id: string;
-  title: string;
-  estimated_minutes: number;
-  deadline: string | null;
-  priority: number;
-}
+import { useState } from "react"
+import { generatePlan } from "@/lib/planner/generatePlan"
 
 export default function PlannerPage() {
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [studyUnits, setStudyUnits] = useState<StudyUnit[]>([]);
+  const [loading, setLoading] = useState(false)
+  const [overloadData, setOverloadData] = useState<any>(null)
+  const [success, setSuccess] = useState<any>(null)
 
-  const [title, setTitle] = useState("");
-  const [estimatedMinutes, setEstimatedMinutes] = useState("");
-  const [deadline, setDeadline] = useState("");
-  const [priority, setPriority] = useState("3");
-  const [subjectId, setSubjectId] = useState("");
+  const handleGenerate = async (mode: "strict" | "auto") => {
+    setLoading(true)
+    setSuccess(null)
 
-  useEffect(() => {
-    fetchSubjects();
-    fetchStudyUnits();
-  }, []);
+    const res = await generatePlan(mode)
 
-  const fetchSubjects = async () => {
-    const { data } = await supabase.from("subjects").select("*");
-    if (data) setSubjects(data);
-  };
+    setLoading(false)
 
-  const fetchStudyUnits = async () => {
-    const { data } = await supabase
-      .from("study_units")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (data) setStudyUnits(data);
-  };
-
-  const handleAddStudyUnit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
-    if (!user) return;
-
-    const { error } = await supabase.from("study_units").insert({
-      user_id: user.id,
-      subject_id: subjectId,
-      title,
-      estimated_minutes: parseInt(estimatedMinutes),
-      deadline: deadline || null,
-      priority: parseInt(priority),
-    });
-
-    if (!error) {
-      setTitle("");
-      setEstimatedMinutes("");
-      setDeadline("");
-      setPriority("3");
-      setSubjectId("");
-      fetchStudyUnits();
-    } else {
-      alert(error.message);
+    if (res.status === "OVERLOAD") {
+      setOverloadData(res)
+      return
     }
-  };
+
+    if (res.status === "SUCCESS") {
+      setOverloadData(null)
+      setSuccess(res)
+      return
+    }
+
+    alert(JSON.stringify(res))
+  }
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
+    <div className="min-h-screen bg-neutral-950 text-white p-8">
       <h1 className="text-3xl font-bold mb-6">Planner</h1>
 
-      {/* Add Study Unit Form */}
-      <form
-        onSubmit={handleAddStudyUnit}
-        className="bg-neutral-900 p-6 rounded-xl mb-8 space-y-4"
+      <button
+        onClick={() => handleGenerate("strict")}
+        disabled={loading}
+        className="px-6 py-3 bg-white text-black rounded-lg"
       >
-        <input
-          type="text"
-          placeholder="Title"
-          className="w-full p-3 bg-neutral-800 rounded-lg border border-neutral-700"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-        />
+        {loading ? "Generating..." : "Generate Plan"}
+      </button>
 
-        <input
-          type="number"
-          placeholder="Estimated Minutes"
-          className="w-full p-3 bg-neutral-800 rounded-lg border border-neutral-700"
-          value={estimatedMinutes}
-          onChange={(e) => setEstimatedMinutes(e.target.value)}
-          required
-        />
+      {success && (
+        <div className="mt-6 bg-green-900/30 p-4 rounded">
+          <p>Plan generated successfully.</p>
+          <p>Tasks created: {success.taskCount}</p>
+        </div>
+      )}
 
-        <input
-          type="date"
-          className="w-full p-3 bg-neutral-800 rounded-lg border border-neutral-700"
-          value={deadline}
-          onChange={(e) => setDeadline(e.target.value)}
-        />
+      {overloadData && (
+        <div className="mt-8 bg-red-900/30 p-6 rounded space-y-4">
+          <h2 className="text-xl font-semibold">Overload Detected</h2>
 
-        <select
-          className="w-full p-3 bg-neutral-800 rounded-lg border border-neutral-700"
-          value={priority}
-          onChange={(e) => setPriority(e.target.value)}
-        >
-          <option value="1">Priority 1 (High)</option>
-          <option value="2">Priority 2</option>
-          <option value="3">Priority 3</option>
-          <option value="4">Priority 4</option>
-          <option value="5">Priority 5 (Low)</option>
-        </select>
+          <p>
+            Required daily minutes:{" "}
+            <strong>{Math.ceil(overloadData.burnRate)}</strong>
+          </p>
 
-        <select
-          className="w-full p-3 bg-neutral-800 rounded-lg border border-neutral-700"
-          value={subjectId}
-          onChange={(e) => setSubjectId(e.target.value)}
-          required
-        >
-          <option value="">Select Subject</option>
-          {subjects.map((subject) => (
-            <option key={subject.id} value={subject.id}>
-              {subject.name}
-            </option>
-          ))}
-        </select>
+          <p>
+            Your current daily capacity:{" "}
+            <strong>{overloadData.currentCapacity}</strong>
+          </p>
 
-        <button
-          type="submit"
-          className="w-full p-3 bg-white text-black rounded-lg"
-        >
-          Add Study Unit
-        </button>
-      </form>
+          <p>
+            Suggested capacity to meet deadlines:{" "}
+            <strong>{overloadData.suggestedCapacity}</strong>
+          </p>
 
-      {/* Study Units List */}
-      <div className="space-y-4">
-        {studyUnits.map((unit) => (
-          <div
-            key={unit.id}
-            className="p-4 bg-neutral-900 rounded-lg"
-          >
-            <h3 className="font-semibold">{unit.title}</h3>
-            <p>Minutes: {unit.estimated_minutes}</p>
-            <p>Deadline: {unit.deadline || "None"}</p>
-            <p>Priority: {unit.priority}</p>
+          <div className="flex gap-4 mt-4">
+            <button
+              onClick={() => handleGenerate("strict")}
+              className="px-4 py-2 bg-white text-black rounded"
+            >
+              Proceed Strict Anyway
+            </button>
+
+            <button
+              onClick={() => handleGenerate("auto")}
+              className="px-4 py-2 bg-yellow-400 text-black rounded"
+            >
+              Auto Adjust & Generate
+            </button>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
-  );
+  )
 }

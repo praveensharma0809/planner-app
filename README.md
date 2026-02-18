@@ -1,3 +1,24 @@
+⚠ Temporary Client-Side Plan Generation (Must Refactor Before Production)
+
+Currently, plan generation and task completion logic run on the client using the standard Supabase browser client (@supabase/supabase-js). This was chosen to simplify authentication handling because the app currently uses client-side session storage (localStorage). Server Actions were removed since they could not access the browser session, causing UNAUTHORIZED errors.
+
+Before production deployment, this must be refactored to:
+
+Move plan generation and completion logic back to secure Server Actions or API routes.
+
+Implement proper Supabase SSR authentication using cookies (@supabase/ssr).
+
+Add middleware to handle session propagation server-side.
+
+Ensure all task mutations and scheduling logic execute securely on the backend.
+
+Remove any sensitive logic from client execution.
+
+This is a technical debt item intentionally deferred to prioritize feature development and stabilize core functionality.
+
+
+
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
