@@ -1,4 +1,6 @@
-import { supabase } from "@/lib/supabase"
+"use server"
+
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { overloadAnalyzer, type OverloadResult } from "@/lib/planner/overloadAnalyzer"
 import { scheduler } from "@/lib/planner/scheduler"
 
@@ -10,6 +12,7 @@ type GeneratePlanResult =
   | { status: "SUCCESS"; taskCount: number }
 
 export async function generatePlan(mode: "strict" | "auto"): Promise<GeneratePlanResult> {
+  const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
