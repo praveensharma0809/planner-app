@@ -1,0 +1,549 @@
+📘 StudyHard – Product Requirements Document (PRD)
+
+Version: 1.0
+Product Identity: Competitive Exam Execution Engine
+Status: Active Development
+Architecture: Next.js 14 + Supabase SSR + Server Actions
+
+1. Product Overview
+1.1 Vision
+
+StudyHard is a Strategic Execution System designed for serious competitive exam aspirants. It transforms preparation into a structured, capacity-aware, deadline-optimized execution plan.
+
+It is NOT:
+
+A to-do list
+
+A casual planner
+
+A journaling tool
+
+A notes app
+
+It IS:
+
+A workload optimizer
+
+A capacity-aware scheduler
+
+A deadline execution engine
+
+A mission-control system for exam preparation
+
+1.2 Core Philosophy
+
+Preparation should follow a disciplined pipeline:
+
+Define → Configure → Generate → Execute → Track → Optimize
+
+
+The system must feel:
+
+Structured
+
+Controlled
+
+Intelligent
+
+Data-driven
+
+Serious
+
+Performance-focused
+
+Primary Identity (Phase 1–2):
+
+Competitive Exam Weapon
+
+Future Identity (Phase 3+):
+
+Dual Mode: Competitive + Academic
+
+2. Target Users
+2.1 Primary Users
+
+GATE aspirants
+
+UPSC aspirants
+
+JEE aspirants
+
+High-stakes exam candidates
+
+Structured and disciplined learners
+
+Psychology:
+
+Deadline-driven
+
+Performance-oriented
+
+Strategic thinkers
+
+Seeking accountability
+
+2.2 Secondary Users (Future)
+
+College students
+
+Structured learners
+
+Casual but serious students
+
+3. Problem Statement
+
+Competitive aspirants struggle with:
+
+Overestimating daily capacity
+
+Underestimating workload
+
+Manual schedule creation
+
+Deadline blindness
+
+Inconsistent execution
+
+Poor load balancing
+
+No capacity-awareness
+
+Existing tools:
+
+Notion → too generic
+
+Google Calendar → not intelligent
+
+Todo apps → no capacity modeling
+
+Study apps → no deadline logic
+
+There is no structured execution engine tailored for competitive exams.
+
+4. Solution Overview
+
+StudyHard provides:
+
+Subject-level workload modeling
+
+Deadline-driven scheduling
+
+Capacity-aware planning
+
+Overload detection
+
+Structured daily execution
+
+Calendar visualization
+
+Performance analytics
+
+5. Technical Architecture
+5.1 Stack
+
+Next.js 14 (App Router)
+
+Supabase (Postgres + Auth + RLS)
+
+TypeScript
+
+TailwindCSS
+
+Server Actions
+
+Supabase SSR (@supabase/ssr)
+
+Middleware session refresh
+
+5.2 Authentication Model
+
+Cookie-based session storage
+
+SSR Supabase client
+
+Middleware refreshes tokens
+
+Server Actions read cookies
+
+All mutations run server-side
+
+RLS enforced via auth.uid()
+
+Security Principle:
+
+No client-side mutation logic.
+
+6. Database Schema
+Profiles
+Field	Type
+id	UUID (PK)
+full_name	text
+primary_exam	text
+qualification	text
+phone	text
+daily_available_minutes	integer
+exam_date	date
+created_at	timestamp
+Subjects
+Field	Type
+id	UUID
+user_id	UUID
+name	text
+total_items	integer
+completed_items	integer
+avg_duration_minutes	integer
+deadline	date
+priority	integer
+mandatory	boolean
+created_at	timestamp
+Tasks
+Field	Type
+id	UUID
+user_id	UUID
+subject_id	UUID
+title	text
+scheduled_date	date
+duration_minutes	integer
+priority	integer
+completed	boolean
+is_plan_generated	boolean
+created_at	timestamp
+7. Core Modules
+7.1 Subject Database
+
+Purpose:
+Define workload inventory.
+
+Features:
+
+Add subject
+
+Set total lectures
+
+Set average duration
+
+Set deadline
+
+Set priority
+
+Track completion %
+
+Displays:
+
+Completion %
+
+Remaining time estimate
+
+7.2 Mission Control Wizard
+
+4-Step Configuration Engine:
+
+Step 1: Deadlines
+
+Define deadline per subject
+
+Step 2: Subject Sequence
+
+Reorder execution order
+
+Step 3: Workload
+
+Define lecture counts
+
+Define revision cycles (future)
+
+Step 4: Constraints
+
+Daily capacity
+
+Off days
+
+Custom availability (future)
+
+Output:
+Validated planning configuration.
+
+7.3 Planning Engine
+
+Files:
+
+overloadAnalyzer.ts
+
+scheduler.ts
+
+generatePlan.ts
+
+Responsibilities:
+
+Calculate burn rate
+
+Detect overload
+
+Suggest capacity adjustments
+
+Distribute workload across dates
+
+Replace future generated tasks
+
+Insert new schedule
+
+Modes:
+
+strict
+
+auto
+
+Strict → block if overloaded
+Auto → redistribute
+
+7.4 Operational Plan Page (/planner)
+
+Purpose:
+Daily execution console.
+
+Structure:
+
+System Status Banner
+
+Plan Projections
+
+Date Navigator
+
+Daily Transmission
+
+Execution Blocks
+
+Execution Block:
+
+Subject tag
+
+Duration
+
+Completion toggle
+
+Status state
+
+Must feel like:
+
+Mission execution dashboard
+
+7.5 Calendar View (/calendar)
+
+Purpose:
+Timeline visualization.
+
+Features:
+
+Monthly grid
+
+Daily time badge
+
+Task preview
+
+Day modal
+
+Task completion inside modal
+
+Scrollable day view
+
+Future:
+
+Overload indicator per day
+
+Daily capacity visualization
+
+7.6 Dashboard Overview (/dashboard)
+
+Purpose:
+Strategic overview.
+
+Contains:
+
+Today Summary
+
+Weekly Snapshot
+
+Mini Calendar
+
+Plan Health
+
+Style:
+Mission Control + SaaS polish
+
+8. MVP Definition
+
+MVP must include:
+
+✔ SSR Auth
+✔ Secure Server Actions
+✔ Subject management
+✔ Planning wizard
+✔ Overload detection
+✔ Strict/Auto modes
+✔ Task generation
+✔ Daily execution
+✔ Calendar view
+✔ Task completion
+
+No analytics beyond basic projections.
+
+9. Short-Term Goals (Phase 1–2)
+Phase 1 – Stability
+
+Lock competitive identity
+
+Refine planner UI
+
+Improve task card hierarchy
+
+Add capacity vs used visualization
+
+Strengthen system status display
+
+Phase 2 – Execution Optimization
+
+Burn rate display
+
+Daily progress %
+
+Overload alert visuals
+
+Regeneration confirmation
+
+Capacity visualization per day
+
+10. Long-Term Goals
+Phase 3 – Intelligence Layer
+
+Deadline risk projection
+
+Smart rest day suggestion
+
+Adaptive scheduling
+
+Efficiency metrics
+
+Phase 4 – Dual Mode
+
+Competitive Mode:
+
+Strict
+
+Hard limits
+
+Alerts
+
+Academic Mode:
+
+Flexible
+
+Softer UI
+
+Encouragement
+
+Same engine, different presentation.
+
+Phase 5 – Analytics
+
+Completion streak
+
+Weekly performance heatmap
+
+Efficiency score
+
+Subject dominance graph
+
+11. Non-Goals
+
+Do NOT add:
+
+Notes
+
+Chat
+
+Social features
+
+Gamification
+
+AI tutor
+
+Journaling
+
+Custom color themes
+
+This is not a productivity toy.
+
+12. Success Metrics
+
+Short-term:
+
+Plan generation success
+
+Daily task completion
+
+Overload clarity
+
+Mid-term:
+
+Weekly execution consistency
+
+Reduced rescheduling
+
+Long-term:
+
+Improved deadline adherence
+
+Higher completion velocity
+
+Reduced burnout
+
+13. Design Principles
+
+Structured > Decorative
+
+Data > Fluff
+
+Clarity > Minimalism
+
+System feedback always visible
+
+No silent failures
+
+Every screen must have purpose
+
+14. Current System Status
+
+✔ SSR authentication implemented
+✔ Middleware session refresh
+✔ Server-side planner logic
+✔ Typed planner engine
+✔ Centralized DB types
+✔ Secure task completion
+✔ Calendar implemented
+✔ Wizard implemented
+
+System stable.
+
+15. Immediate Next Focus
+
+Refine Planner page:
+
+Capacity vs Used display
+
+Daily execution %
+
+Stronger status banner
+
+Clearer task hierarchy
+
+Controlled animations
+
+No new feature expansion.
+
+16. Final Product Positioning
+
+StudyHard is:
+
+A Strategic Execution System for Competitive Exams.
+
+It is built for students who treat preparation like a mission.

@@ -1,0 +1,55 @@
+/// <reference types="vitest" />
+
+import { analyzePlan } from "@/lib/planner/analyzePlan"
+import type { Subject } from "@/lib/types/db"
+
+function buildSubject(overrides: Partial<Subject> = {}): Subject {
+  return {
+    id: "subject-1",
+    user_id: "user-1",
+    name: "Calculus",
+    total_items: 6,
+    completed_items: 0,
+    avg_duration_minutes: 60,
+    deadline: "2024-01-05",
+    priority: 1,
+    mandatory: false,
+    created_at: "2024-01-01T00:00:00Z",
+    ...overrides
+  }
+}
+
+describe("analyzePlan", () => {
+  const today = new Date("2024-01-01T00:00:00Z")
+
+  it("returns OVERLOAD in strict mode when required work exceeds capacity", () => {
+    const subjects = [
+      buildSubject({
+        total_items: 8,
+        avg_duration_minutes: 120,
+        deadline: "2024-01-02"
+      })
+    ]
+
+    const result = analyzePlan(subjects, 60, today, "strict")
+
+    expect(result.status).toBe("OVERLOAD")
+    expect(result.overload).toBe(true)
+  })
+
+  it("returns READY in auto mode even when overload is detected", () => {
+    const subjects = [
+      buildSubject({
+        total_items: 4,
+        avg_duration_minutes: 60,
+        deadline: "2024-01-02"
+      })
+    ]
+
+    const result = analyzePlan(subjects, 60, today, "auto")
+
+    expect(result.status).toBe("READY")
+    expect(result.overload.overload).toBe(true)
+    expect(result.tasks.length).toBeGreaterThan(0)
+  })
+})

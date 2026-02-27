@@ -6,6 +6,9 @@ export interface Profile {
   phone: string | null
   daily_available_minutes: number
   exam_date: string | null
+  streak_current?: number
+  streak_longest?: number
+  streak_last_completed_date?: string | null
   created_at: string
 }
 

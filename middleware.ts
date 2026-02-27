@@ -26,7 +26,41 @@ export async function middleware(request: NextRequest) {
   })
 
   // Refresh session if expired - required for Server Actions/RSC auth
-  await supabase.auth.getUser()
+  const {
+    data: { user }
+  } = await supabase.auth.getUser()
+
+  const path = request.nextUrl.pathname
+
+  const isProtectedRoute =
+    path.startsWith("/dashboard") ||
+    path.startsWith("/planner") ||
+    path.startsWith("/onboarding")
+
+  const isAuthRoute = path.startsWith("/auth/login") || path.startsWith("/auth/signup")
+
+  if (!isProtectedRoute) {
+    return response
+  }
+
+  if (!user) {
+    if (isAuthRoute) return response
+    const redirectUrl = new URL("/auth/login", request.url)
+    redirectUrl.searchParams.set("redirectTo", path)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  // For protected routes, ensure profile exists; otherwise send to onboarding
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (!profile && !path.startsWith("/onboarding")) {
+    const redirectUrl = new URL("/onboarding", request.url)
+    return NextResponse.redirect(redirectUrl)
+  }
 
   return response
 }

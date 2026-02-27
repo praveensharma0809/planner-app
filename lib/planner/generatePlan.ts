@@ -1,8 +1,9 @@
 "use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
-import { overloadAnalyzer, type OverloadResult } from "@/lib/planner/overloadAnalyzer"
-import { scheduler } from "@/lib/planner/scheduler"
+import { analyzePlan } from "@/lib/planner/analyzePlan"
+import type { OverloadResult } from "@/lib/planner/overloadAnalyzer"
+import type { SchedulerMode } from "@/lib/planner/scheduler"
 
 type GeneratePlanResult =
   | { status: "UNAUTHORIZED" }
@@ -11,7 +12,7 @@ type GeneratePlanResult =
   | ({ status: "OVERLOAD" } & OverloadResult)
   | { status: "SUCCESS"; taskCount: number }
 
-export async function generatePlan(mode: "strict" | "auto"): Promise<GeneratePlanResult> {
+export async function generatePlan(mode: SchedulerMode): Promise<GeneratePlanResult> {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -23,7 +24,7 @@ export async function generatePlan(mode: "strict" | "auto"): Promise<GeneratePla
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("daily_available_minutes")
+    .select("daily_available_minutes, exam_date")
     .eq("id", user.id)
     .single()
 
@@ -40,25 +41,21 @@ export async function generatePlan(mode: "strict" | "auto"): Promise<GeneratePla
     return { status: "NO_SUBJECTS" }
   }
 
-  const overload = overloadAnalyzer(
+  const analysis = analyzePlan(
     subjects,
     profile.daily_available_minutes,
-    today
+    today,
+    mode,
+    profile.exam_date ?? undefined
   )
 
-  if (overload.overload && mode === "strict") {
-    return {
-      status: "OVERLOAD",
-      ...overload
-    }
+  if (analysis.status === "NO_SUBJECTS") {
+    return { status: "NO_SUBJECTS" }
   }
 
-  const result = scheduler(
-    subjects,
-    profile.daily_available_minutes,
-    mode,
-    today
-  )
+  if (analysis.status === "OVERLOAD") {
+    return { status: "OVERLOAD", ...analysis }
+  }
 
   await supabase
     .from("tasks")
@@ -67,7 +64,7 @@ export async function generatePlan(mode: "strict" | "auto"): Promise<GeneratePla
     .gte("scheduled_date", today.toISOString().split("T")[0])
     .eq("is_plan_generated", true)
 
-  const tasksToInsert = result.tasks.map(task => ({
+  const tasksToInsert = analysis.tasks.map(task => ({
     user_id: user.id,
     subject_id: task.subject_id,
     scheduled_date: task.scheduled_date,
