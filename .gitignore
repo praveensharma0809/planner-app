@@ -23,6 +23,12 @@
 # misc
 .DS_Store
 *.pem
+supabase/.temp
+supabase/.branches
+supabase/.history
+
+# supabase build artifacts
+tsconfig.tsbuildinfo
 
 # debug
 npm-debug.log*
