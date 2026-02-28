@@ -1,67 +1,105 @@
 # ALIGNMENT_REPORT.md
 ## StudyHard — Spec vs. Implementation Analysis
 
-**Prepared:** February 28, 2026  
-**Based on:** PROJECT_SPEC.md v2.0 and CURRENT_SYSTEM.md (reverse-engineered state)
+**Prepared:** February 28, 2026 (Session 8 update)
+**Based on:** PROJECT_SPEC.md v2.0, CURRENT_SYSTEM.md (Session 7), and full codebase review
 
 ---
 
-## 1. Where the Implementation Already Matches the Spec
+## 1. Where the Implementation Matches the Spec
 
 | Area | Detail |
 |---|---|
-| Auth system | Supabase Auth with email/password, protected routes, profile-presence check to gate onboarding |
-| Onboarding Step 1 (partial) | Captures full_name, primary_exam, daily_available_minutes, exam_date — correct fields |
-| Subject data model (core fields) | name, total_items, avg_duration_minutes, deadline, priority, mandatory — all present in DB |
-| Subject management UI | Add, edit, delete with cascade warning on subjects page |
-| Plan generation is user-triggered | "Generate Plan" button — engine does not auto-run |
-| Overload detection exists | `overloadAnalyzer.ts` computes burn rate vs. capacity |
-| Task distribution logic | `scheduler.ts` sorts by mandatory → earliest deadline → urgency score and fills days forward |
-| Regeneration preserves past | Future generated tasks are deleted; past tasks (date < today) are never touched |
-| Task completion is binary | `completeTask.ts` sets `completed = true` — no partial states |
-| Completed tasks are not removed | They remain in place, just marked |
-| Subject progress counter | `increment_completed_items` RPC keeps `completed_items` accurate |
-| Calendar page exists | Monthly view of tasks with completion toggles |
-| Dashboard shows today's tasks | Task list for current date with summary of minutes |
-| `is_plan_generated` flag | Distinguishes plan-generated tasks from potential manual ones (schema ready) |
+| Auth system | Supabase Auth with email/password; SSR cookie-based sessions; all protected routes gated by middleware |
+| Middleware route protection | `middleware.ts` redirects unauthenticated → login; no profile → onboarding |
+| Onboarding (5-step wizard) | Profile → Subjects → Off-Days → Blueprint Preview → Confirm & Generate — all built |
+| Subject data model | All core fields: `name`, `total_items`, `avg_duration_minutes`, `deadline`, `priority`, `mandatory` |
+| Subject management UI | Full CRUD with health indicators, burn-rate ETA, delete confirmation dialog, color-coded progress |
+| Plan generation is user-triggered | "Analyze Plan" → "Commit" — engine never auto-runs |
+| Blueprint before generation | Full Blueprint Screen: per-subject feasibility, capacity bar, badges (IMPOSSIBLE/AT RISK/OK), summary stats |
+| Overload detection & resolution | `overloadAnalyzer.ts` + `resolveOverload` action + UI panel with adjustment inputs and re-analysis |
+| Task distribution | `scheduler.ts` sorts mandatory → earliest deadline → urgency; fills days; enforces `examDeadline`; skips `offDays` |
+| `off_days` table | Created in migration 1; scheduler uses it; managed from Settings |
+| Regeneration preserves past | `commitPlan` deletes only future generated tasks; never touches past or manual tasks |
+| Task completion is binary | `completeTask.ts` sets `completed = true` — no partial states, no undo at MVP |
+| Completed tasks stay visible | Remain in place, visually marked (green check + badge) |
+| Subject progress counter | Incremented in `completeTask.ts` via direct table update |
+| Streak tracking | `completeTask.ts` maintains `streak_current`, `streak_longest`, `streak_last_completed_date` on `profiles` |
+| Calendar (week + month) | Week view with navigation, mark complete, inline reschedule, missed indicators. Month view with day expansion and task toggles |
+| Custom task creation | `createTask` + `AddTaskForm` with subject picker |
+| Dashboard (7+ panels) | Streak, pending today, done today (SVG ring), backlog, weekly strip, plan health (execution score), mini calendar, upcoming deadlines with completion %, today's tasks with mark complete |
+| Settings page | Profile editing, off-days management, re-trigger onboarding |
+| `is_plan_generated` flag | Correctly distinguishes plan-generated from manual tasks |
+| No client-side mutations | All mutations go through server actions; no direct DB calls |
+| RLS | All tables have `user_id = auth.uid()` policies; enforced at DB level |
+| Neutral language | Full language audit completed — no "student" or exam-specific copy in UI |
+| Error boundaries | `error.tsx` on all dashboard routes |
+| Loading states | `loading.tsx` skeletons across all major routes |
+| Toast notifications | Global ToastProvider in root layout; success/error/info types |
+| Keyboard accessibility | Focus-visible styles in global CSS |
+| Responsive sidebar | Mobile hamburger drawer, fixed desktop sidebar |
+| App branding | Metadata, titles, and copy all say "StudyHard" |
+| Test suite | 18 tests passing across 6 files; zero TypeScript errors |
 
 ---
 
-## 2. Where Behavior Is Different from the Spec
+## 2. Remaining Gaps
 
-### 2.1 — Dual Planning Modes vs. Single Unified Mode (Critical)
+All backend server actions are complete. Remaining work is UI/UX polish and quality.
 
-**Spec:** A single unified planning mode. The engine always surfaces conflicts, enters a refinement loop with the user, and proceeds only after the user confirms. There is no "auto" mode.
+### 2.1 — Calendar Drag-to-Reschedule
+**Spec:** Users can drag tasks between dates.
+**Current:** `rescheduleTask` server action works; inline date-picker reschedule works. HTML5 drag-and-drop UI not yet built.
 
-**Current:** Two modes — `strict` (abort on overload) and `auto` (silently bumps effective daily capacity to match the burn rate). The `auto` mode performs a hidden mutation to the user's capacity without any user acknowledgment.
+### 2.2 — Dark/Light Theme Toggle
+**Spec:** Theme preference support.
+**Current:** Not built. Needs CSS variable system + ThemeProvider + settings toggle.
 
-**Conflict with spec:** Core Rule #2 states "The system never changes the user's plan without explicit user action." Silent capacity adjustment in `auto` mode violates this directly.
+### 2.3 — Empty State Polish
+**Spec (Rule 7):** Meaningful empty states with CTAs everywhere.
+**Current:** Most pages have basic "No X found" text, but lack illustrated CTAs (e.g., "no tasks → go to planner").
 
----
+### 2.4 — Expanded Test Coverage
+**Current:** 18 tests. Target: 30+ tests covering more server actions and edge cases.
 
-### 2.2 — Blueprint Screen Does Not Exist (Critical)
-
-**Spec:** Before any plan is written, the user sees a full Blueprint Screen showing: total workload vs. available time, projected daily load per subject, deadline feasibility (safe / tight / at risk / impossible), overload warnings, capacity gap, and suggested adjustments. No plan is generated without the user confirming this screen.
-
-**Current:** The planner page detects overload and presents a binary choice (strict or auto) with required vs. available minutes. There is no structured blueprint view, no per-subject feasibility breakdown, no suggested adjustments, and no inline editing before generation.
-
----
-
-### 2.3 — Conflict Resolution Is Not Interactive
-
-**Spec:** When the plan is infeasible, the system enters a loop where the user can adjust deadlines, item counts, daily time, and priorities inline — and the blueprint updates in real time. The loop continues until conflicts are resolved or explicitly acknowledged.
-
-**Current:** `resolveOverload.ts` is an empty placeholder. No inline adjustment is possible. The user can only choose between two static modes.
+### 2.5 — Subject Subtopics/Chapters (Stretch)
+**Spec:** Optional drill-down into subtopics per subject.
+**Current:** Not built. Requires schema change (`parent_id` or subtopics table).
 
 ---
 
-### 2.4 — Language Targets "Students" Not Neutral Users
+## 3. Resolved Issues
 
-**Spec:** "Do not label users as 'students' in the UI. Use neutral language — 'you', 'your plan', 'your subjects.'" Users are any person with a high-stakes goal.
-
-**Current:** CURRENT_SYSTEM.md describes the app as "geared toward students preparing for competitive exams." This framing likely surfaces in UI copy.
+| # | Issue | Resolution |
+|---|---|---|
+| 1 | `uuid → "0"` PostgREST schema-cache bug | `completeTask.ts` rewritten with direct table ops |
+| 2 | Single-pass generate → write with no preview | `analyzePlanAction` + `commitPlan` split |
+| 3 | `resolveOverload.ts` was empty placeholder | Fully implemented with UI panel |
+| 4 | `auto` mode silently mutated capacity | Removed; single unified mode |
+| 5 | Streak infrastructure missing | Added to profiles; maintained by `completeTask` |
+| 6 | `off_days` table missing | Created; scheduler uses it |
+| 7 | Client-side auth checks (useEffect flash) | `middleware.ts` handles server-side |
+| 8 | Scheduler ignored off-days and exam deadline | Now accepts `offDays` and enforces deadline |
+| 9 | Dashboard had no data actions | All 6 actions implemented |
+| 10 | Test suite was misaligned | Rewritten; 18 tests passing |
+| 11 | Blueprint Screen UI not built | Full planner pipeline with overload panel, preview, summary stats |
+| 12 | Onboarding only had Step 1 | Full 5-step wizard complete |
+| 13 | Dashboard missing 7-grid layout | All panels built with responsive grid |
+| 14 | Language targeted "students" | Full copy audit completed — neutral throughout |
+| 15 | Settings page not built | Full settings with profile, off-days, onboarding re-trigger |
 
 ---
+
+## 4. Features Not Needed for MVP
+
+| Feature | Notes |
+|---|---|
+| `qualification` field | Legacy; retained in DB, excluded from all UI |
+| `phone` field | Legacy; retained in DB, excluded from all UI |
+
+---
+
+*End of ALIGNMENT_REPORT.md*
 
 ### 2.5 — Onboarding Is Incomplete
 

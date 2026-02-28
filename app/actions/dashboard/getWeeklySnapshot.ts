@@ -22,7 +22,11 @@ function getWeekRange(base: Date): { startISO: string; endISO: string } {
   return { startISO, endISO }
 }
 
-export async function getWeeklySnapshot(): Promise<GetWeeklySnapshotResponse> {
+/**
+ * Fetch tasks for a given week. If `weekOf` is provided (ISO date string),
+ * the week containing that date is used. Otherwise defaults to the current week.
+ */
+export async function getWeeklySnapshot(weekOf?: string): Promise<GetWeeklySnapshotResponse> {
   const supabase = await createServerSupabaseClient()
   const {
     data: { user }
@@ -32,7 +36,12 @@ export async function getWeeklySnapshot(): Promise<GetWeeklySnapshotResponse> {
     return { status: "UNAUTHORIZED" }
   }
 
-  const { startISO, endISO } = getWeekRange(new Date())
+  const baseDate = weekOf ? new Date(weekOf + "T12:00:00") : new Date()
+  if (isNaN(baseDate.getTime())) {
+    return { status: "SUCCESS", tasks: [] }
+  }
+
+  const { startISO, endISO } = getWeekRange(baseDate)
 
   const { data } = await supabase
     .from("tasks")

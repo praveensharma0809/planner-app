@@ -53,12 +53,21 @@ export async function analyzePlanAction(
     return { status: "NO_SUBJECTS" }
   }
 
+  // Fetch off-days so the analyzer/scheduler can skip them
+  const { data: offDayRows } = await supabase
+    .from("off_days")
+    .select("date")
+    .eq("user_id", user.id)
+
+  const offDays = new Set<string>((offDayRows ?? []).map(r => r.date))
+
   const analysis: AnalyzePlanStatus = analyzePlan(
     subjects,
     profile.daily_available_minutes,
     today,
     mode,
-    profile.exam_date ?? undefined
+    profile.exam_date ?? undefined,
+    offDays
   )
 
   if (analysis.status === "OVERLOAD") {

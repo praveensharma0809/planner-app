@@ -1,11 +1,13 @@
 "use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { revalidatePath } from "next/cache"
 
 export type RescheduleTaskResponse =
   | { status: "UNAUTHORIZED" }
   | { status: "INVALID_DATE" }
   | { status: "NOT_FOUND" }
+  | { status: "ERROR"; message: string }
   | { status: "SUCCESS" }
 
 export async function rescheduleTask(taskId: string, newDate: string): Promise<RescheduleTaskResponse> {
@@ -44,8 +46,10 @@ export async function rescheduleTask(taskId: string, newDate: string): Promise<R
 
   if (error) {
     console.error("Reschedule error:", error)
-    return { status: "INVALID_DATE" }
+    return { status: "ERROR", message: error.message }
   }
 
+  revalidatePath("/dashboard/calendar")
+  revalidatePath("/dashboard")
   return { status: "SUCCESS" }
 }

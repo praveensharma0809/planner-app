@@ -116,7 +116,7 @@ export function scheduler(
             .toISOString()
             .split("T")[0],
           duration_minutes: subject.avg_duration_minutes,
-          title: `${subject.priority} Priority Study`,
+          title: `${subject.name} – Session`,
           priority: subject.priority
         })
 

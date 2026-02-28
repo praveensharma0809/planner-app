@@ -22,6 +22,7 @@ export interface Subject {
   deadline: string
   priority: number
   mandatory: boolean
+  archived?: boolean
   created_at: string
 }
 
@@ -35,5 +36,33 @@ export interface Task {
   priority: number
   completed: boolean
   is_plan_generated: boolean
+  created_at: string
+}
+
+export interface OffDay {
+  id: string
+  user_id: string
+  date: string
+  reason: string | null
+  created_at: string
+}
+
+export interface Subtopic {
+  id: string
+  user_id: string
+  subject_id: string
+  name: string
+  total_items: number
+  completed_items: number
+  sort_order: number
+  created_at: string
+}
+
+export interface PlanEvent {
+  id: string
+  user_id: string
+  event_type: "analyzed" | "committed" | "resolved_overload"
+  task_count: number
+  summary: string | null
   created_at: string
 }

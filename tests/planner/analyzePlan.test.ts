@@ -1,7 +1,10 @@
-/// <reference types="vitest" />
+/// <reference types="vitest/globals" />
 
-import { analyzePlan } from "@/lib/planner/analyzePlan"
+import { analyzePlan, type AnalyzePlanStatus } from "@/lib/planner/analyzePlan"
 import type { Subject } from "@/lib/types/db"
+
+type OverloadStatus = Extract<AnalyzePlanStatus, { status: "OVERLOAD" }>
+type ReadyStatus    = Extract<AnalyzePlanStatus, { status: "READY" }>
 
 function buildSubject(overrides: Partial<Subject> = {}): Subject {
   return {
@@ -34,7 +37,7 @@ describe("analyzePlan", () => {
     const result = analyzePlan(subjects, 60, today, "strict")
 
     expect(result.status).toBe("OVERLOAD")
-    expect(result.overload).toBe(true)
+    expect((result as OverloadStatus).overload).toBe(true)
   })
 
   it("returns READY in auto mode even when overload is detected", () => {
@@ -49,7 +52,8 @@ describe("analyzePlan", () => {
     const result = analyzePlan(subjects, 60, today, "auto")
 
     expect(result.status).toBe("READY")
-    expect(result.overload.overload).toBe(true)
-    expect(result.tasks.length).toBeGreaterThan(0)
+    expect((result as ReadyStatus).overload.overload).toBe(true)
+    expect((result as ReadyStatus).tasks.length).toBeGreaterThan(0)
   })
 })
+

@@ -36,8 +36,6 @@ export interface OverloadResult {
   overallStatus: "feasible" | "overloaded"
 }
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24
-
 function countAvailableDays(start: Date, end: Date, offDays: Set<string>): number {
   // Inclusive of start and end; skips dates present in offDays (ISO yyyy-mm-dd)
   const cursor = new Date(start)
@@ -147,11 +145,6 @@ export function overloadAnalyzer(
       totalRequiredMinPerDay += requiredMinutesPerDay
     }
   }
-
-  const totalDays = Math.max(
-    1,
-    Math.ceil((maxEffectiveDeadline.getTime() - today.getTime()) / MS_PER_DAY)
-  )
 
   const burnRate = totalRequiredMinPerDay
   const capacityGapMinPerDay = Math.max(0, totalRequiredMinPerDay - dailyAvailableMinutes)

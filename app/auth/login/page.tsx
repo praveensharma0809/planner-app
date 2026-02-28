@@ -3,61 +3,96 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/app/components/Toast";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { addToast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      alert(error.message);
-    } else {
-      router.push("/dashboard");
+      if (error) {
+        addToast(error.message, "error");
+        setLoading(false);
+      } else {
+        router.push("/dashboard");
+      }
+    } catch {
+      addToast("Network error - please try again.", "error");
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black text-white">
-      <div className="w-full max-w-md bg-neutral-900 p-8 rounded-2xl shadow-xl">
-        <h1 className="text-2xl font-semibold mb-6 text-center">
-          Login
-        </h1>
+    <main className="min-h-screen flex items-center justify-center text-white relative overflow-hidden" style={{ background: "var(--background)" }}>
+      <div className="mesh-bg" />
 
-        <form className="space-y-4" onSubmit={handleLogin}>
-          <input
-            type="email"
-            placeholder="Email"
-            className="w-full p-3 rounded-lg bg-neutral-800 border border-neutral-700 focus:outline-none focus:ring-2 focus:ring-white"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+      <div className="w-full max-w-md space-y-8 relative z-10 px-4">
+        <div className="text-center space-y-3">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl shadow-indigo-500/20">
+            <span className="text-xl font-black text-white">S</span>
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight gradient-text">StudyHard</h1>
+          <p className="text-sm text-white/40">Sign in to continue</p>
+        </div>
 
-          <input
-            type="password"
-            placeholder="Password"
-            className="w-full p-3 rounded-lg bg-neutral-800 border border-neutral-700 focus:outline-none focus:ring-2 focus:ring-white"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+        <div className="glass-card !p-8 space-y-6">
+          <form className="space-y-4" onSubmit={handleLogin}>
+            <div className="space-y-1.5">
+              <label htmlFor="email" className="text-xs text-white/40 font-medium">Email</label>
+              <input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                className="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.06] focus:outline-none focus:border-indigo-500/30 focus:ring-1 focus:ring-indigo-500/20 text-sm transition-all"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
 
-          <button
-            type="submit"
-            className="w-full p-3 rounded-lg bg-white text-black font-medium hover:bg-gray-200 transition"
-          >
-            Login
-          </button>
-        </form>
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="text-xs text-white/40 font-medium">Password</label>
+              <input
+                id="password"
+                type="password"
+                placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;"
+                className="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.06] focus:outline-none focus:border-indigo-500/30 focus:ring-1 focus:ring-indigo-500/20 text-sm transition-all"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary w-full !py-3 !text-sm"
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
+          </form>
+
+          <p className="text-center text-sm text-white/30">
+            Don&apos;t have an account?{" "}
+            <Link href="/auth/signup" className="text-indigo-400 hover:text-indigo-300 transition-colors font-medium">
+              Create one
+            </Link>
+          </p>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

@@ -1,136 +1,66 @@
-"use client"
-
-import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { redirect } from "next/navigation"
 import { Subject } from "@/lib/types/db"
 import { SubjectCard } from "./SubjectCard"
+import { AddSubjectForm } from "./AddSubjectForm"
 
-export default function SubjectsPage() {
-  const [subjects, setSubjects] = useState<Subject[]>([])
-  const [loading, setLoading] = useState(true)
+export default async function SubjectsPage() {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  const [name, setName] = useState("")
-  const [totalItems, setTotalItems] = useState(1)
-  const [avgDuration, setAvgDuration] = useState(60)
-  const [deadline, setDeadline] = useState("")
-  const [priority, setPriority] = useState(3)
+  if (!user) redirect("/auth/login")
 
-  useEffect(() => {
-    fetchSubjects()
-  }, [])
+  const { data } = await supabase
+    .from("subjects")
+    .select(
+      "id, user_id, name, total_items, completed_items, avg_duration_minutes, deadline, priority, mandatory, created_at"
+    )
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
 
-  const fetchSubjects = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data } = await supabase
-      .from("subjects")
-      .select("id, user_id, name, total_items, completed_items, avg_duration_minutes, deadline, priority, mandatory, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-
-    if (data) setSubjects(data)
-    setLoading(false)
-  }
-
-  const addSubject = async () => {
-    if (!name.trim()) return
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    await supabase.from("subjects").insert({
-      user_id: user.id,
-      name,
-      total_items: totalItems,
-      avg_duration_minutes: avgDuration,
-      deadline,
-      priority,
-      mandatory: false,
-      completed_items: 0
-    })
-
-    setName("")
-    setTotalItems(1)
-    setAvgDuration(60)
-    setDeadline("")
-    setPriority(3)
-
-    fetchSubjects()
-  }
-
-  if (loading) return <div className="p-8">Loading...</div>
+  const subjects: Subject[] = data ?? []
+  const activeSubjects = subjects.filter(s => !s.archived)
+  const archivedSubjects = subjects.filter(s => s.archived)
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white p-8">
-      <h1 className="text-3xl font-bold mb-8">Subjects</h1>
+    <div className="p-4 sm:p-8 max-w-4xl mx-auto">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-2 gradient-text">Subjects</h1>
+      <p className="text-sm text-white/40 mb-8">Manage your subjects, deadlines, and subtopics</p>
 
-      {/* Add Subject Form */}
-      <div className="bg-neutral-900 p-6 rounded-xl mb-8 space-y-4">
-        <input
-          placeholder="Subject name"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          className="w-full p-3 bg-neutral-800 rounded"
-        />
+      <AddSubjectForm />
 
-        <div className="grid grid-cols-2 gap-4">
-          <input
-            type="number"
-            placeholder="Total items"
-            value={totalItems}
-            onChange={e => setTotalItems(Number(e.target.value))}
-            className="p-3 bg-neutral-800 rounded"
-          />
-
-          <input
-            type="number"
-            placeholder="Avg duration (mins)"
-            value={avgDuration}
-            onChange={e => setAvgDuration(Number(e.target.value))}
-            className="p-3 bg-neutral-800 rounded"
-          />
+      {activeSubjects.length === 0 && archivedSubjects.length === 0 ? (
+        <div className="glass-card text-center !py-16 space-y-3">
+          <div className="text-5xl">&#x1F4DA;</div>
+          <h2 className="text-lg font-semibold text-white/80">No subjects yet</h2>
+          <p className="text-sm text-white/40 max-w-sm mx-auto">
+            Add your first subject above to start tracking progress and generating a plan.
+          </p>
         </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <input
-            type="date"
-            value={deadline}
-            onChange={e => setDeadline(e.target.value)}
-            className="p-3 bg-neutral-800 rounded"
-          />
-
-          <select
-            value={priority}
-            onChange={e => setPriority(Number(e.target.value))}
-            className="p-3 bg-neutral-800 rounded"
-          >
-            <option value={1}>High</option>
-            <option value={2}>Medium-High</option>
-            <option value={3}>Medium</option>
-            <option value={4}>Low</option>
-            <option value={5}>Very Low</option>
-          </select>
+      ) : activeSubjects.length === 0 ? (
+        <div className="glass-card text-center !py-8 space-y-2">
+          <p className="text-sm text-white/50">All subjects are archived. Restore one below to continue.</p>
         </div>
+      ) : (
+        <div className="space-y-4">
+          {activeSubjects.map((subject) => (
+            <SubjectCard key={subject.id} subject={subject} />
+          ))}
+        </div>
+      )}
 
-        <button
-          onClick={addSubject}
-          className="px-6 py-3 bg-white text-black rounded"
-        >
-          Add Subject
-        </button>
-      </div>
-
-      {/* Subjects List */}
-      <div className="space-y-4">
-        {subjects.map(subject => (
-          <SubjectCard
-            key={subject.id}
-            subject={subject}
-            onRefresh={fetchSubjects}
-          />
-        ))}
-      </div>
+      {archivedSubjects.length > 0 && (
+        <div className="mt-10 space-y-4">
+          <h2 className="text-[10px] font-semibold text-white/30 uppercase tracking-widest">Archived ({archivedSubjects.length})</h2>
+          <div className="space-y-4 opacity-50">
+            {archivedSubjects.map((subject) => (
+              <SubjectCard key={subject.id} subject={subject} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

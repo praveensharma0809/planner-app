@@ -40,10 +40,24 @@ export function buildSupabaseMock(userId = "user-1") {
       getUser: vi.fn().mockResolvedValue({ data: { user: userId ? { id: userId } : null } })
     },
     from: vi.fn((table: string) => {
-      if (table !== "tasks") {
-        throw new Error(`Unexpected table ${table}`)
+      if (table === "tasks") {
+        return tasksTable
       }
-      return tasksTable
+      // Default no-op table for plan_events, etc.
+      return {
+        insert: vi.fn(async () => ({ data: null, error: null })),
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn(() => ({
+                limit: vi.fn(() => ({ data: [], error: null })),
+                data: [],
+                error: null,
+              })),
+            })),
+          })),
+        })),
+      }
     }),
     rpc: vi.fn(async () => ({ data: null, error: null }))
   }

@@ -1,4 +1,4 @@
-/// <reference types="vitest" />
+/// <reference types="vitest/globals" />
 
 import { vi } from "vitest"
 import { createServerSupabaseClientMock, buildSupabaseMock } from "../utils/supabaseMock"

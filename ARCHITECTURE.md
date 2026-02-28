@@ -1,7 +1,7 @@
 # ARCHITECTURE.md
 ## StudyHard — Target Architecture
 
-**Version:** 1.0  
+**Version:** 1.1 (updated post-audit February 28, 2026)  
 **Prepared:** February 28, 2026  
 **Basis:** PROJECT_SPEC.md v2.0, CURRENT_SYSTEM.md, ALIGNMENT_REPORT.md  
 **Approach:** Incremental evolution — no rewrite
@@ -28,8 +28,8 @@ The following modules are correct as implemented. They require no structural cha
 | Supabase Auth | Supabase-managed | Fully functional; email/password auth matches spec |
 | Browser Supabase client | `lib/supabase.ts` | No changes needed |
 | Server Supabase client | `lib/supabase/server.ts` | Cookie-based server client is correct pattern |
-| Task completion action | `app/actions/plan/completeTask.ts` | Binary completion + RPC counter increment is fully spec-compliant |
-| `increment_completed_items` RPC | Supabase DB | Correct behavior; keep as-is |
+| Task completion action | `app/actions/plan/completeTask.ts` | Rewritten post-audit: 3-step direct table ops (tasks → subjects → profiles); no RPC |
+| `increment_completed_items` RPC | Supabase DB | Retained in DB; **app no longer calls it directly** |
 | Core subject schema | `profiles`, `subjects`, `tasks` tables | Core fields are correct; additions are additive, not replacements |
 | `is_plan_generated` flag on tasks | DB + type definition | Correct distinction; used by regeneration logic |
 | Regeneration preserves past | `generatePlan.ts` (partial) | The guard `scheduled_date >= today` for deletion is exactly right |
@@ -39,11 +39,11 @@ The following modules are correct as implemented. They require no structural cha
 
 ---
 
-## 3. What Needs Refactoring
+## 3. What Needed Refactoring (Post-Audit Status)
 
-The following modules exist but must be changed to align with the spec.
+The following modules were identified for change. Items marked **✅ DONE** have been fully implemented. Items marked **⬜ PENDING** remain as frontend-only work.
 
-### 3.1 — `generatePlan.ts` (Critical)
+### 3.1 — `generatePlan.ts` ✅ DONE
 
 **Current problem:** Plan generation is a single-pass function that detects overload and immediately either writes tasks or aborts. The `auto` mode silently bumps effective capacity without user knowledge, directly violating Core Rule #2.
 
@@ -55,7 +55,7 @@ The `auto` mode is removed entirely.
 
 ---
 
-### 3.2 — `overloadAnalyzer.ts` (Significant)
+### 3.2 — `overloadAnalyzer.ts` ✅ DONE
 
 **Current problem:** Computes a single global burn rate (total remaining minutes / days to furthest deadline) and compares it against daily capacity. This is not granular enough for per-subject feasibility analysis as required by the Blueprint Screen.
 
@@ -69,7 +69,7 @@ The global burn rate check is retained as a summary output but the per-subject b
 
 ---
 
-### 3.3 — `resolveOverload.ts` (Empty — Must Be Implemented)
+### 3.3 — `resolveOverload.ts` ✅ DONE
 
 **Current problem:** The file is an empty placeholder. It sits on the critical path between overload detection and plan confirmation.
 
@@ -77,7 +77,7 @@ The global burn rate check is retained as a summary output but the per-subject b
 
 ---
 
-### 3.4 — `scheduler.ts` (Moderate)
+### 3.4 — `scheduler.ts` ✅ DONE
 
 **Current problem:** The day-filling loop assumes every day from today to the furthest deadline is available. It does not accept off-days. It does not enforce the two-tier deadline hierarchy (subject deadline must not exceed exam deadline). It supports a capacity-override parameter used only by the now-deprecated `auto` mode.
 
@@ -91,7 +91,7 @@ The core sorting logic (mandatory → earliest deadline → urgency score) is re
 
 ---
 
-### 3.5 — Onboarding Page (Major Expansion)
+### 3.5 — Onboarding Page ⬜ PENDING (Frontend Roadmap Phase 7)
 
 **Current problem:** Only Step 1 (profile setup) is implemented. The flow does not continue into subject setup, constraint configuration, or blueprint preview.
 
@@ -109,7 +109,7 @@ Each step is skippable. Skipping Step 4 proceeds with an unreviewed blueprint an
 
 ---
 
-### 3.6 — Dashboard Page (Major Expansion)
+### 3.6 — Dashboard Page ⬜ PENDING (Frontend Roadmap Phase 4)
 
 **Current problem:** A single component rendering today's task list and a minutes summary. Structurally cannot accommodate the 7-grid layout.
 
@@ -119,20 +119,13 @@ See Section 6 for the full panel breakdown.
 
 ---
 
-### 3.7 — Route Protection (Moderate)
+### 3.7 — Route Protection ✅ DONE
 
-**Current problem:** Auth checks occur in `useEffect` hooks on the client, producing a flash of unprotected content before the redirect fires.
-
-**Required change:** Implement route protection in `middleware.ts` (the file already exists). The middleware should:
-- Read the Supabase session from cookies on every request to a protected route (`/dashboard/*`, `/planner/*`, `/onboarding/*`).
-- Redirect to `/auth/login` if no valid session is found.
-- Redirect to `/onboarding` if a session exists but no `profiles` row exists.
-
-Client-side `useEffect` auth checks can be removed once middleware is reliable.
+`middleware.ts` handles all route protection server-side: unauthenticated → `/auth/login`; session but no `profiles` row → `/onboarding`. Client-side `useEffect` auth guards have been removed.
 
 ---
 
-### 3.8 — Language Audit (Minor)
+### 3.8 — Language Audit ⬜ PENDING (Frontend Roadmap Phase 9)
 
 **Current problem:** UI copy and internal documentation use the word "students" and framing specific to exam prep.
 
@@ -279,8 +272,9 @@ The scheduling engine is a pure-function pipeline. No component of the engine re
 │                          → return updated BlueprintResult        │
 │  plan/commitPlan.ts      Accept confirmed input → run Phase 3    │
 │                          → delete + insert tasks                 │
-│  plan/completeTask.ts    Mark task done → increment RPC          │
-│                          → update streak fields on profile       │
+  plan/completeTask.ts    Mark task done → direct table ops:      
+│                          UPDATE tasks, UPDATE subjects,           
+│                          UPDATE profiles streak fields           
 │  plan/rescheduleTask.ts  (New) Move task to new date             │
 │                          → update scheduled_date on task row     │
 │  dashboard/              Dedicated data-fetch actions per panel:  │
@@ -474,15 +468,15 @@ The following sequence is designed to keep the application working at every step
 
 | Phase | Work | Risk |
 |---|---|---|
-| **P1 — Middleware Auth** | Implement `middleware.ts` route protection; remove client useEffect auth guards | Low — additive |
-| **P2 — Schema Additions** | Add `off_days` table; add streak columns to `profiles`; add composite index on `tasks` | Low — additive only |
-| **P3 — Engine Refactor** | Extend `overloadAnalyzer.ts`; refactor `scheduler.ts` for off-days + deadline hierarchy; remove auto mode | Medium — touches core logic; existing tests (if any) must pass |
-| **P4 — Blueprint Pipeline** | Implement `analyzePlan`, refactor `resolveOverload`, implement `commitPlan`; wire up `/planner` page to new pipeline | Medium — replaces planner UI flow |
-| **P5 — Onboarding Expansion** | Extend onboarding to 5 steps; integrate Blueprint Screen as Step 4 | Medium — new UI; no DB risk |
-| **P6 — Dashboard Expansion** | Rebuild dashboard page as 7-panel grid; implement panel components and their data actions | Medium — large UI work; data layer is reads-only |
-| **P7 — Calendar Expansion** | Add day modal, drag-to-reschedule, missed task indicators; implement `rescheduleTask` action | Medium — interactive UI; `rescheduleTask` is a simple UPDATE |
-| **P8 — Settings Page** | Add settings page for profile fields, exam deadline, off-days management | Low — CRUD with existing schema |
-| **P9 — Language Audit** | Sweep all UI strings; replace student/exam-specific language | Low — cosmetic |
+| **P1 — Middleware Auth** ✅ | `middleware.ts` route protection implemented; unauthenticated → login; no profile → onboarding | Complete |
+| **P2 — Schema Additions** ✅ | `off_days` table; streak columns on `profiles`; `profiles → auth.users` FK; 3 migrations applied | Complete |
+| **P3 — Engine Refactor** ✅ | `overloadAnalyzer.ts` extended; `scheduler.ts` accepts `offDays` + enforces `examDeadline`; `auto` mode removed | Complete |
+| **P4 — Blueprint Pipeline** ✅ | `analyzePlanAction` (no DB write) + `commitPlan` + `resolveOverload` all implemented; `/planner` wired | Complete |
+| **P5 — Onboarding Expansion** ⬜ | Extend onboarding to 5 steps; integrate Blueprint Screen as Step 4 | Frontend Roadmap Phase 7 |
+| **P6 — Dashboard Expansion** ⬜ | Rebuild dashboard page as 7-panel grid; implement panel components | Frontend Roadmap Phase 4 |
+| **P7 — Calendar Expansion** 🔄 | `rescheduleTask` action done; Mark Complete works; drag-to-reschedule UI not yet built | Frontend Roadmap Phase 5 |
+| **P8 — Settings Page** ⬜ | Add settings page for profile fields, exam deadline, off-days management | Frontend Roadmap Phase 8 |
+| **P9 — Language Audit** ⬜ | Sweep all UI strings; replace student/exam-specific language | Frontend Roadmap Phase 9 |
 
 ---
 

@@ -104,6 +104,14 @@ export async function resolveOverload(
 		return { status: "NO_SUBJECTS" }
 	}
 
+	// Fetch off-days so the analyzer/scheduler can skip them
+	const { data: offDayRows } = await supabase
+		.from("off_days")
+		.select("date")
+		.eq("user_id", user.id)
+
+	const offDays = new Set<string>((offDayRows ?? []).map(r => r.date))
+
 	const { subjects: adjustedSubjects, dailyMinutes } = applyAdjustment(
 		subjects,
 		profile.daily_available_minutes,
@@ -115,7 +123,8 @@ export async function resolveOverload(
 		dailyMinutes,
 		today,
 		mode,
-		profile.exam_date ?? undefined
+		profile.exam_date ?? undefined,
+		offDays
 	)
 
 	return analysis

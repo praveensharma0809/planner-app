@@ -1,98 +1,174 @@
 # Current System Overview
 
-This document describes the existing implementation of the planner app. It is a reverse‑engineered summary of how the system works today, covering core functionality, architecture, data model, and user flows.
+**Last updated:** February 28, 2026 (Session 8 — Batch 2)
+
+This document describes the current implemented and stable state of StudyHard. It is kept in sync with every change batch.
 
 ---
 
 ## 1. Application Purpose
 
-The web application is a personal study planner geared toward students preparing for competitive exams. Users define subjects with item counts and deadlines, specify their daily available study time, and the system automatically generates a schedule of tasks. Tasks can then be marked complete as the user works through them. There are also dashboard and calendar views for reviewing current and past tasks.
+StudyHard is a Strategic Execution Engine for people preparing for high-stakes goals. Users define subjects with item counts and deadlines, specify daily capacity, and the system generates a capacity-aware task schedule through an analyze-review-confirm pipeline. Tasks are tracked on a dashboard and calendar. Streaks, backlog, and subject progress are maintained automatically on completion.
 
 
 ## 2. Major Modules and Folders
 
-- **`app/`** – Next.js 13+ (App Router) frontend pages and layouts.
-  - `/auth/` – login and signup screens using Supabase client SDK.
-  - `/onboarding/` – profile setup page for new users.
-  - `/dashboard/` – authenticated area with `layout.tsx` (sidebar) and subpages:
-    - `page.tsx` – today’s task list and daily summary.
-    - `subjects/` – subject management (list, add, edit, delete).
-    - `calendar/` – month‑view of scheduled tasks.
-  - `/planner/` – page to trigger plan generation with overload detection.
-  - Root `page.tsx` – redirects users based on auth/profile state.
+- **`app/`** — Next.js 16 (App Router) frontend pages and layouts.
+  - `/auth/` — Login and signup screens using Supabase browser client. Branded UI with loading states, toast errors, try-catch error handling, `<main>` semantic wrappers, and cross-page links.
+  - `/onboarding/` — 5-step onboarding wizard: Profile → Subjects → Off-Days → Blueprint Preview → Confirm & Generate. Uses toast system (no alert() calls). All 6 async handlers wrapped in try-catch. Progressbar aria roles. Accessible input labels.
+  - `/dashboard/` — Authenticated area, protected by middleware:
+    - `layout.tsx` — Sidebar navigation (responsive: slide-out drawer on mobile, fixed on desktop).
+    - `Sidebar.tsx` — Nav links with icons, active state indicator bar (emerald accent), transitions, sign-out button with try-catch.
+    - `page.tsx` — Dashboard: streak (with break warning), today's tasks (with quick-add), weekly strip, deadline proximity alerts, backlog, plan health with execution score, mini monthly calendar, backlog reschedule banner.
+    - `QuickAddTask.tsx` — Inline quick-add task for today, embedded in dashboard. Subject picker, duration input, Enter-to-submit.
+    - `subjects/` — Subject CRUD via server actions (`SubjectCard`, `AddSubjectForm`). Supports archive/restore (soft-delete). Archived subjects shown in separate section. Subtopics panel per subject.
+    - `calendar/` — Week view AND month view:
+      - **WeekView** — HTML5 drag-and-drop rescheduling, mark complete, inline reschedule, undo complete (↩), Add Custom Task form. Optimistic UI + revert.
+      - **MonthView** — Interactive monthly grid with keyboard navigation (arrow keys), day expansion with task completion/undo, `role="grid"`, roving tabindex.
+    - `settings/` — Profile/settings editor + off-days management + re-trigger onboarding + theme toggle.
+  - `/planner/` — Analyze → overload resolution → task preview → commit pipeline. Confirmation dialog before re-generating. Plan history log. Division-by-zero guards.
+  - `/components/` — `SubmitButton`, `Toast` (with aria-live), `ThemeProvider` (light/dark).
+  - Root `page.tsx` — Redirects based on auth/profile state.
 
-- **`lib/`** – shared library code.
-  - `supabase.ts` – browser Supabase client.
-  - `supabase/server.ts` – helper for creating a server‑side Supabase client using Next.js cookies.
-  - `types/db.ts` – TypeScript interfaces for `Profile`, `Subject`, and `Task` rows.
-  - `planner/` – planning logic:
-    - `scheduler.ts` – algorithm that turns subjects into scheduled tasks.
-    - `overloadAnalyzer.ts` – checks if current load exceeds daily capacity.
-    - `generatePlan.ts` – server action that orchestrates plan generation and writes tasks.
+- **`lib/`** – Shared library code.
+  - `constants.ts` — APP_NAME, timing constants, urgency/score/health thresholds, locale config, priority options.
+  - `supabase.ts` — Browser Supabase client.
+  - `supabase/server.ts` — `createServerSupabaseClient()` cookie-based server client.
+  - `types/db.ts` — `Profile`, `Subject` (with `archived`), `Task`, `OffDay`, `Subtopic`, `PlanEvent`.
+  - `planner/` — Pure planning logic: `scheduler.ts`, `overloadAnalyzer.ts`, `analyzePlan.ts`.
 
-- **`app/actions/plan/`** – server actions for task operations.
-  - `completeTask.ts` – mark task complete and bump subject counter.
-  - `resolveOverload.ts` – currently empty placeholder.
+- **`app/actions/plan/`** – Server actions for task and plan mutations.
+  - `completeTask.ts` — Mark complete, update subject counter + streak. Returns `void`.
+  - `uncompleteTask.ts` — Mark incomplete, decrement subject counter (floor 0). No streak change.
+  - `analyzePlan.ts` — Load profile/subjects(excl. archived)/off_days, run engine, return blueprint.
+  - `commitPlan.ts` — Delete future generated tasks, insert new schedule, log plan event.
+  - `rescheduleTask.ts` — Move task to new date. Reject past dates.
+  - `resolveOverload.ts` — Recompute with adjustments. Excludes archived subjects.
+  - `createTask.ts` — Custom manual task creation.
+  - `logPlanEvent.ts` — Log events to plan_events table.
+  - `getPlanHistory.ts` — Fetch last 20 plan events.
 
-Other miscellaneous config files include Next.js and ESLint configs, etc.
+- **`app/actions/dashboard/`** – Read-only server actions. All subject queries filter `archived = false`.
+- **`app/actions/subjects/`** – `addSubject`, `updateSubject`, `deleteSubject`, `toggleArchiveSubject`, `subtopics`.
+- **`app/actions/offdays/`** – `addOffDay`, `deleteOffDay`, `getOffDays`.
+- **`middleware.ts`** – Session refresh, auth redirect, profile redirect.
 
 
 ## 3. Backend Architecture Style
 
-The backend is primarily serverless and handled by Supabase (PostgreSQL + Auth + Edge Functions). There is no custom API server; most data access happens directly from React components or from server‑action helpers (using `"use server"` in Next.js). Authentication and row operations use the Supabase client or server client depending on context. Database logic is mostly in Supabase tables and a few stored procedures (e.g. `increment_completed_items` invoked via RPC).
+Serverless via Supabase (PostgreSQL + Auth + RLS). All mutations through Next.js Server Actions with cookie-based Supabase server client. Planning engine is pure functions in `lib/planner/`. All actions return structured types (SUCCESS/UNAUTHORIZED/ERROR).
 
 
-## 4. Database Structure (Inferred)
+## 4. Database Structure
 
-Supabase tables mirror the TypeScript interfaces:
+Six public tables, all with RLS (`user_id = auth.uid()`):
 
-- **profiles** – keyed by `id` (user UUID). Fields include `full_name`, `primary_exam`, `qualification`, `phone`, `daily_available_minutes`, `exam_date`, `created_at`.
-- **subjects** – each row has `id`, `user_id` foreign key, `name`, `total_items`, `completed_items`, `avg_duration_minutes`, `deadline` (ISO date string), `priority` (numeric), `mandatory` (boolean), `created_at`.
-- **tasks** – scheduled study tasks: `id`, `user_id`, `subject_id`, `title`, `scheduled_date`, `duration_minutes`, `priority`, `completed` (bool), `is_plan_generated` (bool), `created_at`.
+- **`profiles`** — `id` (FK auth.users), `full_name`, `primary_exam`, `qualification`, `phone`, `daily_available_minutes`, `exam_date`, `streak_current`, `streak_longest`, `streak_last_completed_date`, `created_at`.
+- **`subjects`** — `id`, `user_id`, `name`, `total_items`, `completed_items`, `avg_duration_minutes`, `deadline`, `priority`, `mandatory`, **`archived`** (default false), `created_at`.
+- **`tasks`** — `id`, `user_id`, `subject_id` (FK), `title`, `scheduled_date`, `duration_minutes`, `priority`, `completed`, `is_plan_generated`, `created_at`.
+- **`off_days`** — `id`, `user_id`, `date`, `reason`, `created_at`. Unique on `(user_id, date)`.
+- **`subtopics`** — `id`, `user_id`, `subject_id`, `name`, `total_items`, `completed_items`, `sort_order`, `created_at`.
+- **`plan_events`** — `id`, `user_id`, `event_type` (analyzed/committed/resolved_overload), `task_count`, `summary`, `created_at`.
 
-Additional objects:
-- Supabase Auth users table (managed by Supabase).
-- A PostgreSQL RPC `increment_completed_items(subject_id_input)` increments a subject's `completed_items` counter when a task is marked complete.
+Migrations: `202602280001` (streaks, off_days), `202602280002` (streak function), `202602280003` (corrections), `202602280004` (subject archive), `202602280005` (plan_events).
 
 
 ## 5. Task & Schedule Management
 
-- **Plan generation**: When the user clicks "Generate Plan" on `/planner`, the client calls `generatePlan(mode)` (mode is `"strict"` or `"auto"`).
-  1. `generatePlan` checks auth and loads user profile and subjects via the server Supabase client.
-  2. If no profile or subjects exist it returns an error state.
-  3. It runs `overloadAnalyzer` to compute `burnRate` (total remaining minutes divided by days until furthest deadline) and compare to `daily_available_minutes`. If overload and mode is `strict`, it returns an overload status to the client without writing tasks.
-  4. Otherwise it calls `scheduler`, which sorts active subjects (mandatory → earliest deadline → urgency score) and iteratively fills days from today forward, producing a list of `ScheduledTask` objects. In `auto` mode, the effective daily capacity is bumped to at least the burn rate; in `strict` mode it stays at the user's declared capacity.
-  5. Before inserting new tasks the function deletes any existing `tasks` for the user that were `is_plan_generated = true` and have `scheduled_date >= today` (allows regeneration/rescheduling while preserving past history).
-  6. The computed tasks are inserted with `completed = false` and `is_plan_generated = true`.
-  7. The client displays success or overload information accordingly.
+### Plan generation
+1. `analyzePlanAction()` loads profile, subjects (excl. archived), off_days.
+2. `analyzePlan()` → `overloadAnalyzer` + `scheduler` → `ScheduledTask[]`.
+3. Overload → `resolveOverload(adjustment)` recomputes (no DB write).
+4. Confirmation dialog if re-analyzing existing plan.
+5. `commitPlan()` → delete old + insert new + log plan event + revalidate.
 
-- **Task completion**: Clicking "Complete" on a task (on dashboard or calendar) triggers the server action `completeTask(taskId)`. This:
-  1. Retrieves the task row and returns if already completed or not found.
-  2. Updates `completed = true` on the task (ensuring the user owns it).
-  3. Calls the `increment_completed_items` RPC to bump the parent subject's `completed_items` counter. This keeps subject progress accurate for scheduling.
+### Task completion / undo
+- `completeTask(taskId)`: Mark complete, increment subject counter, update streak. Idempotent.
+- `uncompleteTask(taskId)`: Mark incomplete, decrement counter (floor 0). No streak change. Undo button (↩) in WeekView + MonthView.
 
-- **Rescheduling**: Regenerating a plan automatically deletes future generated tasks and reinserts new ones, so schedules adapt as subject progress or deadlines change. Past tasks (dates before today) are never deleted or modified.
+### Rescheduling
+- Inline date picker or HTML5 drag-and-drop in WeekView.
+- `rescheduleTask(taskId, newDate)`: Rejects past dates.
 
-
-## 6. Authentication System
-
-- Supabase Auth handles user accounts with email/password.
-- Client‑side pages (`/auth/login`, `/auth/signup`) use the browser Supabase client to sign in/up.
-- Protected areas (dashboard, onboarding, planner) check `supabase.auth.getUser()` in `useEffect` hooks or server actions; unauthenticated users are redirected to login.
-- After signing up the user must complete the onboarding profile; the presence of a row in `profiles` determines if onboarding is needed.
+### Subject archiving
+- `toggleArchiveSubject()`: Toggles `archived`. Archived excluded from planning/dashboard/deadlines. Visible in subjects "Archived" section.
 
 
-## 7. Key User Flows
-
-1. **Sign up / login:** User registers via `/auth/signup` (Supabase sends confirmation). Login via `/auth/login`. The root page redirects them appropriately.
-2. **Onboarding:** After first login, the user is prompted to enter full name, primary exam, and daily available study hours. This creates a `profiles` row with `id = user.id` and calculates `daily_available_minutes`.
-3. **Add subjects:** In `/dashboard/subjects`, the user adds subjects by specifying name, total items, average duration, deadline, and priority. Subjects can be edited or deleted. Deleting a subject likely cascades to tasks through foreign key constraints (the UI warns about associated tasks).
-4. **Generate plan:** Navigate to `/planner` and hit "Generate Plan". If overload is detected the UI shows required vs. available minutes and offers to proceed strict or auto‑adjust. Successful generation inserts scheduled tasks for upcoming days.
-5. **Dashboard / daily tasks:** `/dashboard` shows tasks scheduled for the current day, along with a summary of total, completed, and remaining minutes. Tasks can be marked complete; completion updates the subject progress.
-6. **Calendar:** `/dashboard/calendar` lists tasks grouped by date for the current month. Users may complete tasks from here as well.
-7. **Subject progress:** As tasks are completed, the `completed_items` field on subjects increments. This influences future schedule generations since only remaining items appear.
+## 6. Authentication
+- Supabase Auth (email/password), cookie-based sessions.
+- `middleware.ts` refreshes sessions, redirects unauthenticated/no-profile.
+- All server actions verify auth independently.
 
 
----
+## 7. Accessibility
+- `focus-visible` keyboard rings. Arrow key MonthView navigation (roving tabindex).
+- `aria-label` on all buttons (with dynamic context), `aria-expanded` on toggles.
+- `role="grid"` on calendar, `role="status" aria-live="polite"` on toast, `role="progressbar"` on stepper.
+- `htmlFor`/`id` on form fields. `<main>` semantic wrappers.
 
-This documentation captures the current implementation and behavior of the planner application. It is intended as a reference before any proposed enhancements or refactors.
+
+## 8. Error Handling
+- Try-catch on all ~30+ client-side async functions with `finally` blocks.
+- Toast notifications for all feedback (no `alert()` calls).
+- Division-by-zero and NaN guards on numeric computations.
+- Optimistic UI with revert on error (WeekView/MonthView).
+- Per-route `error.tsx` error boundaries.
+
+
+## 9. Theme System
+- `ThemeProvider` context, `data-theme` attribute on `<html>`.
+- Persists to `localStorage` (`studyhard-theme`).
+- Light mode via `[data-theme="light"]` CSS overrides.
+
+
+## 10. Test Suite
+
+**52 tests across 11 files**, all passing, 0 TypeScript errors.
+
+| File | Tests | Coverage |
+|---|---|---|
+| `completeTask.test.ts` | 3 | Auth, idempotency, table ops |
+| `commitPlan.test.ts` | 2 | Future-only insert, unauthorized |
+| `getSubjectProgress.test.ts` | 4 | Auth, health computation, edge cases |
+| `getMonthTaskCounts.test.ts` | 4 | Auth, aggregation, sorting |
+| `getStreak.test.ts` | 4 | Streak calculations |
+| `getBacklog.test.ts` | 4 | Backlog filtering |
+| `rescheduleTask.test.ts` | 6 | Validation |
+| `createTask.test.ts` | 6 | Creation validation |
+| `analyzePlan.test.ts` | 2 | OVERLOAD/READY modes |
+| `scheduler.test.ts` | 9 | Off-days, exam-date, empty, capacity, interleaving, priority |
+| `overloadAnalyzer.test.ts` | 7 | Overload edge cases |
+
+
+## 11. Recent Changes (Session 8 — Batch 2)
+
+| Change | Key Files |
+|---|---|
+| Production hardening (try-catch, guards, constants, aria-live) | `lib/constants.ts`, ~14 component files |
+| Accessibility (~29 aria fixes) | Multiple components |
+| Keyboard calendar navigation | `MonthView.tsx` |
+| Confirm before plan regen | `planner/page.tsx` |
+| Task undo (uncomplete) with optimistic UI | `uncompleteTask.ts`, WeekView, MonthView |
+| Sidebar icons + active indicator | `Sidebar.tsx` |
+| Dashboard quick-add task | `QuickAddTask.tsx`, `page.tsx` |
+| Subject archive/soft-delete | Migration, toggle action, type update, query filters |
+| 7 new scheduler tests (45→52) | `scheduler.test.ts` |
+| Planner history log | Migration, log/fetch actions, planner UI |
+
+### Session 8 — Batch 1 Changes
+
+Drag-to-reschedule, streak break warning, deadline alerts, tests 18→45, theme toggle, empty states, responsive polish, subtopics panel.
+
+### Prior Sessions
+
+Auth, onboarding wizard, planner pipeline, dashboard (7+ panels), calendar (week+month), subjects CRUD, settings, toast system, error boundaries, loading skeletons, sidebar, branding, language audit, focus-visible styles.
+
+
+## 12. Tech Stack
+
+- **Runtime:** Next.js 16.1.6 (App Router, Turbopack)
+- **Language:** TypeScript (strict mode, 0 errors)
+- **Styling:** Tailwind CSS v4
+- **Database:** Supabase (PostgreSQL + Auth + RLS)
+- **Testing:** Vitest (52/52 passing)
+- **Package manager:** npm

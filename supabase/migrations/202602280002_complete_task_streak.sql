@@ -2,7 +2,7 @@
 -- Depends on existing increment_completed_items RPC
 
 create or replace function public.complete_task_with_streak(p_task_id uuid)
-returns void
+returns json
 language plpgsql
 security definer
 set search_path = public
@@ -21,11 +21,11 @@ begin
   for update;
 
   if not found then
-    return;
+    return json_build_object('status', 'noop');
   end if;
 
   if v_task.completed then
-    return;
+    return json_build_object('status', 'noop');
   end if;
 
   -- Mark task completed
@@ -42,7 +42,7 @@ begin
   for update;
 
   if not found then
-    return;
+    return json_build_object('status', 'noop');
   end if;
 
   -- Compute new streak values
@@ -69,5 +69,7 @@ begin
 
   -- Increment subject counts (existing RPC)
   perform increment_completed_items(v_task.subject_id);
+
+  return json_build_object('status', 'completed');
 end;
 $$;

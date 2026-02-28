@@ -1,6 +1,6 @@
 # DB_SCHEMA.md
 ## StudyHard — Target Database Schema
-Version: 1.0 (aligns with PROJECT_SPEC v2.0 and ARCHITECTURE v1.0)
+Version: 1.1 (updated post-audit February 28, 2026)
 Scope: Define the relational schema to support the target architecture without adding new product features.
 
 ---
@@ -51,8 +51,9 @@ Scope: Define the relational schema to support the target architecture without a
 - created_at (timestamptz, default now())
 - UNIQUE (user_id, date)
 
-### 1.5 RPC (existing)
-- increment_completed_items(subject_id uuid) — keeps subjects.completed_items in sync when tasks are completed.
+### 1.5 RPCs (DB-resident; not called directly by app)
+- `increment_completed_items(subject_id uuid)` — increments `subjects.completed_items`. **Retained in DB** but the app no longer calls it directly. `completeTask.ts` uses a direct `UPDATE subjects` call instead (avoids PostgREST schema-cache binding issues).
+- `complete_task_with_streak(p_task_id uuid)` — admin-only helper added in migration 3. Not called by the app. Marked with a `COMMENT` in the DB for documentation.
 
 ---
 ## 2) Relationships & Invariants
@@ -85,29 +86,28 @@ Scope: Define the relational schema to support the target architecture without a
 - Phase 1/2 (analyzePlan/resolveOverload): read profiles, subjects, off_days; compute BlueprintResult in memory; no writes.
 - Phase 3 (commitPlan): delete future generated tasks, insert new generated tasks with is_plan_generated = true; never touches past rows or manual tasks.
 - Calendar drag (rescheduleTask): updates tasks.scheduled_date; rejects moves before today; does not alter completed state.
-- Streak updates: completeTask action marks task completed and updates profiles streak fields atomically with the RPC counter.
+- Task completion (completeTask): **3-step direct table ops** — (1) UPDATE tasks SET completed=true WHERE completed=false (idempotent guard); (2) UPDATE subjects SET completed_items = completed_items + 1; (3) UPDATE profiles streak fields. No RPC call.
 
 ---
-## 6) Migration Plan (from current schema)
-1) Add columns to profiles:
-   - streak_current integer DEFAULT 0
-   - streak_longest integer DEFAULT 0
-   - streak_last_completed_date date NULL
-   These are additive and backfilled to 0/NULL; no downtime expected.
+## 6) Migration Status (all 3 migrations applied ✅)
 
-2) Create off_days table as defined above with UNIQUE (user_id, date).
+**Migration 1 — `202602280001_phase1_schema.sql`** ✅
+- Added `streak_current`, `streak_longest`, `streak_last_completed_date` to `profiles`.
+- Created `off_days` table with `UNIQUE (user_id, date)`.
+- Created `complete_task_with_streak` RPC (original signature).
 
-3) Retain existing profiles columns qualification and phone but mark deprecated in code; remove from forms and type surfaces. (Future cleanup migration can drop them.)
+**Migration 2 — `202602280002_complete_task_streak.sql`** ✅
+- Updated `complete_task_with_streak` function body with correct streak logic.
 
-4) Ensure tasks table keeps is_plan_generated; no change needed.
+**Migration 3 — `202602280003_schema_corrections.sql`** ✅
+- Added `DEFAULT gen_random_uuid()` to `off_days.id` (was missing).
+- Added `FOREIGN KEY` from `profiles.id → auth.users(id)`.
+- Rebuilt `complete_task_with_streak` as admin-only helper with `COMMENT` noting the app uses direct table ops.
 
-5) Backfill/verify data integrity:
-   - Set any NULL completed_items to 0 on subjects if they exist.
-   - Ensure all tasks rows have is_plan_generated populated (default true for legacy rows if missing).
+**Remaining (no migration needed):**
+- Legacy `qualification` and `phone` columns on `profiles` — retained in DB; excluded from all UI and type surfaces.
+- Subtopic hierarchy (`parent_id` on subjects) — deferred to a future release.
 
-6) RLS review (Supabase): confirm policies for off_days mirror subjects/tasks (user_id isolation) and profiles remains 1:1.
-
-7) Deploy migration in a single transaction; client code should be updated to ignore new columns safely (Supabase client tolerates extra fields).
 
 ---
 ## 7) Assumptions
