@@ -17,6 +17,14 @@ StudyHard converts a person's workload, available time, and deadline into a disc
 
 ---
 
+## Use Cases
+
+- **Students preparing for exams**: Plan study schedules for multiple subjects with deadlines.
+- **Professionals managing certifications**: Balance work and study time effectively.
+- **Project planners**: Break down tasks into manageable chunks and track progress.
+
+---
+
 ## Stack
 
 | Layer | Technology |
@@ -183,10 +191,54 @@ User confirms
 
 ---
 
-## Development notes
+## Deployment
 
-- `lib/supabase.ts` exports a **browser** Supabase client used only by auth pages and the onboarding form. All server-side code uses `lib/supabase/server.ts`.
-- Task completion **does not use PostgREST RPC**. All three writes (task, subject, profile) go through the Supabase table API directly, scoped with `user_id`. This eliminates the PostgREST schema-cache UUID binding bug (`22P02: invalid input syntax for type uuid: "0"`) that occurs when a function signature is changed and the cache is stale.
-- `complete_task_with_streak` remains in the database as a SECURITY DEFINER admin/backfill helper, but the application never calls it.
-- `vitest.setup.ts` mocks `next/cache` globally so server actions can be unit-tested without a Next.js request context. `vitest.config.ts` wires it via `setupFiles`.
-- `app/dashboard/TaskCard.tsx` has `"use client"` — it uses `onClick` handlers.
+### Hosting on Vercel
+
+1. Connect your GitHub repository to Vercel.
+2. Set the environment variables in the Vercel dashboard:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+3. Deploy the project.
+
+### Supabase Configuration
+
+Ensure the Supabase project has the correct RLS policies and database schema as defined in the migrations.
+
+---
+
+## Contributing
+
+1. Fork the repository.
+2. Create a new branch for your feature or bug fix:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+3. Commit your changes:
+   ```bash
+   git commit -m "Add your message here"
+   ```
+4. Push to your branch:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+5. Open a pull request.
+
+---
+
+## Known Issues
+
+- **Task rescheduling conflicts:** Rescheduling tasks may lead to overlapping deadlines if not resolved manually.
+- **Browser compatibility:** Fully tested on Chrome and Firefox; other browsers may have minor UI inconsistencies.
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+---
+
+## Contact
+
+For questions or support, please contact the maintainers at [support@studyhard.com](mailto:support@studyhard.com).

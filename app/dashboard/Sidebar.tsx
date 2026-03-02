@@ -40,6 +40,14 @@ const navLinks = [
     ),
   },
   {
+    href: "/execution", label: "Execution", exact: false,
+    icon: (
+      <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+        <path d="M4 6h16M4 12h16M4 18h10" />
+      </svg>
+    ),
+  },
+  {
     href: "/dashboard/settings", label: "Settings", exact: false,
     icon: (
       <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">

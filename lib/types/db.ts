@@ -23,7 +23,24 @@ export interface Subject {
   priority: number
   mandatory: boolean
   archived?: boolean
+  urgency_score?: number
+  health_state?: "stable" | "watch" | "at_risk" | "critical" | "overdue" | null
+  remaining_minutes?: number
+  estimated_completion_date?: string | null
   created_at: string
+}
+
+export interface SubjectWorkloadView {
+  subject_id: string
+  user_id: string
+  subject_name: string
+  deadline: string
+  priority: number
+  archived: boolean
+  effective_total_items: number
+  subtopic_count: number
+  avg_duration_minutes: number
+  total_hours_required: number
 }
 
 export interface Task {
@@ -65,4 +82,38 @@ export interface PlanEvent {
   task_count: number
   summary: string | null
   created_at: string
+}
+
+export interface ExecutionCategory {
+  id: string
+  user_id: string
+  month_start: string
+  name: string
+  sort_order: number
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ExecutionItem {
+  id: string
+  user_id: string
+  category_id: string
+  series_id: string
+  month_start: string
+  title: string
+  sort_order: number
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ExecutionEntry {
+  id: string
+  user_id: string
+  item_id: string
+  entry_date: string
+  completed: boolean
+  created_at: string
+  updated_at: string
 }

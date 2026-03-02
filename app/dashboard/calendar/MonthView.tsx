@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import type { Task } from "@/lib/types/db"
 import { completeTask } from "@/app/actions/plan/completeTask"
 import { uncompleteTask } from "@/app/actions/plan/uncompleteTask"
+import { rescheduleTask } from "@/app/actions/plan/rescheduleTask"
 
 interface Props {
   tasks: Task[]
@@ -30,27 +31,10 @@ export function MonthView({ tasks, year, month, today, prevMonth, nextMonth, isC
   const [completedLocal, setCompletedLocal] = useState<Set<string>>(new Set())
   const [uncompletedLocal, setUncompletedLocal] = useState<Set<string>>(new Set())
   const [uncompletingId, setUncompletingId] = useState<string | null>(null)
-  const gridRef = useRef<HTMLDivElement>(null)
+  const [movingId, setMovingId] = useState<string | null>(null)
 
   const daysInMonth = new Date(year, month, 0).getDate()
   const firstDayOfWeek = (new Date(year, month - 1, 1).getDay() + 6) % 7
-
-  const handleGridKeyDown = useCallback((e: React.KeyboardEvent) => {
-    const target = e.target as HTMLElement
-    if (!target.dataset.dayIndex) return
-
-    const idx = Number(target.dataset.dayIndex)
-    let next = idx
-    if (e.key === "ArrowRight") next = Math.min(idx + 1, daysInMonth - 1)
-    else if (e.key === "ArrowLeft") next = Math.max(idx - 1, 0)
-    else if (e.key === "ArrowDown") next = Math.min(idx + 7, daysInMonth - 1)
-    else if (e.key === "ArrowUp") next = Math.max(idx - 7, 0)
-    else return
-
-    e.preventDefault()
-    const nextBtn = gridRef.current?.querySelector(`[data-day-index="${next}"]`) as HTMLElement | null
-    nextBtn?.focus()
-  }, [daysInMonth])
 
   const tasksByDate = new Map<string, Task[]>()
   for (const task of tasks) {
@@ -87,6 +71,19 @@ export function MonthView({ tasks, year, month, today, prevMonth, nextMonth, isC
     }
   }
 
+  const handleReschedule = async (taskId: string, newDate: string) => {
+    if (!newDate || newDate < today) return
+    setMovingId(taskId)
+    try {
+      const result = await rescheduleTask(taskId, newDate)
+      if (result.status === "SUCCESS") {
+        window.location.reload()
+      }
+    } finally {
+      setMovingId(null)
+    }
+  }
+
   const expandedTasks = expandedDay ? (tasksByDate.get(expandedDay) ?? []) : []
 
   return (
@@ -100,29 +97,23 @@ export function MonthView({ tasks, year, month, today, prevMonth, nextMonth, isC
           <div className="flex items-center gap-2 flex-wrap">
             {!isCurrentMonth && (
               <Link
-                href="/dashboard/calendar?view=month"
+                href="/dashboard/calendar"
                 className="px-3 py-1.5 text-xs bg-indigo-500/15 border border-indigo-500/20 text-indigo-300 rounded-xl hover:bg-indigo-500/25 transition-all font-medium"
               >
                 This month
               </Link>
             )}
             <Link
-              href={`/dashboard/calendar?view=month&month=${prevMonth}`}
+              href={`/dashboard/calendar?month=${prevMonth}`}
               className="px-3 py-1.5 text-sm bg-white/[0.04] border border-white/[0.06] rounded-xl hover:bg-white/[0.08] transition-all"
             >
               &#x2190; Prev
             </Link>
             <Link
-              href={`/dashboard/calendar?view=month&month=${nextMonth}`}
+              href={`/dashboard/calendar?month=${nextMonth}`}
               className="px-3 py-1.5 text-sm bg-white/[0.04] border border-white/[0.06] rounded-xl hover:bg-white/[0.08] transition-all"
             >
               Next &#x2192;
-            </Link>
-            <Link
-              href="/dashboard/calendar"
-              className="px-3 py-1.5 text-xs bg-white/[0.04] border border-white/[0.06] rounded-xl hover:bg-white/[0.08] transition-all text-white/50"
-            >
-              Week view
             </Link>
           </div>
         </div>
@@ -139,7 +130,7 @@ export function MonthView({ tasks, year, month, today, prevMonth, nextMonth, isC
         </div>
       </header>
 
-      <div ref={gridRef} onKeyDown={handleGridKeyDown} className="grid grid-cols-7 gap-1" role="grid" aria-label="Monthly calendar">
+      <div className="grid grid-cols-7 gap-1" role="grid" aria-label="Monthly calendar">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
           <div key={d} className="text-center text-[11px] text-white/30 font-medium py-2">{d}</div>
         ))}
@@ -164,8 +155,6 @@ export function MonthView({ tasks, year, month, today, prevMonth, nextMonth, isC
           return (
             <button
               key={dayNum}
-              data-day-index={i}
-              tabIndex={i === 0 ? 0 : -1}
               onClick={() => setExpandedDay(isExpanded ? null : dateStr)}
               aria-label={`${monthLabel.split(" ")[0]} ${dayNum}${count > 0 ? ` - ${count} task${count !== 1 ? "s" : ""}` : ""}`}
               className={`min-h-[48px] sm:min-h-[80px] rounded-xl p-1 sm:p-2 text-left transition-all border ${
@@ -246,6 +235,15 @@ export function MonthView({ tasks, year, month, today, prevMonth, nextMonth, isC
                       <div className="text-xs text-white/40">
                         {task.duration_minutes} min &#xB7; P{task.priority}
                       </div>
+                      <input
+                        type="date"
+                        min={today}
+                        defaultValue={task.scheduled_date}
+                        onChange={(e) => handleReschedule(task.id, e.target.value)}
+                        disabled={movingId === task.id}
+                        className="mt-1 text-[11px] bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1 text-white/60 disabled:opacity-40"
+                        aria-label="Reschedule task"
+                      />
                     </div>
                     {isDone && (
                       <button
@@ -267,12 +265,7 @@ export function MonthView({ tasks, year, month, today, prevMonth, nextMonth, isC
             </div>
           )}
 
-          <Link
-            href={`/dashboard/calendar?week=${expandedDay}`}
-            className="inline-block text-xs text-white/40 hover:text-white/70 transition-colors mt-4"
-          >
-            Open in week view &#x2192;
-          </Link>
+          <p className="text-xs text-white/35 mt-4">Use the date picker in each task to move it to another day.</p>
         </div>
       )}
     </div>
