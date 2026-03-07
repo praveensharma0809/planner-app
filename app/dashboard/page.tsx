@@ -27,7 +27,7 @@ export default async function DashboardPage() {
 
   const streakData = streak.status === "SUCCESS" ? streak : null
   const tasks: Task[] = weekly.status === "SUCCESS" ? weekly.tasks : []
-  const upcoming = deadlines.status === "SUCCESS" ? deadlines.subjects : []
+  const upcoming = deadlines.status === "SUCCESS" ? deadlines.deadlines : []
 
   const { data: { user } } = await supabase.auth.getUser()
   const subjects = user
@@ -154,20 +154,17 @@ export default async function DashboardPage() {
             <p className="text-sm text-white/40 py-4">No subjects with deadlines.</p>
           ) : (
             <div className="space-y-2">
-              {upcoming.slice(0, 8).map(subject => {
-                const days = subject.deadline ? daysUntil(subject.deadline) : null
-                const percent = subject.total_items > 0
-                  ? Math.round((subject.completed_items / subject.total_items) * 100)
-                  : 0
+              {upcoming.slice(0, 8).map(item => {
+                const days = item.deadline ? daysUntil(item.deadline) : null
 
                 return (
-                  <div key={subject.id} className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 space-y-1">
+                  <div key={item.topic_id} className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 space-y-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium text-white/85 truncate">{subject.name}</p>
-                      <span className="text-[10px] text-white/35">{percent}%</span>
+                      <p className="text-sm font-medium text-white/85 truncate">{item.topic_name}</p>
+                      <span className="text-[10px] text-white/35">{item.subject_name}</span>
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-white/40">
-                      <span>{subject.deadline ?? "No deadline"}</span>
+                      <span>{item.deadline}</span>
                       {days !== null && <span>{days < 0 ? "Overdue" : days === 0 ? "Today" : `${days}d`}</span>}
                     </div>
                   </div>

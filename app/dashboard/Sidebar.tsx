@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { createBrowserClient } from "@supabase/ssr"
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 
 const navLinks = [
   {
@@ -63,10 +63,6 @@ export function Sidebar() {
   const [signingOut, setSigningOut] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  useEffect(() => {
-    setMobileOpen(false)
-  }, [pathname])
-
   const isActive = (href: string, exact: boolean) => {
     if (exact) return pathname === href
     return pathname.startsWith(href)
@@ -104,6 +100,7 @@ export function Sidebar() {
             <Link
               key={href}
               href={href}
+              onClick={() => setMobileOpen(false)}
               className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
                 active
                   ? "bg-white/[0.08] text-white font-medium shadow-sm backdrop-blur-sm"

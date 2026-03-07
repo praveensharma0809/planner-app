@@ -23,6 +23,7 @@ export async function addOffDay(input: AddOffDayInput) {
   }
 
   const { data, error } = await supabase.from("off_days").insert({
+    id: crypto.randomUUID(),
     user_id: user.id,
     date: input.date,
     reason: input.reason?.trim() || null,

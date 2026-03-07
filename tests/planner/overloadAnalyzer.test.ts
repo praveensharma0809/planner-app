@@ -1,119 +1,83 @@
-/// <reference types="vitest/globals" />
+import { describe, it, expect } from "vitest"
+import { checkFeasibility } from "@/lib/planner/feasibility"
+import type { GlobalConstraints, PlannableUnit } from "@/lib/planner/types"
 
-import { overloadAnalyzer } from "@/lib/planner/overloadAnalyzer"
-import type { Subject } from "@/lib/types/db"
-
-function buildSubject(overrides: Partial<Subject> = {}): Subject {
+function buildUnit(overrides: Partial<PlannableUnit> = {}): PlannableUnit {
   return {
-    id: "subject-1",
-    user_id: "user-1",
-    name: "Biology",
-    total_items: 10,
-    completed_items: 0,
-    avg_duration_minutes: 30,
-    deadline: "2024-01-15",
-    priority: 1,
-    mandatory: false,
-    created_at: "2024-01-01T00:00:00Z",
+    id: "topic-1",
+    subject_id: "subject-1",
+    subject_name: "Biology",
+    topic_name: "Genetics",
+    estimated_minutes: 120,
+    priority: 2,
+    deadline: "2024-01-03",
+    depends_on: [],
+    revision_sessions: 0,
+    practice_sessions: 0,
     ...overrides,
   }
 }
 
-describe("overloadAnalyzer", () => {
-  const today = new Date("2024-01-01T00:00:00Z")
+const baseConstraints: GlobalConstraints = {
+  study_start_date: "2024-01-01",
+  exam_date: "2024-01-03",
+  weekday_capacity_minutes: 120,
+  weekend_capacity_minutes: 120,
+  session_length_minutes: 60,
+  final_revision_days: 0,
+  buffer_percentage: 0,
+}
 
-  it("returns feasible when no active subjects", () => {
-    const result = overloadAnalyzer([], 60, today)
-    expect(result.overload).toBe(false)
-    expect(result.overallStatus).toBe("feasible")
-    expect(result.subjects).toHaveLength(0)
-  })
-
-  it("returns feasible when capacity exceeds requirements", () => {
-    const subjects = [
-      buildSubject({
-        total_items: 4,
-        completed_items: 0,
-        avg_duration_minutes: 30,
-        deadline: "2024-01-15",
-      }),
-    ]
-
-    const result = overloadAnalyzer(subjects, 120, today)
-    expect(result.overload).toBe(false)
-    expect(result.overallStatus).toBe("feasible")
-    expect(result.subjects[0].status).toBe("safe")
-    expect(result.capacityGapMinPerDay).toBe(0)
-  })
-
-  it("returns overloaded when capacity is far exceeded", () => {
-    const subjects = [
-      buildSubject({
-        total_items: 100,
-        completed_items: 0,
-        avg_duration_minutes: 60,
-        deadline: "2024-01-03", // 3 days to do 100 hours
-      }),
-    ]
-
-    const result = overloadAnalyzer(subjects, 60, today)
-    expect(result.overload).toBe(true)
-    expect(result.overallStatus).toBe("overloaded")
-    expect(result.subjects[0].status).toBe("impossible")
-    expect(result.capacityGapMinPerDay).toBeGreaterThan(0)
-  })
-
-  it("filters out fully-completed subjects", () => {
-    const subjects = [
-      buildSubject({ total_items: 10, completed_items: 10 }),
-      buildSubject({ id: "s2", name: "Active", total_items: 5, completed_items: 0 }),
-    ]
-
-    const result = overloadAnalyzer(subjects, 60, today)
-    expect(result.subjects).toHaveLength(1)
-    expect(result.subjects[0].name).toBe("Active")
-  })
-
-  it("skips off-days when counting available days", () => {
-    const subjects = [
-      buildSubject({
-        total_items: 3,
-        completed_items: 0,
-        avg_duration_minutes: 60,
-        deadline: "2024-01-05",
-      }),
-    ]
-
-    const withoutOff = overloadAnalyzer(subjects, 60, today)
-    const withOff = overloadAnalyzer(subjects, 60, today, null, new Set(["2024-01-02", "2024-01-03"]))
-
-    // Fewer available days → higher required min/day
-    expect(withOff.subjects[0].requiredMinutesPerDay).toBeGreaterThan(
-      withoutOff.subjects[0].requiredMinutesPerDay
+describe("checkFeasibility", () => {
+  it("returns feasible when capacity covers all sessions", () => {
+    const result = checkFeasibility(
+      [buildUnit({ estimated_minutes: 120 })],
+      baseConstraints,
+      new Set<string>()
     )
+
+    expect(result.feasible).toBe(true)
+    expect(result.globalGap).toBe(0)
   })
 
-  it("clamps subject deadline to exam date", () => {
-    const subjects = [
-      buildSubject({ deadline: "2024-01-20" }),
-    ]
+  it("returns infeasible when a unit has no available slots", () => {
+    const result = checkFeasibility(
+      [buildUnit({ estimated_minutes: 240, deadline: "2023-12-31" })],
+      baseConstraints,
+      new Set<string>()
+    )
 
-    const result = overloadAnalyzer(subjects, 60, today, "2024-01-10")
-    expect(result.subjects[0].effectiveDeadline).toBe("2024-01-10")
+    expect(result.feasible).toBe(false)
+    expect(result.units[0].status).toBe("impossible")
   })
 
-  it("provides suggestions when overloaded", () => {
-    const subjects = [
-      buildSubject({
-        total_items: 50,
-        avg_duration_minutes: 60,
-        deadline: "2024-01-05",
-      }),
-    ]
+  it("shows higher gap when off-days remove available capacity", () => {
+    const units = [buildUnit({ estimated_minutes: 360 })]
 
-    const result = overloadAnalyzer(subjects, 60, today)
-    const sub = result.subjects[0]
-    expect(sub.suggestions.increaseDailyMinutesBy).toBeDefined()
-    expect(sub.suggestions.increaseDailyMinutesBy!).toBeGreaterThan(0)
+    const withoutOffDays = checkFeasibility(units, baseConstraints, new Set<string>())
+    const withOffDays = checkFeasibility(
+      units,
+      baseConstraints,
+      new Set(["2024-01-02", "2024-01-03"])
+    )
+
+    expect(withOffDays.totalSlotsAvailable).toBeLessThan(withoutOffDays.totalSlotsAvailable)
+    expect(withOffDays.globalGap).toBeGreaterThanOrEqual(withoutOffDays.globalGap)
+  })
+
+  it("provides global suggestions when plan is infeasible", () => {
+    const result = checkFeasibility(
+      [buildUnit({ estimated_minutes: 1000, deadline: "2024-01-03" })],
+      {
+        ...baseConstraints,
+        weekday_capacity_minutes: 60,
+        weekend_capacity_minutes: 60,
+      },
+      new Set<string>()
+    )
+
+    expect(result.feasible).toBe(false)
+    expect(result.suggestions.length).toBeGreaterThan(0)
+    expect(result.suggestions.some((s) => s.kind === "increase_capacity")).toBe(true)
   })
 })

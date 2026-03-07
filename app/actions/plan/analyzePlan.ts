@@ -1,82 +1,8 @@
 "use server"
 
-import { createServerSupabaseClient } from "@/lib/supabase/server"
-import { analyzePlan, type AnalyzePlanStatus } from "@/lib/planner/analyzePlan"
-import type { OverloadResult } from "@/lib/planner/overloadAnalyzer"
-import type { ScheduledTask, SchedulerMode } from "@/lib/planner/scheduler"
+// This action is now a thin redirect to the new planner pipeline.
+// The old analyze flow is replaced by the phased planner.
+// Kept for backward compatibility with any remaining callers.
 
-export type AnalyzePlanResponse =
-  | { status: "UNAUTHORIZED" }
-  | { status: "NO_PROFILE" }
-  | { status: "NO_SUBJECTS" }
-  | ({ status: "OVERLOAD" } & OverloadResult)
-  | ({
-      status: "READY"
-      tasks: ScheduledTask[]
-      taskCount: number
-      overload: OverloadResult
-      effectiveCapacity?: number
-    })
-
-export async function analyzePlanAction(
-  mode: SchedulerMode = "strict"
-): Promise<AnalyzePlanResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user }
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { status: "UNAUTHORIZED" }
-  }
-
-  const today = new Date()
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("daily_available_minutes, exam_date")
-    .eq("id", user.id)
-    .single()
-
-  if (!profile) {
-    return { status: "NO_PROFILE" }
-  }
-
-  const { data: subjects } = await supabase
-    .from("subjects")
-    .select(
-      "id, user_id, name, total_items, completed_items, avg_duration_minutes, deadline, priority, mandatory, created_at"
-    )
-    .eq("user_id", user.id)
-
-  if (!subjects || subjects.length === 0) {
-    return { status: "NO_SUBJECTS" }
-  }
-
-  // Fetch off-days so the analyzer/scheduler can skip them
-  const { data: offDayRows } = await supabase
-    .from("off_days")
-    .select("date")
-    .eq("user_id", user.id)
-
-  const offDays = new Set<string>((offDayRows ?? []).map(r => r.date))
-
-  const analysis: AnalyzePlanStatus = analyzePlan(
-    subjects,
-    profile.daily_available_minutes,
-    today,
-    mode,
-    profile.exam_date ?? undefined,
-    offDays
-  )
-
-  if (analysis.status === "OVERLOAD") {
-    return analysis
-  }
-
-  if (analysis.status === "NO_SUBJECTS") {
-    return { status: "NO_SUBJECTS" }
-  }
-
-  return analysis
-}
+export { generatePlanAction as analyzePlanAction } from "@/app/actions/planner/generatePlan"
+export type { GeneratePlanResponse as AnalyzePlanResponse } from "@/app/actions/planner/generatePlan"

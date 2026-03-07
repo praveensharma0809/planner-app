@@ -1,139 +1,133 @@
-/// <reference types="vitest/globals" />
+import { describe, it, expect } from "vitest"
+import { schedule } from "@/lib/planner/scheduler"
+import type { GlobalConstraints, PlannableUnit } from "@/lib/planner/types"
 
-import { scheduler } from "@/lib/planner/scheduler"
-import type { Subject } from "@/lib/types/db"
-
-function buildSubject(overrides: Partial<Subject> = {}): Subject {
+function buildUnit(overrides: Partial<PlannableUnit> = {}): PlannableUnit {
   return {
-    id: "subject-1",
-    user_id: "user-1",
-    name: "Physics",
-    total_items: 3,
-    completed_items: 0,
-    avg_duration_minutes: 60,
-    deadline: "2024-01-10",
-    priority: 1,
-    mandatory: false,
-    created_at: "2024-01-01T00:00:00Z",
-    ...overrides
+    id: "topic-1",
+    subject_id: "subject-1",
+    subject_name: "Physics",
+    topic_name: "Mechanics",
+    estimated_minutes: 180,
+    priority: 2,
+    deadline: "2024-01-05",
+    depends_on: [],
+    revision_sessions: 0,
+    practice_sessions: 0,
+    ...overrides,
   }
 }
 
-describe("scheduler", () => {
-  const today = new Date("2024-01-01T00:00:00Z")
+const baseConstraints: GlobalConstraints = {
+  study_start_date: "2024-01-01",
+  exam_date: "2024-01-07",
+  weekday_capacity_minutes: 120,
+  weekend_capacity_minutes: 120,
+  session_length_minutes: 60,
+  final_revision_days: 0,
+  buffer_percentage: 0,
+}
 
-  it("never schedules past the exam date", () => {
-    const examDate = "2024-01-03"
-    const result = scheduler(
-      [buildSubject({ total_items: 5, deadline: "2024-01-08" })],
-      180,
-      today,
-      { examDeadline: examDate }
-    )
-
-    const scheduledDates = result.tasks.map(task => task.scheduled_date)
-    expect(scheduledDates.every(date => date <= examDate)).toBe(true)
+describe("schedule", () => {
+  it("returns empty schedule for empty units", () => {
+    const result = schedule([], baseConstraints, new Set<string>())
+    expect(result).toEqual([])
   })
 
-  it("skips off-days when creating tasks", () => {
+  it("skips off-days when scheduling", () => {
     const offDay = "2024-01-02"
-    const result = scheduler(
-      [buildSubject({ total_items: 3, deadline: "2024-01-05" })],
-      60,
-      today,
-      { offDays: new Set([offDay]) }
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 180, deadline: "2024-01-04" })],
+      { ...baseConstraints, weekday_capacity_minutes: 60, weekend_capacity_minutes: 60 },
+      new Set([offDay])
     )
 
-    const scheduledDates = result.tasks.map(task => task.scheduled_date)
-    expect(scheduledDates).not.toContain(offDay)
+    expect(result.map((t) => t.scheduled_date)).not.toContain(offDay)
   })
 
-  it("returns empty tasks when all subjects are complete", () => {
-    const result = scheduler(
-      [buildSubject({ total_items: 5, completed_items: 5 })],
-      180,
-      today
+  it("never schedules sessions past a unit deadline", () => {
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 300, deadline: "2024-01-02" })],
+      { ...baseConstraints, weekday_capacity_minutes: 60, weekend_capacity_minutes: 60 },
+      new Set<string>()
     )
-    expect(result.tasks).toEqual([])
+
+    expect(result.every((t) => t.scheduled_date <= "2024-01-02")).toBe(true)
   })
 
-  it("returns empty tasks when subjects list is empty", () => {
-    const result = scheduler([], 180, today)
-    expect(result.tasks).toEqual([])
-  })
-
-  it("schedules tasks for a single day when only one day is available", () => {
-    const result = scheduler(
-      [buildSubject({ total_items: 2, avg_duration_minutes: 30, deadline: "2024-01-01" })],
-      120,
-      today
+  it("respects earliest_start", () => {
+    const result = schedule(
+      [buildUnit({ earliest_start: "2024-01-03", estimated_minutes: 120 })],
+      { ...baseConstraints, weekday_capacity_minutes: 60, weekend_capacity_minutes: 60 },
+      new Set<string>()
     )
-    // All tasks on the same day (today)
-    const dates = new Set(result.tasks.map(t => t.scheduled_date))
-    expect(dates.size).toBe(1)
-    expect(dates.has("2024-01-01")).toBe(true)
-  })
 
-  it("handles multiple subjects and interleaves by urgency", () => {
-    const subjectA = buildSubject({
-      id: "a",
-      name: "Urgent",
-      total_items: 2,
-      avg_duration_minutes: 30,
-      deadline: "2024-01-02",
-      priority: 1,
-      mandatory: true,
-    })
-    const subjectB = buildSubject({
-      id: "b",
-      name: "Relaxed",
-      total_items: 2,
-      avg_duration_minutes: 30,
-      deadline: "2024-01-10",
-      priority: 2,
-      mandatory: false,
-    })
-    const result = scheduler([subjectA, subjectB], 120, today)
-    // Mandatory/closer deadline subject should appear first
-    expect(result.tasks[0].subject_id).toBe("a")
-    expect(result.tasks.length).toBeGreaterThanOrEqual(4)
+    expect(result.every((t) => t.scheduled_date >= "2024-01-03")).toBe(true)
   })
 
   it("does not exceed daily capacity", () => {
-    const result = scheduler(
-      [buildSubject({ total_items: 10, avg_duration_minutes: 60, deadline: "2024-01-05" })],
-      120,
-      today
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 600, deadline: "2024-01-05" })],
+      { ...baseConstraints, weekday_capacity_minutes: 120, weekend_capacity_minutes: 120 },
+      new Set<string>()
     )
-    // Group tasks by date and check no day exceeds 120 min
+
     const byDay = new Map<string, number>()
-    for (const t of result.tasks) {
-      byDay.set(t.scheduled_date, (byDay.get(t.scheduled_date) ?? 0) + t.duration_minutes)
+    for (const s of result) {
+      byDay.set(s.scheduled_date, (byDay.get(s.scheduled_date) ?? 0) + s.duration_minutes)
     }
-    for (const [, totalMin] of byDay) {
-      expect(totalMin).toBeLessThanOrEqual(120)
+
+    for (const totalMinutes of byDay.values()) {
+      expect(totalMinutes).toBeLessThanOrEqual(120)
     }
   })
 
-  it("handles off-days covering entire scheduling range gracefully", () => {
-    const offDays = new Set(["2024-01-01", "2024-01-02", "2024-01-03"])
-    const result = scheduler(
-      [buildSubject({ total_items: 2, deadline: "2024-01-03" })],
-      120,
-      today,
-      { offDays }
+  it("prioritizes more urgent units first", () => {
+    const urgent = buildUnit({
+      id: "urgent",
+      topic_name: "Urgent Topic",
+      priority: 1,
+      deadline: "2024-01-02",
+      estimated_minutes: 60,
+    })
+    const relaxed = buildUnit({
+      id: "relaxed",
+      topic_name: "Relaxed Topic",
+      priority: 5,
+      deadline: "2024-01-07",
+      estimated_minutes: 60,
+    })
+
+    const result = schedule(
+      [relaxed, urgent],
+      { ...baseConstraints, weekday_capacity_minutes: 60, weekend_capacity_minutes: 60 },
+      new Set<string>()
     )
-    // With all days blocked before/on deadline, no tasks can be scheduled
-    expect(result.tasks).toEqual([])
+
+    expect(result[0].topic_id).toBe("urgent")
   })
 
-  it("assigns correct priority from subject to tasks", () => {
-    const result = scheduler(
-      [buildSubject({ priority: 3, total_items: 1, deadline: "2024-01-05" })],
-      180,
-      today
+  it("returns empty schedule for circular dependencies", () => {
+    const a = buildUnit({ id: "a", depends_on: ["b"], estimated_minutes: 60 })
+    const b = buildUnit({ id: "b", depends_on: ["a"], estimated_minutes: 60 })
+
+    const result = schedule([a, b], baseConstraints, new Set<string>())
+    expect(result).toEqual([])
+  })
+
+  it("adds practice sessions when configured", () => {
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 120, practice_sessions: 1, deadline: "2024-01-01" })],
+      {
+        ...baseConstraints,
+        study_start_date: "2024-01-01",
+        exam_date: "2024-01-01",
+        weekday_capacity_minutes: 180,
+        weekend_capacity_minutes: 180,
+      },
+      new Set<string>()
     )
-    expect(result.tasks.length).toBe(1)
-    expect(result.tasks[0].priority).toBe(3)
+
+    expect(result.some((s) => s.session_type === "practice")).toBe(true)
   })
 })

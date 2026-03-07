@@ -1,64 +1,112 @@
-/// <reference types="vitest/globals" />
+import { describe, it, expect, vi, beforeEach } from "vitest"
+import { createServerSupabaseClientMock } from "../utils/supabaseMock"
+import type { ScheduledSession } from "@/lib/planner/types"
 
-import { vi } from "vitest"
-import { createServerSupabaseClientMock, buildSupabaseMock } from "../utils/supabaseMock"
-import type { ScheduledTask } from "@/lib/planner/scheduler"
+const revalidatePathMock = vi.fn()
+
+vi.mock("next/cache", () => ({
+  revalidatePath: revalidatePathMock,
+}))
 
 describe("commitPlan", () => {
-  it("inserts only future generated tasks", async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date("2024-01-01T00:00:00Z"))
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.resetModules()
+  })
 
-    const { supabase, deleteFilters, insertPayloads } = buildSupabaseMock()
-    createServerSupabaseClientMock.mockResolvedValue(supabase)
-    const { commitPlan } = await import("@/app/actions/plan/commitPlan")
-
-    const tasks: ScheduledTask[] = [
-      {
-        subject_id: "history",
-        scheduled_date: "2023-12-30",
-        duration_minutes: 30,
-        title: "Past Task",
-        priority: 1
+  it("commits sessions via commit_plan_atomic RPC", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        user_id: "user-1",
+        study_start_date: "2024-01-01",
+        exam_date: "2024-01-31",
       },
-      {
-        subject_id: "math",
-        scheduled_date: "2024-01-02",
-        duration_minutes: 45,
-        title: "Future Task",
-        priority: 2
-      }
-    ]
-
-    const result = await commitPlan({ tasks })
-
-    expect(result).toEqual({ status: "SUCCESS", taskCount: 1 })
-    expect(insertPayloads).toHaveLength(1)
-
-    const inserted = insertPayloads[0] as Array<Record<string, unknown>>
-    expect(inserted).toHaveLength(1)
-    expect(inserted[0]).toMatchObject({
-      subject_id: "math",
-      scheduled_date: "2024-01-02",
-      is_plan_generated: true,
-      completed: false,
-      user_id: "user-1"
+      error: null,
     })
 
-    expect(deleteFilters.eq).toContainEqual(["user_id", "user-1"])
-    expect(deleteFilters.eq).toContainEqual(["is_plan_generated", true])
-    expect(deleteFilters.gte).toContainEqual(["scheduled_date", "2024-01-01"])
+    const supabase = {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table !== "plan_config") {
+          throw new Error(`Unexpected table: ${table}`)
+        }
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle,
+            })),
+          })),
+        }
+      }),
+      rpc: vi.fn().mockResolvedValue({
+        data: {
+          status: "SUCCESS",
+          task_count: 1,
+          snapshot_id: "snapshot-1",
+        },
+        error: null,
+      }),
+    }
+
+    createServerSupabaseClientMock.mockResolvedValue(supabase as never)
+
+    const { commitPlan } = await import("@/app/actions/plan/commitPlan")
+
+    const sessions: ScheduledSession[] = [
+      {
+        subject_id: "subject-1",
+        topic_id: "topic-1",
+        title: "Math - Algebra",
+        scheduled_date: "2024-01-02",
+        duration_minutes: 60,
+        session_type: "core",
+        priority: 1,
+      },
+    ]
+
+    const result = await commitPlan(sessions, "Initial commit")
+
+    expect(result).toEqual({
+      status: "SUCCESS",
+      taskCount: 1,
+      snapshotId: "snapshot-1",
+    })
+
+    expect(supabase.rpc).toHaveBeenCalledTimes(1)
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      "commit_plan_atomic",
+      expect.objectContaining({
+        p_user_id: "user-1",
+        p_snapshot_summary: "Initial commit",
+      })
+    )
+
+    const [, args] = supabase.rpc.mock.calls[0]
+    expect(JSON.parse(args.p_tasks)).toEqual(sessions)
+    expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard")
+    expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard/calendar")
+    expect(revalidatePathMock).toHaveBeenCalledWith("/planner")
   })
 
   it("returns UNAUTHORIZED when no user is present", async () => {
-    const { supabase } = buildSupabaseMock()
-    supabase.auth.getUser.mockResolvedValue({ data: { user: null } })
-    createServerSupabaseClientMock.mockResolvedValue(supabase)
+    const supabase = {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      },
+      from: vi.fn(),
+      rpc: vi.fn(),
+    }
+
+    createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
     const { commitPlan } = await import("@/app/actions/plan/commitPlan")
 
-    const result = await commitPlan({ tasks: [] })
+    const result = await commitPlan([])
 
     expect(result).toEqual({ status: "UNAUTHORIZED" })
+    expect(supabase.from).not.toHaveBeenCalled()
+    expect(supabase.rpc).not.toHaveBeenCalled()
   })
 })

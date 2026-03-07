@@ -77,10 +77,11 @@ export function ExecutionBoard({ data }: Props) {
   const [dragItemId, setDragItemId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [undo, setUndo] = useState<UndoState | null>(null)
+  const undoId = undo?.id
 
   // Countdown timer for undo
   useEffect(() => {
-    if (!undo) return
+    if (!undoId) return
     const id = window.setInterval(() => {
       setUndo(prev => {
         if (!prev) return null
@@ -89,7 +90,7 @@ export function ExecutionBoard({ data }: Props) {
       })
     }, 1000)
     return () => clearInterval(id)
-  }, [undo?.id])
+  }, [undoId])
 
   const monthDays = useMemo(
     () => buildMonthDays(data.month_key, data.days_in_month),
@@ -168,10 +169,20 @@ export function ExecutionBoard({ data }: Props) {
   const handleToggleEntry = async (itemId: string, dateISO: string) => {
     const key = `${itemId}|${dateISO}`
     const wasChecked = entriesSet.has(key)
-    setEntriesSet(prev => { const n = new Set(prev); wasChecked ? n.delete(key) : n.add(key); return n })
+    setEntriesSet(prev => {
+      const n = new Set(prev)
+      if (wasChecked) n.delete(key)
+      else n.add(key)
+      return n
+    })
     const res = await toggleExecutionEntry({ item_id: itemId, entry_date: dateISO, completed: !wasChecked })
     if (res.status !== "SUCCESS") {
-      setEntriesSet(prev => { const n = new Set(prev); wasChecked ? n.add(key) : n.delete(key); return n })
+      setEntriesSet(prev => {
+        const n = new Set(prev)
+        if (wasChecked) n.add(key)
+        else n.delete(key)
+        return n
+      })
       addToast(res.status === "ERROR" ? res.message : "Session expired", "error")
       return
     }
@@ -332,7 +343,7 @@ export function ExecutionBoard({ data }: Props) {
                           <div className="flex items-center justify-between gap-1">
                             <span className="truncate" style={{ color: "rgba(255,255,255,0.6)" }}>{cat.name}</span>
                             <button onClick={() => handleDeleteCategory(cat.id, cat.name)} style={{ color: "rgba(255,255,255,0.15)", fontSize: 10 }} className="shrink-0" title="Delete category"
-                              onMouseEnter={e => (e.currentTarget.style.color = "#f87171")} onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.15)")}>×</button>
+                              onMouseEnter={e => { e.currentTarget.style.color = "#f87171" }} onMouseLeave={e => { e.currentTarget.style.color = "rgba(255,255,255,0.15)" }}>×</button>
                           </div>
                         </td>
                         <td style={{ ...BD, position: "sticky", left: ROW_NUM_W + COL_CAT_W, zIndex: 20, width: COL_ITEM_W, height: ROW_H, background: CAT_ROW_BG }} className="px-1">
@@ -379,7 +390,7 @@ export function ExecutionBoard({ data }: Props) {
                           <td style={{ ...BD, position: "sticky", left: ROW_NUM_W, zIndex: 20, width: COL_CAT_W, height: ROW_H, background: stickyItemBg }} className="px-2">
                             <div className="flex items-center justify-end">
                               <button onClick={() => handleDeleteItem(item.id, item.title)} style={{ color: "rgba(255,255,255,0.1)", fontSize: 10 }} title="Delete item"
-                                onMouseEnter={e => (e.currentTarget.style.color = "#f87171")} onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.1)")}>×</button>
+                                onMouseEnter={e => { e.currentTarget.style.color = "#f87171" }} onMouseLeave={e => { e.currentTarget.style.color = "rgba(255,255,255,0.1)" }}>×</button>
                             </div>
                           </td>
                           <td style={{ ...BD, position: "sticky", left: ROW_NUM_W + COL_CAT_W, zIndex: 20, width: COL_ITEM_W, height: ROW_H, background: stickyItemBg }} className="px-2">

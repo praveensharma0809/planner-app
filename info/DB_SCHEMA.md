@@ -1,124 +1,345 @@
-# DB_SCHEMA.md
-## StudyHard — Target Database Schema
-Version: 1.1 (updated post-audit February 28, 2026)
-Scope: Define the relational schema to support the target architecture without adding new product features.
+# StudyHard Database Schema
 
----
-## 1) Entities & Columns
+Last updated: March 6, 2026
+Source: live Supabase schema dump captured on March 6, 2026
 
-### 1.1 profiles (user profile and planning defaults)
-- id (uuid, PK, references auth.users.id)
-- full_name (text, nullable)
-- primary_exam (text, nullable) — free-text goal name
-- exam_date (date, nullable) — final exam deadline (global hard stop)
-- daily_available_minutes (integer, nullable)
-- created_at (timestamptz, default now())
-- qualification (text, nullable) — legacy, retained but unused going forward
-- phone (text, nullable) — legacy, retained but unused going forward
-- streak_current (integer, default 0) — running streak counter
-- streak_longest (integer, default 0)
-- streak_last_completed_date (date, nullable) — last day with a completion, used to maintain streak continuity
+This repo snapshot still does not include checked-in SQL migration files, but the schema summary below now reflects the live Supabase database rather than an inferred approximation.
 
-### 1.2 subjects (work streams with deadlines)
-- id (uuid, PK)
-- user_id (uuid, FK → auth.users.id, on delete cascade)
-- name (text, not null)
-- total_items (integer, not null)
-- completed_items (integer, not null, default 0)
-- avg_duration_minutes (integer, not null)
-- deadline (date, nullable) — subject-level deadline; effective deadline = min(deadline, profiles.exam_date)
-- priority (integer, not null, default 3) — 1–5
-- mandatory (boolean, not null, default false)
-- created_at (timestamptz, default now())
+## Public objects present in the live DB
 
-### 1.3 tasks (scheduled work items)
-- id (uuid, PK)
-- user_id (uuid, FK → auth.users.id, on delete cascade)
-- subject_id (uuid, FK → subjects.id, on delete cascade)
-- title (text, not null) — human-readable label; typically derived from subject + item number
-- scheduled_date (date, not null)
-- duration_minutes (integer, not null)
-- priority (integer, not null) — mirrors subject priority at generation time
-- completed (boolean, not null, default false)
-- is_plan_generated (boolean, not null, default true) — distinguishes generated vs. manual tasks
-- created_at (timestamptz, default now())
+Tables:
+- `profiles`
+- `subjects`
+- `subtopics`
+- `tasks`
+- `off_days`
+- `plan_events`
+- `execution_categories`
+- `execution_items`
+- `execution_entries`
 
-### 1.4 off_days (blocked dates to skip scheduling)
-- id (uuid, PK)
-- user_id (uuid, FK → auth.users.id, on delete cascade)
-- date (date, not null)
-- reason (text, nullable)
-- created_at (timestamptz, default now())
-- UNIQUE (user_id, date)
+Views:
+- `subject_workload_view`
 
-### 1.5 RPCs (DB-resident; not called directly by app)
-- `increment_completed_items(subject_id uuid)` — increments `subjects.completed_items`. **Retained in DB** but the app no longer calls it directly. `completeTask.ts` uses a direct `UPDATE subjects` call instead (avoids PostgREST schema-cache binding issues).
-- `complete_task_with_streak(p_task_id uuid)` — admin-only helper added in migration 3. Not called by the app. Marked with a `COMMENT` in the DB for documentation.
+Functions / triggers in `public`:
+- `complete_task_with_streak(p_task_id uuid)`
+- `compute_subject_intelligence()`
+- `increment_completed_items(subject_id_input uuid)`
+- `rls_auto_enable()`
 
----
-## 2) Relationships & Invariants
-- profiles.id = auth.users.id (1:1). Every authenticated user should have exactly one profile row; onboarding enforces creation.
-- subjects.user_id FK → auth.users.id (many subjects per user). Cascades on delete to keep data scoped.
-- tasks.user_id FK → auth.users.id and subject_id FK → subjects.id. Tasks always belong to a subject and a user; cascades on subject delete.
-- off_days.user_id FK → auth.users.id. Unique per user/date to avoid duplicates.
-- Effective deadline rule: effective_deadline(subject) = min(subject.deadline if set, profile.exam_date). No task may be scheduled after profile.exam_date.
-- Past data rule: commitPlan deletes future generated tasks only where scheduled_date >= today AND is_plan_generated = true; past rows are never mutated.
-- Streak rule: streak fields on profiles are updated only through task completion events; there is no undo at MVP.
-- Manual tasks: tasks with is_plan_generated = false are never touched by regeneration.
+## User model
 
----
-## 3) Derived Views / Key Queries (no stored objects required at MVP)
-- Backlog detection: tasks where scheduled_date < today AND completed = false; backlog volume = sum(duration_minutes).
-- Plan health: per-subject progress = completed_items / total_items; deadline health derived in app from effective deadlines.
-- Streak computation: maintained incrementally in profiles; dashboard reads streak_current and streak_longest.
-- Weekly snapshot: aggregate tasks by scheduled_date within current week (counts and completed counts).
-- Upcoming deadlines: subjects ordered by effective_deadline.
+```text
+auth.users
+  -> profiles.id
+      -> subjects.user_id
+      -> tasks.user_id
+      -> off_days.user_id
+      -> subtopics.user_id
+      -> plan_events.user_id
+      -> execution_categories.user_id
+      -> execution_items.user_id
+      -> execution_entries.user_id
+```
 
----
-## 4) Indexing (recommended)
-- tasks: (user_id, scheduled_date) for dashboard/calendar/backlog queries.
-- tasks: (user_id, subject_id) for subject-level rollups.
-- subjects: (user_id, deadline) for upcoming-deadline panel.
-- off_days: UNIQUE (user_id, date) already implies an index; ensure supporting index exists.
+## Core planner tables
 
----
-## 5) Data Flow Fit to Architecture
-- Phase 1/2 (analyzePlan/resolveOverload): read profiles, subjects, off_days; compute BlueprintResult in memory; no writes.
-- Phase 3 (commitPlan): delete future generated tasks, insert new generated tasks with is_plan_generated = true; never touches past rows or manual tasks.
-- Calendar drag (rescheduleTask): updates tasks.scheduled_date; rejects moves before today; does not alter completed state.
-- Task completion (completeTask): **3-step direct table ops** — (1) UPDATE tasks SET completed=true WHERE completed=false (idempotent guard); (2) UPDATE subjects SET completed_items = completed_items + 1; (3) UPDATE profiles streak fields. No RPC call.
+### profiles
+Primary key and auth link:
+- `id` uuid primary key
+- foreign key to `auth.users(id)` with `ON DELETE CASCADE`
 
----
-## 6) Migration Status (all 3 migrations applied ✅)
+Columns:
+- `full_name` text not null
+- `age` integer nullable
+- `qualification` text nullable
+- `phone` text nullable
+- `primary_exam` text not null
+- `exam_date` date nullable
+- `daily_available_minutes` integer not null
+- `created_at` timestamptz not null default `now()`
+- `streak_current` integer not null default `0`
+- `streak_longest` integer not null default `0`
+- `streak_last_completed_date` date nullable
 
-**Migration 1 — `202602280001_phase1_schema.sql`** ✅
-- Added `streak_current`, `streak_longest`, `streak_last_completed_date` to `profiles`.
-- Created `off_days` table with `UNIQUE (user_id, date)`.
-- Created `complete_task_with_streak` RPC (original signature).
+Constraint:
+- `daily_minutes_positive`: `daily_available_minutes > 0`
 
-**Migration 2 — `202602280002_complete_task_streak.sql`** ✅
-- Updated `complete_task_with_streak` function body with correct streak logic.
+RLS:
+- per-user select / insert / update / delete on `id = auth.uid()`
 
-**Migration 3 — `202602280003_schema_corrections.sql`** ✅
-- Added `DEFAULT gen_random_uuid()` to `off_days.id` (was missing).
-- Added `FOREIGN KEY` from `profiles.id → auth.users(id)`.
-- Rebuilt `complete_task_with_streak` as admin-only helper with `COMMENT` noting the app uses direct table ops.
+Important note:
+- The live DB has an `age` column that is not central to the current app flow.
 
-**Remaining (no migration needed):**
-- Legacy `qualification` and `phone` columns on `profiles` — retained in DB; excluded from all UI and type surfaces.
-- Subtopic hierarchy (`parent_id` on subjects) — deferred to a future release.
+### subjects
+Primary key:
+- `id` uuid default `gen_random_uuid()`
 
+Columns:
+- `user_id` uuid not null
+- `name` text not null
+- `created_at` timestamptz not null default `now()`
+- `total_items` integer not null
+- `avg_duration_minutes` integer not null
+- `deadline` date not null
+- `priority` integer not null default `3`
+- `mandatory` boolean not null default `false`
+- `completed_items` integer not null default `0`
+- `custom_daily_minutes` integer nullable
+- `archived` boolean not null default `false`
+- `remaining_minutes` integer nullable
+- `urgency_score` integer nullable
+- `health_state` text nullable
+- `estimated_completion_date` date nullable
 
----
-## 7) Assumptions
-- Subject subtopics/chapters are deferred (no parent_id or separate table at MVP) per ARCHITECTURE §4.3; future phase can introduce hierarchy.
-- Backlog threshold is an application constant, not stored in the database at MVP.
-- No additional audit tables are required beyond created_at timestamps; Supabase storage of WAL/backups suffices for recovery at this phase.
-- exam_date may be null during onboarding; plan generation requires it to be set before commitPlan executes.
+Constraints:
+- `avg_duration_positive`: `avg_duration_minutes > 0`
+- `total_items_positive`: `total_items > 0`
+- `completed_items_valid`: `completed_items >= 0 AND completed_items <= total_items`
 
----
-## 8) Out of Scope (for this phase)
-- Dropping legacy profile columns (qualification, phone).
-- Introducing subtopic hierarchy or nested subjects.
-- Additional counters (e.g., backlog aggregates) — computed at read time.
-- Notifications, multi-profile support, or premium features (not in MVP spec).
+Indexes:
+- `idx_subjects_user` on `(user_id)`
+- `subjects_archived_idx` on `(user_id, archived)`
+
+RLS:
+- per-user select / insert / update / delete on `user_id = auth.uid()`
+
+Important note:
+- The live DB contains intelligence-related fields (`remaining_minutes`, `urgency_score`, `health_state`, `estimated_completion_date`) that are not the main source of truth for the current planner engine in `lib/planner/`.
+
+### subtopics
+Primary key:
+- `id` uuid default `gen_random_uuid()`
+
+Columns:
+- `user_id` uuid not null
+- `subject_id` uuid not null
+- `name` text not null
+- `total_items` integer not null default `0`
+- `completed_items` integer not null default `0`
+- `sort_order` integer not null default `0`
+- `created_at` timestamptz nullable default `now()`
+
+Indexes:
+- `idx_subtopics_subject_id` on `(subject_id)`
+
+RLS:
+- one permissive `FOR ALL` policy: `user_id = auth.uid()`
+
+### tasks
+Primary key:
+- `id` uuid default `gen_random_uuid()`
+
+Columns:
+- `user_id` uuid not null
+- `title` text not null
+- `scheduled_date` date not null
+- `duration_minutes` integer not null
+- `priority` integer not null default `3`
+- `completed` boolean not null default `false`
+- `created_at` timestamptz not null default `now()`
+- `subject_id` uuid not null
+- `is_plan_generated` boolean not null default `true`
+
+Constraint:
+- `duration_positive`: `duration_minutes > 0`
+
+Indexes:
+- `idx_tasks_user_date` on `(user_id, scheduled_date)`
+- `idx_tasks_subject` on `(subject_id)`
+
+RLS:
+- per-user select / insert / update / delete on `user_id = auth.uid()`
+
+### off_days
+Primary key:
+- `id` uuid primary key
+
+Columns:
+- `user_id` uuid not null
+- `date` date not null
+- `reason` text nullable
+- `created_at` timestamptz not null default `now()`
+
+Unique constraint:
+- `(user_id, date)`
+
+Indexes:
+- `off_days_user_date_unique`
+- `off_days_user_id_idx`
+
+RLS:
+- per-user select / insert / update / delete on `user_id = auth.uid()`
+
+Critical note:
+- The live DB currently has no default on `off_days.id`.
+- Application code must provide the id on insert unless the DB is migrated later.
+
+### plan_events
+Primary key:
+- `id` uuid default `gen_random_uuid()`
+
+Columns:
+- `user_id` uuid not null
+- `event_type` text not null
+- `task_count` integer not null default `0`
+- `summary` text nullable
+- `created_at` timestamptz not null default `now()`
+
+Indexes:
+- `plan_events_user_id_idx` on `(user_id, created_at DESC)`
+
+RLS:
+- select own rows
+- insert own rows
+
+Important note:
+- The live DB does contain `plan_events`, even though app code still treats it as optional and degrades gracefully if absent.
+
+## Execution board tables
+
+### execution_categories
+- `id` uuid primary key default `gen_random_uuid()`
+- `user_id` uuid not null
+- `month_start` date not null
+- `name` text not null
+- `sort_order` integer not null default `0`
+- `deleted_at` timestamptz nullable
+- `created_at` timestamptz not null default `now()`
+- `updated_at` timestamptz not null default `now()`
+
+Index:
+- `execution_categories_user_month_idx` on `(user_id, month_start)`
+
+RLS:
+- per-user select / insert / update / delete
+
+### execution_items
+- `id` uuid primary key default `gen_random_uuid()`
+- `user_id` uuid not null
+- `category_id` uuid not null
+- `series_id` uuid not null default `gen_random_uuid()`
+- `month_start` date not null
+- `title` text not null
+- `sort_order` integer not null default `0`
+- `deleted_at` timestamptz nullable
+- `created_at` timestamptz not null default `now()`
+- `updated_at` timestamptz not null default `now()`
+
+Indexes:
+- `execution_items_category_idx` on `(category_id, sort_order)`
+- `execution_items_series_idx` on `(user_id, series_id)`
+- `execution_items_user_month_idx` on `(user_id, month_start)`
+
+RLS:
+- per-user select / insert / update / delete
+
+### execution_entries
+- `id` uuid primary key default `gen_random_uuid()`
+- `user_id` uuid not null
+- `item_id` uuid not null
+- `entry_date` date not null
+- `completed` boolean not null default `true`
+- `created_at` timestamptz not null default `now()`
+- `updated_at` timestamptz not null default `now()`
+
+Unique constraint:
+- `(user_id, item_id, entry_date)`
+
+Indexes:
+- `execution_entries_user_date_idx` on `(user_id, entry_date)`
+- `execution_entries_item_date_idx` on `(item_id, entry_date)`
+
+RLS:
+- per-user select / insert / update / delete
+
+## View
+
+### subject_workload_view
+Purpose:
+- aggregates subject and subtopic workload into a queryable summary
+
+Columns:
+- `subject_id`
+- `user_id`
+- `subject_name`
+- `deadline`
+- `priority`
+- `archived`
+- `effective_total_items`
+- `subtopic_count`
+- `avg_duration_minutes`
+- `total_hours_required`
+
+Behavior:
+- joins `subjects` to `subtopics`
+- uses `COALESCE(sum(st.total_items), s.total_items)` for effective item totals
+- computes `total_hours_required` as rounded numeric hours
+
+Important note:
+- This view exists in the DB and corresponds to the `SubjectWorkloadView` TypeScript interface, but it is not the core data source for the current planner pipeline.
+
+## Functions present in the DB
+
+### `complete_task_with_streak(p_task_id uuid)`
+- returns `json`
+- `SECURITY DEFINER`
+- exists in the DB
+- current app code does not call it for normal completion flow
+
+### `increment_completed_items(subject_id_input uuid)`
+- returns `void`
+- exists in the DB
+- current app code does not rely on it in the normal completion flow
+
+### `compute_subject_intelligence()`
+- trigger function in `plpgsql`
+- likely responsible for maintaining some subject intelligence fields in the DB
+- current planner engine still computes its own planning metrics in application code
+
+### `rls_auto_enable()`
+- event trigger in `plpgsql`
+- DB-level helper; not part of day-to-day app logic
+
+## Repo vs live schema drift
+
+Live DB fields not previously documented clearly:
+- `profiles.age`
+- `subjects.custom_daily_minutes`
+- `subjects.remaining_minutes`
+- `subjects.urgency_score`
+- `subjects.health_state`
+- `subjects.estimated_completion_date`
+- `subject_workload_view`
+- `compute_subject_intelligence()`
+- `rls_auto_enable()`
+
+Live DB constraints / facts worth remembering:
+- `profiles.full_name` is not null in the live DB
+- `profiles.primary_exam` is not null in the live DB
+- `subjects.deadline` is not null in the live DB
+- `off_days.id` has no default in the live DB
+
+## Useful live inspection queries
+
+```sql
+select table_name
+from information_schema.tables
+where table_schema = 'public'
+order by table_name;
+```
+
+```sql
+select column_name, data_type, is_nullable, column_default
+from information_schema.columns
+where table_schema = 'public'
+  and table_name = 'profiles'
+order by ordinal_position;
+```
+
+```sql
+select schemaname, tablename, policyname, cmd
+from pg_policies
+where schemaname = 'public'
+order by tablename, policyname;
+```

@@ -33,7 +33,7 @@ export async function getMonthTasks(
 
   const { data } = await supabase
     .from("tasks")
-    .select("id, user_id, subject_id, title, scheduled_date, duration_minutes, priority, completed, is_plan_generated, created_at")
+    .select("id, user_id, subject_id, topic_id, title, scheduled_date, duration_minutes, priority, completed, is_plan_generated, session_type, plan_version, created_at")
     .eq("user_id", user.id)
     .gte("scheduled_date", firstDay)
     .lte("scheduled_date", lastDayStr)

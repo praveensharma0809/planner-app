@@ -1,6 +1,7 @@
 export interface Profile {
   id: string
   full_name: string | null
+  age?: number | null
   primary_exam: string | null
   qualification: string | null
   phone: string | null
@@ -16,43 +17,71 @@ export interface Subject {
   id: string
   user_id: string
   name: string
-  total_items: number
-  completed_items: number
-  avg_duration_minutes: number
-  deadline: string
-  priority: number
-  mandatory: boolean
-  archived?: boolean
-  urgency_score?: number
-  health_state?: "stable" | "watch" | "at_risk" | "critical" | "overdue" | null
-  remaining_minutes?: number
-  estimated_completion_date?: string | null
+  sort_order: number
+  archived: boolean
   created_at: string
 }
 
-export interface SubjectWorkloadView {
-  subject_id: string
+export interface Topic {
+  id: string
   user_id: string
-  subject_name: string
-  deadline: string
+  subject_id: string
+  name: string
+  sort_order: number
+  created_at: string
+}
+
+export interface Subtopic {
+  id: string
+  user_id: string
+  topic_id: string
+  name: string
+  sort_order: number
+  created_at: string
+}
+
+export interface TopicParams {
+  id: string
+  user_id: string
+  topic_id: string
+  estimated_hours: number
   priority: number
-  archived: boolean
-  effective_total_items: number
-  subtopic_count: number
-  avg_duration_minutes: number
-  total_hours_required: number
+  deadline: string | null
+  earliest_start: string | null
+  depends_on: string[]
+  revision_sessions: number
+  practice_sessions: number
+  created_at: string
+  updated_at: string
+}
+
+export interface PlanConfig {
+  id: string
+  user_id: string
+  study_start_date: string
+  exam_date: string
+  weekday_capacity_minutes: number
+  weekend_capacity_minutes: number
+  session_length_minutes: number
+  final_revision_days: number
+  buffer_percentage: number
+  created_at: string
+  updated_at: string
 }
 
 export interface Task {
   id: string
   user_id: string
   subject_id: string
+  topic_id: string | null
   title: string
   scheduled_date: string
   duration_minutes: number
+  session_type: "core" | "revision" | "practice"
   priority: number
   completed: boolean
   is_plan_generated: boolean
+  plan_version: string | null
   created_at: string
 }
 
@@ -64,22 +93,12 @@ export interface OffDay {
   created_at: string
 }
 
-export interface Subtopic {
+export interface PlanSnapshot {
   id: string
   user_id: string
-  subject_id: string
-  name: string
-  total_items: number
-  completed_items: number
-  sort_order: number
-  created_at: string
-}
-
-export interface PlanEvent {
-  id: string
-  user_id: string
-  event_type: "analyzed" | "committed" | "resolved_overload"
   task_count: number
+  schedule_json: unknown
+  config_snapshot: unknown
   summary: string | null
   created_at: string
 }

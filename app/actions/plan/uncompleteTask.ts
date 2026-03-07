@@ -30,22 +30,6 @@ export async function uncompleteTask(taskId: string) {
 
   if (taskError || !updatedTask) return
 
-  // Decrement completed_items on the parent subject (floor at 0).
-  const { data: subject } = await supabase
-    .from("subjects")
-    .select("completed_items")
-    .eq("id", updatedTask.subject_id)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (subject) {
-    await supabase
-      .from("subjects")
-      .update({ completed_items: Math.max(0, subject.completed_items - 1) })
-      .eq("id", updatedTask.subject_id)
-      .eq("user_id", user.id)
-  }
-
   revalidatePath("/dashboard/calendar")
   revalidatePath("/dashboard")
 }

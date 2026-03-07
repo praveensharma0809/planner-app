@@ -6,10 +6,7 @@ import { revalidatePath } from "next/cache"
 interface UpdateSubjectInput {
   id: string
   name: string
-  total_items: number
-  avg_duration_minutes: number
-  deadline: string
-  priority: number
+  sort_order?: number
 }
 
 export async function updateSubject(input: UpdateSubjectInput) {
@@ -22,27 +19,15 @@ export async function updateSubject(input: UpdateSubjectInput) {
     return { status: "UNAUTHORIZED" as const }
   }
 
-  if (input.total_items < 1) {
-    return { status: "ERROR" as const, message: "Total items must be at least 1." }
-  }
   if (!input.name.trim()) {
     return { status: "ERROR" as const, message: "Subject name is required." }
-  }
-  if (input.avg_duration_minutes < 1) {
-    return { status: "ERROR" as const, message: "Avg duration must be at least 1 minute." }
-  }
-  if (!input.deadline) {
-    return { status: "ERROR" as const, message: "Deadline is required." }
   }
 
   const { error } = await supabase
     .from("subjects")
     .update({
       name: input.name.trim(),
-      total_items: input.total_items,
-      avg_duration_minutes: input.avg_duration_minutes,
-      deadline: input.deadline,
-      priority: input.priority,
+      sort_order: input.sort_order,
     })
     .eq("id", input.id)
     .eq("user_id", user.id)

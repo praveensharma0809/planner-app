@@ -5,9 +5,11 @@ import { revalidatePath } from "next/cache"
 
 interface CreateTaskInput {
   subject_id: string
+  topic_id?: string
   title: string
   scheduled_date: string // YYYY-MM-DD
   duration_minutes: number
+  session_type?: "core" | "revision" | "practice"
 }
 
 export type CreateTaskResponse =
@@ -33,7 +35,7 @@ export async function createTask(input: CreateTaskInput): Promise<CreateTaskResp
   // Verify subject belongs to user
   const { data: subject, error: subjectErr } = await supabase
     .from("subjects")
-    .select("id, priority")
+    .select("id")
     .eq("id", input.subject_id)
     .eq("user_id", user.id)
     .single()
@@ -47,10 +49,12 @@ export async function createTask(input: CreateTaskInput): Promise<CreateTaskResp
     .insert({
       user_id: user.id,
       subject_id: input.subject_id,
+      topic_id: input.topic_id ?? null,
       title: input.title.trim(),
       scheduled_date: input.scheduled_date,
       duration_minutes: input.duration_minutes,
-      priority: subject.priority,
+      session_type: input.session_type ?? "core",
+      priority: 3,
       completed: false,
       is_plan_generated: false,
     })

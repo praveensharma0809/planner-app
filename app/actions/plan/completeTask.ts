@@ -35,23 +35,7 @@ export async function completeTask(taskId: string) {
     return
   }
 
-  // Step 2: Increment completed_items on the parent subject.
-  const { data: subject } = await supabase
-    .from("subjects")
-    .select("completed_items")
-    .eq("id", updatedTask.subject_id)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (subject) {
-    await supabase
-      .from("subjects")
-      .update({ completed_items: subject.completed_items + 1 })
-      .eq("id", updatedTask.subject_id)
-      .eq("user_id", user.id)
-  }
-
-  // Step 3: Update streak on profile.
+  // Step 2: Update streak on profile.
   const { data: profile } = await supabase
     .from("profiles")
     .select("streak_current, streak_longest, streak_last_completed_date")

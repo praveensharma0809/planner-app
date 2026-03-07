@@ -3,23 +3,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mockGetUser = vi.fn()
 const mockSelectResult = vi.fn()
 const mockUpdateResult = vi.fn()
-let selectCallCount = 0
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: () => {
-    selectCallCount = 0
     return Promise.resolve({
       auth: { getUser: () => mockGetUser() },
       from: () => ({
         select: () => ({
           eq: () => ({
             eq: () => ({
-              maybeSingle: () => {
-                selectCallCount++
-                return mockSelectResult()
-              },
+              maybeSingle: () => mockSelectResult(),
             }),
           }),
         }),

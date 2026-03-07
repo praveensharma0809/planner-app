@@ -10,7 +10,7 @@ export type GetSubtopicsResponse =
   | { status: "UNAUTHORIZED" }
   | { status: "SUCCESS"; subtopics: Subtopic[] }
 
-export async function getSubtopics(subjectId: string): Promise<GetSubtopicsResponse> {
+export async function getSubtopics(topicId: string): Promise<GetSubtopicsResponse> {
   try {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -18,15 +18,14 @@ export async function getSubtopics(subjectId: string): Promise<GetSubtopicsRespo
 
     const { data, error } = await supabase
       .from("subtopics")
-      .select("id, user_id, subject_id, name, total_items, completed_items, sort_order, created_at")
-      .eq("subject_id", subjectId)
+      .select("id, user_id, topic_id, name, sort_order, created_at")
+      .eq("topic_id", topicId)
       .eq("user_id", user.id)
       .order("sort_order", { ascending: true })
 
-    // Table may not exist yet — return empty gracefully
     if (error) return { status: "SUCCESS", subtopics: [] }
 
-    return { status: "SUCCESS", subtopics: data ?? [] }
+    return { status: "SUCCESS", subtopics: (data ?? []) as Subtopic[] }
   } catch {
     return { status: "SUCCESS", subtopics: [] }
   }
@@ -40,9 +39,8 @@ export type AddSubtopicResponse =
   | { status: "SUCCESS"; subtopic: Subtopic }
 
 export async function addSubtopic(
-  subjectId: string,
-  name: string,
-  totalItems: number
+  topicId: string,
+  name: string
 ): Promise<AddSubtopicResponse> {
   try {
     const supabase = await createServerSupabaseClient()
@@ -50,23 +48,22 @@ export async function addSubtopic(
     if (!user) return { status: "UNAUTHORIZED" }
 
     if (!name.trim()) return { status: "ERROR", message: "Name is required" }
-    if (totalItems < 0) return { status: "ERROR", message: "Items must be non-negative" }
 
-    // Verify subject ownership
-    const { data: subject } = await supabase
-      .from("subjects")
+    // Verify topic ownership
+    const { data: topic } = await supabase
+      .from("topics")
       .select("id")
-      .eq("id", subjectId)
+      .eq("id", topicId)
       .eq("user_id", user.id)
       .maybeSingle()
 
-    if (!subject) return { status: "ERROR", message: "Subject not found" }
+    if (!topic) return { status: "ERROR", message: "Topic not found" }
 
     // Get next sort_order
     const { data: existing } = await supabase
       .from("subtopics")
       .select("sort_order")
-      .eq("subject_id", subjectId)
+      .eq("topic_id", topicId)
       .eq("user_id", user.id)
       .order("sort_order", { ascending: false })
       .limit(1)
@@ -77,27 +74,21 @@ export async function addSubtopic(
       .from("subtopics")
       .insert({
         user_id: user.id,
-        subject_id: subjectId,
+        topic_id: topicId,
         name: name.trim(),
-        total_items: totalItems,
-        completed_items: 0,
         sort_order: nextOrder,
       })
-      .select("id, user_id, subject_id, name, total_items, completed_items, sort_order, created_at")
+      .select("id, user_id, topic_id, name, sort_order, created_at")
       .single()
 
     if (error || !created) {
-      // Table may not exist yet
-      if (error?.message?.includes("subtopics") || error?.message?.includes("relation")) {
-        return { status: "ERROR", message: "Subtopics feature requires a database migration. Please run the latest migration SQL." }
-      }
       return { status: "ERROR", message: error?.message ?? "Failed to create subtopic" }
     }
 
     revalidatePath("/dashboard/subjects")
-    return { status: "SUCCESS", subtopic: created }
+    return { status: "SUCCESS", subtopic: created as Subtopic }
   } catch {
-    return { status: "ERROR", message: "Subtopics feature is not available yet. Please run the database migration." }
+    return { status: "ERROR", message: "Failed to create subtopic." }
   }
 }
 

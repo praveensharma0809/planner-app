@@ -16,21 +16,20 @@ export function useTheme() {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark")
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === "undefined") return "dark"
+    const stored = localStorage.getItem("studyhard-theme") as Theme | null
+    return stored === "light" || stored === "dark" ? stored : "dark"
+  })
 
   useEffect(() => {
-    const stored = localStorage.getItem("studyhard-theme") as Theme | null
-    if (stored === "light" || stored === "dark") {
-      setTheme(stored)
-      document.documentElement.setAttribute("data-theme", stored)
-    }
-  }, [])
+    localStorage.setItem("studyhard-theme", theme)
+    document.documentElement.setAttribute("data-theme", theme)
+  }, [theme])
 
   function toggle() {
     const next: Theme = theme === "dark" ? "light" : "dark"
     setTheme(next)
-    localStorage.setItem("studyhard-theme", next)
-    document.documentElement.setAttribute("data-theme", next)
   }
 
   return (

@@ -1,24 +1,14 @@
 "use server"
 
-import { createServerSupabaseClient } from "@/lib/supabase/server"
-
+// plan_events table has been replaced by plan_snapshots.
+// This stub is kept for backward compatibility.
 export async function logPlanEvent(
-  eventType: "analyzed" | "committed" | "resolved_overload",
-  taskCount: number,
-  summary?: string
+  _eventType: string,
+  _taskCount: number,
+  _summary?: string
 ): Promise<void> {
-  try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    await supabase.from("plan_events").insert({
-      user_id: user.id,
-      event_type: eventType,
-      task_count: taskCount,
-      summary: summary ?? null,
-    })
-  } catch {
-    // Silently fail — plan_events table may not exist yet
-  }
+  void _eventType
+  void _taskCount
+  void _summary
+  // No-op: plan history is now recorded via plan_snapshots in commit_plan_atomic
 }

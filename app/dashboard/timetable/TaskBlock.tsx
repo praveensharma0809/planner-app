@@ -14,7 +14,6 @@ export function TaskBlock({ task }: TaskBlockProps) {
     listeners,
     setNodeRef,
     transform,
-    transition,
     isDragging,
   } = useSortable({ id: task.id })
 

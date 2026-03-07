@@ -1,5 +1,3 @@
-/// <reference types="vitest" />
-
 import { vi, describe, it, expect, beforeEach } from "vitest"
 import { createServerSupabaseClientMock } from "../utils/supabaseMock"
 
@@ -31,7 +29,8 @@ function buildCompleteTaskMock(options: {
     const chain: Record<string, unknown> = {}
     const methods = ["update", "select", "eq", "maybeSingle", "single"]
     for (const m of methods) {
-      chain[m] = vi.fn((..._args: unknown[]) => {
+      chain[m] = vi.fn((...args: unknown[]) => {
+        void args
         // maybeSingle resolves with the final value
         if (m === "maybeSingle" || m === "single") {
           return Promise.resolve({ data: finalValue, error: null })

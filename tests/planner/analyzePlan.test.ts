@@ -1,59 +1,73 @@
-/// <reference types="vitest/globals" />
+import { describe, it, expect } from "vitest"
+import { generatePlan } from "@/lib/planner/analyzePlan"
+import type { GlobalConstraints, PlannableUnit } from "@/lib/planner/types"
 
-import { analyzePlan, type AnalyzePlanStatus } from "@/lib/planner/analyzePlan"
-import type { Subject } from "@/lib/types/db"
-
-type OverloadStatus = Extract<AnalyzePlanStatus, { status: "OVERLOAD" }>
-type ReadyStatus    = Extract<AnalyzePlanStatus, { status: "READY" }>
-
-function buildSubject(overrides: Partial<Subject> = {}): Subject {
+function buildUnit(overrides: Partial<PlannableUnit> = {}): PlannableUnit {
   return {
-    id: "subject-1",
-    user_id: "user-1",
-    name: "Calculus",
-    total_items: 6,
-    completed_items: 0,
-    avg_duration_minutes: 60,
+    id: "topic-1",
+    subject_id: "subject-1",
+    subject_name: "Physics",
+    topic_name: "Kinematics",
+    estimated_minutes: 120,
+    priority: 2,
     deadline: "2024-01-05",
-    priority: 1,
-    mandatory: false,
-    created_at: "2024-01-01T00:00:00Z",
-    ...overrides
+    depends_on: [],
+    revision_sessions: 0,
+    practice_sessions: 0,
+    ...overrides,
   }
 }
 
-describe("analyzePlan", () => {
-  const today = new Date("2024-01-01T00:00:00Z")
+const baseConstraints: GlobalConstraints = {
+  study_start_date: "2024-01-01",
+  exam_date: "2024-01-05",
+  weekday_capacity_minutes: 120,
+  weekend_capacity_minutes: 120,
+  session_length_minutes: 60,
+  final_revision_days: 0,
+  buffer_percentage: 0,
+}
 
-  it("returns OVERLOAD in strict mode when required work exceeds capacity", () => {
-    const subjects = [
-      buildSubject({
-        total_items: 8,
-        avg_duration_minutes: 120,
-        deadline: "2024-01-02"
-      })
-    ]
+describe("generatePlan", () => {
+  it("returns NO_UNITS when there is nothing to plan", () => {
+    const result = generatePlan({
+      units: [],
+      constraints: baseConstraints,
+      offDays: new Set<string>(),
+    })
 
-    const result = analyzePlan(subjects, 60, today, "strict")
-
-    expect(result.status).toBe("OVERLOAD")
-    expect((result as OverloadStatus).overload).toBe(true)
+    expect(result).toEqual({ status: "NO_UNITS" })
   })
 
-  it("returns READY in auto mode even when overload is detected", () => {
-    const subjects = [
-      buildSubject({
-        total_items: 4,
-        avg_duration_minutes: 60,
-        deadline: "2024-01-02"
-      })
-    ]
+  it("returns INFEASIBLE when capacity is zero", () => {
+    const result = generatePlan({
+      units: [buildUnit()],
+      constraints: {
+        ...baseConstraints,
+        weekday_capacity_minutes: 0,
+        weekend_capacity_minutes: 0,
+      },
+      offDays: new Set<string>(),
+    })
 
-    const result = analyzePlan(subjects, 60, today, "auto")
+    expect(result.status).toBe("INFEASIBLE")
+    if (result.status === "INFEASIBLE") {
+      expect(result.feasibility.globalGap).toBeGreaterThan(0)
+    }
+  })
+
+  it("returns READY with scheduled sessions when feasible", () => {
+    const result = generatePlan({
+      units: [buildUnit()],
+      constraints: baseConstraints,
+      offDays: new Set<string>(),
+    })
 
     expect(result.status).toBe("READY")
-    expect((result as ReadyStatus).overload.overload).toBe(true)
-    expect((result as ReadyStatus).tasks.length).toBeGreaterThan(0)
+    if (result.status === "READY") {
+      expect(result.schedule.length).toBe(2)
+      expect(result.schedule.every((s) => s.session_type === "core")).toBe(true)
+      expect(result.feasibility.feasible).toBe(true)
+    }
   })
 })
-
