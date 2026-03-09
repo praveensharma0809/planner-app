@@ -47,6 +47,22 @@ export default async function SettingsPage() {
       <hr className="border-white/[0.06]" />
 
       <section className="space-y-3">
+        <h2 className="text-xl font-semibold">Operations</h2>
+        <p className="text-sm text-white/40">
+          View planner reliability telemetry, error rates, and latency stats from
+          the <code className="text-white/60">ops_events</code> stream.
+        </p>
+        <Link
+          href="/dashboard/settings/operations"
+          className="inline-block px-4 py-2 text-sm bg-white/[0.04] border border-white/[0.06] rounded-xl hover:bg-white/[0.08] transition-all text-white/60"
+        >
+          Open Operations Dashboard
+        </Link>
+      </section>
+
+      <hr className="border-white/[0.06]" />
+
+      <section className="space-y-3">
         <h2 className="text-xl font-semibold">Onboarding</h2>
         <p className="text-sm text-white/40">
           Re-run the setup wizard to update your profile, subjects, and study preferences from scratch.

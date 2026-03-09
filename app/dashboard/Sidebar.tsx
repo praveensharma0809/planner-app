@@ -24,14 +24,6 @@ const navLinks = [
     ),
   },
   {
-    href: "/dashboard/subjects", label: "Subjects", exact: false,
-    icon: (
-      <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-        <path d="M4 19.5A2.5 2.5 0 016.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-      </svg>
-    ),
-  },
-  {
     href: "/planner", label: "Planner", exact: false,
     icon: (
       <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
@@ -40,10 +32,10 @@ const navLinks = [
     ),
   },
   {
-    href: "/execution", label: "Execution", exact: false,
+    href: "/dashboard/subjects", label: "Subjects", exact: false,
     icon: (
       <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-        <path d="M4 6h16M4 12h16M4 18h10" />
+        <path d="M4 19.5A2.5 2.5 0 016.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
       </svg>
     ),
   },
@@ -57,7 +49,7 @@ const navLinks = [
   },
 ]
 
-export function Sidebar() {
+export function TopNav() {
   const pathname = usePathname()
   const router = useRouter()
   const [signingOut, setSigningOut] = useState(false)
@@ -82,97 +74,111 @@ export function Sidebar() {
     }
   }
 
-  const navContent = (
-    <>
-      <Link href="/dashboard" className="flex items-center gap-2 group">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-          <span className="text-sm font-black text-white">S</span>
-        </div>
-        <span className="text-base font-bold tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent group-hover:to-white/80 transition-all">
-          StudyHard
-        </span>
-      </Link>
-
-      <nav className="flex flex-col gap-1 flex-1">
-        {navLinks.map(({ href, label, exact, icon }) => {
-          const active = isActive(href, exact)
-          return (
-            <Link
-              key={href}
-              href={href}
-              onClick={() => setMobileOpen(false)}
-              className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
-                active
-                  ? "bg-white/[0.08] text-white font-medium shadow-sm backdrop-blur-sm"
-                  : "text-white/50 hover:text-white/80 hover:bg-white/[0.04]"
-              }`}
-            >
-              {active && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-gradient-to-b from-indigo-400 to-purple-500" />
-              )}
-              <span className={active ? "text-indigo-400" : "text-white/30"}>{icon}</span>
-              {label}
-            </Link>
-          )
-        })}
-      </nav>
-
-      <button
-        onClick={handleSignOut}
-        disabled={signingOut}
-        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/30 hover:text-red-400 hover:bg-red-500/[0.06] transition-all text-left disabled:opacity-50"
-      >
-        <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-          <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
-        </svg>
-        {signingOut ? "Signing out..." : "Sign out"}
-      </button>
-    </>
-  )
-
   return (
-    <>
-      {/* Mobile hamburger */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-40 p-2.5 glass-card !rounded-xl"
-        aria-label="Open menu"
-      >
-        <svg className="w-5 h-5 text-white/70" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-          <path d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
+    <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-white/[0.06] bg-[#0a0a18]/80 backdrop-blur-xl">
+      <div className="h-full max-w-[1440px] mx-auto flex items-center gap-1 px-4">
+        {/* Logo */}
+        <Link href="/dashboard" className="flex items-center gap-2 group mr-6 shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <span className="text-xs font-black text-white">S</span>
+          </div>
+          <span className="hidden sm:block text-sm font-bold tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent group-hover:to-white/80 transition-all">
+            StudyHard
+          </span>
+        </Link>
 
-      {/* Mobile overlay */}
-      {mobileOpen && (
-        <div
-          className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
+        {/* Desktop Nav */}
+        <nav className="hidden md:flex items-center gap-0.5 flex-1">
+          {navLinks.map(({ href, label, exact, icon }) => {
+            const active = isActive(href, exact)
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`relative flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] transition-all duration-200 ${
+                  active
+                    ? "bg-white/[0.08] text-white font-medium"
+                    : "text-white/40 hover:text-white/70 hover:bg-white/[0.04]"
+                }`}
+              >
+                {active && (
+                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-[2px] rounded-full bg-gradient-to-r from-indigo-400 to-purple-500" />
+                )}
+                <span className={active ? "text-indigo-400" : "text-white/25"}>{icon}</span>
+                {label}
+              </Link>
+            )
+          })}
+        </nav>
 
-      {/* Mobile drawer */}
-      <aside
-        className={`md:hidden fixed top-0 left-0 z-50 h-full w-60 bg-[#0a0a18]/95 backdrop-blur-xl border-r border-white/[0.06] flex flex-col gap-8 p-6 overflow-y-auto transition-transform duration-300 ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
+        {/* Right side */}
+        <div className="hidden md:flex items-center gap-2 ml-auto">
+          <button
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] text-white/30 hover:text-red-400 hover:bg-red-500/[0.06] transition-all disabled:opacity-50"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+            </svg>
+            {signingOut ? "..." : "Sign out"}
+          </button>
+        </div>
+
+        {/* Mobile hamburger */}
         <button
-          onClick={() => setMobileOpen(false)}
-          className="absolute top-4 right-4 p-1.5 text-white/30 hover:text-white transition-colors rounded-lg hover:bg-white/5"
-          aria-label="Close menu"
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="md:hidden ml-auto p-2 rounded-lg hover:bg-white/[0.04] transition-colors"
+          aria-label="Toggle menu"
         >
-          <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-            <path d="M6 18L18 6M6 6l12 12" />
+          <svg className="w-5 h-5 text-white/60" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+            {mobileOpen
+              ? <path d="M6 18L18 6M6 6l12 12" />
+              : <path d="M4 6h16M4 12h16M4 18h16" />
+            }
           </svg>
         </button>
-        {navContent}
-      </aside>
+      </div>
 
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-60 shrink-0 bg-[#0a0a18]/80 backdrop-blur-xl border-r border-white/[0.06] flex-col gap-8 p-5 overflow-y-auto">
-        {navContent}
-      </aside>
-    </>
+      {/* Mobile dropdown */}
+      {mobileOpen && (
+        <>
+          <div className="md:hidden fixed inset-0 top-14 bg-black/40 backdrop-blur-sm z-40" onClick={() => setMobileOpen(false)} />
+          <nav className="md:hidden absolute top-14 left-0 right-0 bg-[#0d0d1a]/95 backdrop-blur-xl border-b border-white/[0.06] p-3 space-y-1 z-50 animate-slide-in">
+            {navLinks.map(({ href, label, exact, icon }) => {
+              const active = isActive(href, exact)
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
+                    active
+                      ? "bg-white/[0.08] text-white font-medium"
+                      : "text-white/40 hover:text-white/70 hover:bg-white/[0.04]"
+                  }`}
+                >
+                  <span className={active ? "text-indigo-400" : "text-white/25"}>{icon}</span>
+                  {label}
+                </Link>
+              )
+            })}
+            <button
+              onClick={handleSignOut}
+              disabled={signingOut}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/30 hover:text-red-400 hover:bg-red-500/[0.06] transition-all disabled:opacity-50"
+            >
+              <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+              </svg>
+              {signingOut ? "Signing out..." : "Sign out"}
+            </button>
+          </nav>
+        </>
+      )}
+    </header>
   )
 }
+
+/** @deprecated Use TopNav instead */
+export const Sidebar = TopNav

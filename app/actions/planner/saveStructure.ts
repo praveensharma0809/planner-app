@@ -35,6 +35,93 @@ export async function saveStructure(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { status: "UNAUTHORIZED" }
 
+  // Collect all IDs that should survive (sent from UI)
+  const keepSubjectIds = new Set<string>()
+  const keepTopicIds = new Set<string>()
+  const keepSubtopicIds = new Set<string>()
+
+  for (const subj of subjects) {
+    if (subj.id) keepSubjectIds.add(subj.id)
+    for (const topic of subj.topics) {
+      if (topic.id) keepTopicIds.add(topic.id)
+      for (const st of topic.subtopics) {
+        if (st.id) keepSubtopicIds.add(st.id)
+      }
+    }
+  }
+
+  // ── Delete removed items ──────────────────────────────────────────────────
+  // 1. Archive subjects the user removed
+  const { data: existingSubjects } = await supabase
+    .from("subjects")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("archived", false)
+
+  for (const s of existingSubjects ?? []) {
+    if (!keepSubjectIds.has(s.id)) {
+      await supabase
+        .from("subjects")
+        .update({ archived: true })
+        .eq("id", s.id)
+        .eq("user_id", user.id)
+    }
+  }
+
+  // 2. Delete topics that were removed
+  const existingSubjectIds = (existingSubjects ?? []).map((s) => s.id)
+  if (existingSubjectIds.length > 0) {
+    const { data: existingTopics } = await supabase
+      .from("topics")
+      .select("id")
+      .eq("user_id", user.id)
+      .in("subject_id", existingSubjectIds)
+
+    for (const t of existingTopics ?? []) {
+      if (!keepTopicIds.has(t.id)) {
+        // Delete subtopics of this topic first
+        await supabase
+          .from("subtopics")
+          .delete()
+          .eq("topic_id", t.id)
+          .eq("user_id", user.id)
+        // Delete topic_params
+        await supabase
+          .from("topic_params")
+          .delete()
+          .eq("topic_id", t.id)
+          .eq("user_id", user.id)
+        // Delete the topic
+        await supabase
+          .from("topics")
+          .delete()
+          .eq("id", t.id)
+          .eq("user_id", user.id)
+      }
+    }
+
+    // 3. Delete subtopics that were removed (but topic still exists)
+    const survivingTopicIds = Array.from(keepTopicIds)
+    if (survivingTopicIds.length > 0) {
+      const { data: existingSubtopics } = await supabase
+        .from("subtopics")
+        .select("id")
+        .eq("user_id", user.id)
+        .in("topic_id", survivingTopicIds)
+
+      for (const st of existingSubtopics ?? []) {
+        if (!keepSubtopicIds.has(st.id)) {
+          await supabase
+            .from("subtopics")
+            .delete()
+            .eq("id", st.id)
+            .eq("user_id", user.id)
+        }
+      }
+    }
+  }
+
+  // ── Upsert surviving / new items ──────────────────────────────────────────
   for (const subj of subjects) {
     if (!subj.name.trim()) {
       return { status: "ERROR", message: "Subject name is required." }

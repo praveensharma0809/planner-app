@@ -1,4 +1,5 @@
 import { getMonthTasks } from "@/app/actions/dashboard/getMonthTasks"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { MonthView } from "./MonthView"
 
 interface Props {
@@ -23,17 +24,29 @@ export default async function CalendarPage({ searchParams }: Props) {
   }
 
   const monthStr = `${calYear}-${String(calMonth).padStart(2, "0")}`
-  const monthRes = await getMonthTasks(monthStr)
+
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const [monthRes, subjectsData] = await Promise.all([
+    getMonthTasks(monthStr),
+    user
+      ? supabase.from("subjects").select("id, name").eq("user_id", user.id).order("sort_order")
+      : Promise.resolve({ data: [] }),
+  ])
+
   const monthTasks = monthRes.status === "SUCCESS" ? monthRes.tasks : []
+  const subjects = (subjectsData.data ?? []) as { id: string; name: string }[]
 
   const prevDate = calMonth === 1 ? `${calYear - 1}-12` : `${calYear}-${String(calMonth - 1).padStart(2, "0")}`
   const nextDate = calMonth === 12 ? `${calYear + 1}-01` : `${calYear}-${String(calMonth + 1).padStart(2, "0")}`
   const isCurrentMonth = calYear === now.getFullYear() && calMonth === now.getMonth() + 1
 
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto">
       <MonthView
         tasks={monthTasks}
+        subjects={subjects}
         year={calYear}
         month={calMonth}
         today={today}

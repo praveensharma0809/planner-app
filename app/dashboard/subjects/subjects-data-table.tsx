@@ -43,7 +43,7 @@ export function SubjectsDataTable({ initialSubjects }: Props) {
   const displaySubjects = showArchived ? archivedSubjects : activeSubjects
 
   function formatDeadline(deadline: string) {
-    return new Date(deadline).toLocaleDateString(undefined, {
+    return new Date(deadline).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",

@@ -44,15 +44,13 @@ export function buildDaySlots(
         ? constraints.weekend_capacity_minutes
         : constraints.weekday_capacity_minutes
       const effectiveCapacity = Math.floor(rawCapacity * bufferMultiplier)
-      const maxSlots = Math.floor(
-        effectiveCapacity / constraints.session_length_minutes
-      )
-      if (maxSlots > 0) {
+      // Keep the day if there's any capacity at all (individual topic session
+      // lengths determine whether they can actually fit)
+      if (effectiveCapacity > 0) {
         slots.push({
           date: iso,
           capacity: effectiveCapacity,
-          maxSlots,
-          remainingSlots: maxSlots,
+          remainingMinutes: effectiveCapacity,
           isWeekend: weekend,
         })
       }
@@ -64,11 +62,11 @@ export function buildDaySlots(
 }
 
 function classifyUnit(
-  totalSessions: number,
-  availableSlots: number
+  minutesNeeded: number,
+  minutesAvailable: number
 ): UnitFeasibilityStatus {
-  if (availableSlots <= 0 || totalSessions > availableSlots) return "impossible"
-  const ratio = totalSessions / availableSlots
+  if (minutesAvailable <= 0 || minutesNeeded > minutesAvailable) return "impossible"
+  const ratio = minutesNeeded / minutesAvailable
   if (ratio <= 0.8) return "safe"
   if (ratio <= 0.9) return "tight"
   return "at_risk"
@@ -76,18 +74,16 @@ function classifyUnit(
 
 function buildUnitSuggestions(
   unit: PlannableUnit,
-  totalSessions: number,
-  availableSlots: number,
-  sessionLength: number,
-  avgDailySlotsForUnit: number
+  minutesNeeded: number,
+  minutesAvailable: number,
+  avgDailyCapacity: number
 ): FeasibilitySuggestion[] {
   const suggestions: FeasibilitySuggestion[] = []
-  const gap = totalSessions - availableSlots
-  if (gap <= 0) return suggestions
+  const minuteGap = minutesNeeded - minutesAvailable
+  if (minuteGap <= 0) return suggestions
 
-  // suggest extending deadline
-  if (avgDailySlotsForUnit > 0) {
-    const extraDays = Math.ceil(gap / avgDailySlotsForUnit)
+  if (avgDailyCapacity > 0) {
+    const extraDays = Math.ceil(minuteGap / avgDailyCapacity)
     suggestions.push({
       kind: "extend_deadline",
       message: `Extend deadline for "${unit.topic_name}" by ${extraDays} day(s)`,
@@ -95,11 +91,10 @@ function buildUnitSuggestions(
     })
   }
 
-  // suggest reducing effort
-  const reduceHours = Math.ceil((gap * sessionLength) / 60)
+  const reduceHours = Math.ceil(minuteGap / 60)
   suggestions.push({
     kind: "reduce_effort",
-    message: `Reduce effort for "${unit.topic_name}" by ${reduceHours} hour(s) (${gap} session(s))`,
+    message: `Reduce effort for "${unit.topic_name}" by ${reduceHours} hour(s)`,
     value: reduceHours,
   })
 
@@ -112,72 +107,68 @@ export function checkFeasibility(
   offDays: Set<string>
 ): FeasibilityResult {
   const daySlots = buildDaySlots(constraints, offDays)
-  const sessionLength = constraints.session_length_minutes
-  const totalSlotsAvailable = daySlots.reduce((s, d) => s + d.maxSlots, 0)
+  const totalMinutesAvailable = daySlots.reduce((s, d) => s + d.capacity, 0)
 
-  let totalSessionsNeeded = 0
+  let totalMinutesNeeded = 0
   const unitResults: UnitFeasibility[] = []
 
   for (const unit of units) {
     if (unit.estimated_minutes <= 0) continue
 
-    const coreSessions = Math.ceil(unit.estimated_minutes / sessionLength)
-    const allSessions =
-      coreSessions + unit.revision_sessions + unit.practice_sessions
-    totalSessionsNeeded += allSessions
+    const sessionsNeeded = Math.ceil(
+      unit.estimated_minutes / unit.session_length_minutes
+    )
+    const minutesNeeded = sessionsNeeded * unit.session_length_minutes
+    totalMinutesNeeded += minutesNeeded
 
-    // Count slots available for this unit (respecting its date window)
+    // Sum available minutes within this unit's own date window
     const unitStart = unit.earliest_start ?? constraints.study_start_date
     const unitEnd = unit.deadline
-    let availableSlots = 0
+    let availableMinutes = 0
     for (const slot of daySlots) {
       if (slot.date >= unitStart && slot.date <= unitEnd) {
-        availableSlots += slot.maxSlots
+        availableMinutes += slot.capacity
       }
     }
 
-    const status = classifyUnit(allSessions, availableSlots)
+    const status = classifyUnit(minutesNeeded, availableMinutes)
 
-    const avgDailySlots =
-      daySlots.length > 0 ? totalSlotsAvailable / daySlots.length : 0
+    const avgDailyCapacity =
+      daySlots.length > 0 ? totalMinutesAvailable / daySlots.length : 0
     const suggestions = buildUnitSuggestions(
       unit,
-      allSessions,
-      availableSlots,
-      sessionLength,
-      avgDailySlots
+      minutesNeeded,
+      availableMinutes,
+      avgDailyCapacity
     )
 
     unitResults.push({
       unitId: unit.id,
       name: unit.topic_name,
       deadline: unitEnd,
-      totalSessions: allSessions,
-      availableSlots,
+      totalSessions: sessionsNeeded,
+      availableMinutes,
       status,
       suggestions,
     })
   }
 
-  const globalGap = Math.max(0, totalSessionsNeeded - totalSlotsAvailable)
+  const globalGap = Math.max(0, totalMinutesNeeded - totalMinutesAvailable)
   const feasible = globalGap === 0 && unitResults.every((u) => u.status !== "impossible")
 
   const globalSuggestions: FeasibilitySuggestion[] = []
   if (globalGap > 0) {
-    // how much extra capacity per day to cover the gap
     const activeDays = daySlots.length || 1
-    const extraMinutesPerDay = Math.ceil(
-      (globalGap * sessionLength) / activeDays
-    )
+    const extraMinutesPerDay = Math.ceil(globalGap / activeDays)
     globalSuggestions.push({
       kind: "increase_capacity",
       message: `Increase daily study time by ${extraMinutesPerDay} minutes`,
       value: extraMinutesPerDay,
     })
 
-    const avgDailySlots = totalSlotsAvailable / activeDays
-    if (avgDailySlots > 0) {
-      const extraDays = Math.ceil(globalGap / avgDailySlots)
+    const avgDailyCapacity = totalMinutesAvailable / activeDays
+    if (avgDailyCapacity > 0) {
+      const extraDays = Math.ceil(globalGap / avgDailyCapacity)
       globalSuggestions.push({
         kind: "extend_deadline",
         message: `Extend exam date by ${extraDays} day(s)`,
@@ -185,7 +176,7 @@ export function checkFeasibility(
       })
     }
 
-    const reduceHours = Math.ceil((globalGap * sessionLength) / 60)
+    const reduceHours = Math.ceil(globalGap / 60)
     globalSuggestions.push({
       kind: "reduce_effort",
       message: `Reduce total effort by ${reduceHours} hour(s)`,
@@ -195,8 +186,8 @@ export function checkFeasibility(
 
   return {
     feasible,
-    totalSessionsNeeded,
-    totalSlotsAvailable,
+    totalSessionsNeeded: totalMinutesNeeded,
+    totalSlotsAvailable: totalMinutesAvailable,
     globalGap,
     units: unitResults,
     suggestions: globalSuggestions,

@@ -14,7 +14,7 @@ export async function getPlanConfig(): Promise<GetPlanConfigResponse> {
 
   const { data, error } = await supabase
     .from("plan_config")
-    .select("id, user_id, study_start_date, exam_date, weekday_capacity_minutes, weekend_capacity_minutes, session_length_minutes, final_revision_days, buffer_percentage, created_at, updated_at")
+    .select("id, user_id, study_start_date, exam_date, weekday_capacity_minutes, weekend_capacity_minutes, plan_order, final_revision_days, buffer_percentage, max_active_subjects, created_at, updated_at")
     .eq("user_id", user.id)
     .maybeSingle()
 

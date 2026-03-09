@@ -78,6 +78,25 @@ npm run dev
 npm test
 ```
 
+5. Run full local production checks:
+
+```bash
+npm run ci:check
+```
+
+## Reliability Layer
+
+- CI gate workflow: `.github/workflows/ci.yml`
+- Operational runbook: `info/OPERATIONS.md`
+- Server telemetry helper: `lib/ops/telemetry.ts`
+- Telemetry schema migration: `supabase/migrations/006_ops_events.sql`
+
+Telemetry defaults to structured server logs. To persist telemetry in DB, set:
+
+```env
+ENABLE_DB_TELEMETRY=true
+```
+
 ## Database note
 
 This repo snapshot does not currently include SQL migration files. The in-repo schema reference lives in `info/DB_SCHEMA.md` and `info/AI_CONTEXT.md`, and those docs have been refreshed from a live Supabase schema dump captured on March 6, 2026.

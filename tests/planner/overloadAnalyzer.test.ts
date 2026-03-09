@@ -9,11 +9,10 @@ function buildUnit(overrides: Partial<PlannableUnit> = {}): PlannableUnit {
     subject_name: "Biology",
     topic_name: "Genetics",
     estimated_minutes: 120,
+    session_length_minutes: 60,
     priority: 2,
     deadline: "2024-01-03",
     depends_on: [],
-    revision_sessions: 0,
-    practice_sessions: 0,
     ...overrides,
   }
 }
@@ -23,9 +22,10 @@ const baseConstraints: GlobalConstraints = {
   exam_date: "2024-01-03",
   weekday_capacity_minutes: 120,
   weekend_capacity_minutes: 120,
-  session_length_minutes: 60,
+  plan_order: "balanced" as const,
   final_revision_days: 0,
   buffer_percentage: 0,
+  max_active_subjects: 0,
 }
 
 describe("checkFeasibility", () => {

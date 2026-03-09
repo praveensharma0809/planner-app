@@ -63,10 +63,12 @@ describe("commitPlan", () => {
         duration_minutes: 60,
         session_type: "core",
         priority: 1,
+        session_number: 1,
+        total_sessions: 1,
       },
     ]
 
-    const result = await commitPlan(sessions, "Initial commit")
+    const result = await commitPlan(sessions, "future", "Initial commit")
 
     expect(result).toEqual({
       status: "SUCCESS",
@@ -84,7 +86,7 @@ describe("commitPlan", () => {
     )
 
     const [, args] = supabase.rpc.mock.calls[0]
-    expect(JSON.parse(args.p_tasks)).toEqual(sessions)
+    expect(args.p_tasks).toEqual(sessions)
     expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard")
     expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard/calendar")
     expect(revalidatePathMock).toHaveBeenCalledWith("/planner")

@@ -18,10 +18,10 @@ export default async function ExecutionPage({ searchParams }: PageProps) {
 
   if (res.status !== "SUCCESS") {
     return (
-      <div className="h-screen flex items-center justify-center text-white" style={{ background: "#0d0d14" }}>
+      <div className="flex items-center justify-center min-h-[60vh] text-white">
         <div className="text-center space-y-3">
-          <h1 className="text-lg font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>Execution Board</h1>
-          <p className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>Sign in to access your execution data.</p>
+          <h1 className="text-lg font-medium text-white/70">Execution Board</h1>
+          <p className="text-sm text-white/40">Sign in to access your execution data.</p>
           <Link href="/auth/login" className="inline-block text-sm text-blue-400 hover:text-blue-300">Sign in &rarr;</Link>
         </div>
       </div>
@@ -33,11 +33,9 @@ export default async function ExecutionPage({ searchParams }: PageProps) {
   const nextKey = shiftMonth(data.month_key, 1)
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden text-white" style={{ background: "#0d0d14" }}>
+    <div className="flex flex-col overflow-hidden text-white" style={{ height: "calc(100vh - 56px)" }}>
       {/* Formula bar */}
-      <div className="shrink-0 h-7 flex items-center gap-3 px-2 text-[11px]" style={{ background: "#111120", borderBottom: "1px solid #252538" }}>
-        <Link href="/dashboard" className="hover:text-white/60" style={{ color: "rgba(255,255,255,0.3)" }}>&larr; Back</Link>
-        <div className="w-px h-4" style={{ background: "#252538" }} />
+      <div className="shrink-0 h-7 flex items-center gap-3 px-3 text-[11px]" style={{ background: "#111120", borderBottom: "1px solid #252538" }}>
         <Link href={`/execution?month=${prevKey}`} className="hover:text-white/60 px-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>&#9664;</Link>
         <span className="font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>{data.month_label}</span>
         <Link href={`/execution?month=${nextKey}`} className="hover:text-white/60 px-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>&#9654;</Link>

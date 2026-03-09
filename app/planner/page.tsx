@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useToast } from "@/app/components/Toast"
 import PlannerStepper from "./components/PlannerStepper"
 import StructureBuilder, { type SubjectDraft } from "./components/StructureBuilder"
@@ -16,9 +16,49 @@ import { getPlanConfig } from "@/app/actions/planner/getPlanConfig"
 import { savePlanConfig } from "@/app/actions/planner/savePlanConfig"
 import { generatePlanAction } from "@/app/actions/planner/generatePlan"
 import { commitPlan } from "@/app/actions/planner/commitPlan"
-import { getPlanHistory } from "@/app/actions/planner/getPlanHistory"
+import type { KeepPreviousMode } from "@/app/actions/planner/commitPlan"
 import type { ScheduledSession, FeasibilityResult } from "@/lib/planner/types"
-import type { PlanSnapshot } from "@/lib/types/db"
+
+// ── sessionStorage helpers ────────────────────────────────────────────────────
+const STORAGE_KEY = "planner-wizard-state"
+const PLANNER_ENGINE_VERSION = "2026-03-08-sequential-v2"
+
+interface PersistedState {
+  engineVersion?: string
+  phase: number
+  maxPhase: number
+  topics: TopicForParams[]
+  paramMap: [string, ParamValues][]
+  constraints: ConstraintValues | null
+  sessions: ScheduledSession[]
+  feasibility: FeasibilityResult | null
+}
+
+function saveProgress(state: PersistedState) {
+  try {
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...state,
+        engineVersion: PLANNER_ENGINE_VERSION,
+      })
+    )
+  } catch { /* quota exceeded – ignore */ }
+}
+
+function loadProgress(): PersistedState | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function clearProgress() {
+  try { sessionStorage.removeItem(STORAGE_KEY) } catch { /* noop */ }
+}
 
 export default function PlannerPage() {
   const { addToast } = useToast()
@@ -50,12 +90,50 @@ export default function PlannerPage() {
   const [isCommitting, setIsCommitting] = useState(false)
   const [commitResult, setCommitResult] = useState<{ status: string; taskCount?: number } | null>(null)
 
-  // History
-  const [history, setHistory] = useState<PlanSnapshot[]>([])
+  // Track whether initial hydration from sessionStorage is done
+  const hydratedRef = useRef(false)
 
-  // Load structure on mount
+  // ── Persist progress whenever key state changes ──────────────────────────
   useEffect(() => {
-    getStructure().then((res) => {
+    if (!hydratedRef.current) return // don't write until initial load complete
+    saveProgress({
+      phase,
+      maxPhase,
+      topics,
+      paramMap: Array.from(paramMap.entries()),
+      constraints,
+      sessions,
+      feasibility,
+    })
+  }, [phase, maxPhase, topics, paramMap, constraints, sessions, feasibility])
+
+  // ── Load on mount: restore from sessionStorage + fetch structure from DB ─
+  useEffect(() => {
+    async function init() {
+      // 1. Try to hydrate from sessionStorage
+      const savedRaw = loadProgress()
+      const saved =
+        savedRaw && savedRaw.engineVersion === PLANNER_ENGINE_VERSION
+          ? savedRaw
+          : null
+
+      // Planner logic changed, so invalidate stale preview/commit state.
+      if (savedRaw && !saved) {
+        clearProgress()
+      }
+
+      if (saved) {
+        if (saved.phase) setPhase(saved.phase)
+        if (saved.maxPhase) setMaxPhase(saved.maxPhase)
+        if (saved.topics) setTopics(saved.topics)
+        if (saved.paramMap) setParamMap(new Map(saved.paramMap))
+        if (saved.constraints) setConstraints(saved.constraints)
+        if (saved.sessions) setSessions(saved.sessions)
+        if (saved.feasibility) setFeasibility(saved.feasibility)
+      }
+
+      // 2. Always fetch live structure from DB (source of truth for Phase 1)
+      const res = await getStructure()
       if (res.status === "SUCCESS") {
         const mapped: SubjectDraft[] = res.tree.subjects.map((s) => ({
           id: s.id,
@@ -73,12 +151,60 @@ export default function PlannerPage() {
           })),
         }))
         setSubjects(mapped)
+
+        // If we restored to Phase 2+ but don't have topics yet, rebuild them
+        if (saved && saved.phase >= 2 && (!saved.topics || saved.topics.length === 0)) {
+          const topicList: TopicForParams[] = []
+          for (const s of res.tree.subjects) {
+            for (const t of s.topics) {
+              topicList.push({ id: t.id, subject_name: s.name, topic_name: t.name })
+            }
+          }
+          setTopics(topicList)
+        }
+
+        // If we restored to Phase 2+ but don't have params, load them
+        if (saved && saved.phase >= 2 && (!saved.paramMap || saved.paramMap.length === 0)) {
+          const paramsRes = await getTopicParams()
+          if (paramsRes.status === "SUCCESS") {
+            const map = new Map<string, ParamValues>()
+            for (const p of paramsRes.params) {
+              map.set(p.topic_id, {
+                topic_id: p.topic_id,
+                estimated_hours: p.estimated_hours,
+                priority: p.priority,
+                deadline: p.deadline ?? "",
+                earliest_start: p.earliest_start ?? "",
+                depends_on: p.depends_on ?? [],
+                session_length_minutes: p.session_length_minutes ?? 60,
+              })
+            }
+            setParamMap(map)
+          }
+        }
+
+        // If restored to Phase 3+ but no constraints, load from DB
+        if (saved && saved.phase >= 3 && !saved.constraints) {
+          const configRes = await getPlanConfig()
+          if (configRes.status === "SUCCESS" && configRes.config) {
+            setConstraints({
+              study_start_date: configRes.config.study_start_date,
+              exam_date: configRes.config.exam_date,
+              weekday_capacity_minutes: configRes.config.weekday_capacity_minutes,
+              weekend_capacity_minutes: configRes.config.weekend_capacity_minutes,
+              plan_order: (configRes.config.plan_order as ConstraintValues["plan_order"]) ?? "balanced",
+              final_revision_days: configRes.config.final_revision_days ?? 2,
+              buffer_percentage: configRes.config.buffer_percentage ?? 10,
+              max_active_subjects: configRes.config.max_active_subjects ?? 0,
+            })
+          }
+        }
       }
+
       setStructureLoaded(true)
-    })
-    getPlanHistory().then((res) => {
-      if (res.status === "SUCCESS") setHistory(res.snapshots)
-    })
+      hydratedRef.current = true
+    }
+    init()
   }, [])
 
   const goToPhase = useCallback((p: number) => {
@@ -138,8 +264,7 @@ export default function PlannerPage() {
             deadline: p.deadline ?? "",
             earliest_start: p.earliest_start ?? "",
             depends_on: p.depends_on ?? [],
-            revision_sessions: p.revision_sessions,
-            practice_sessions: p.practice_sessions,
+            session_length_minutes: p.session_length_minutes ?? 60,
           })
         }
         setParamMap(map)
@@ -161,8 +286,7 @@ export default function PlannerPage() {
         deadline: p.deadline || null,
         earliest_start: p.earliest_start || null,
         depends_on: p.depends_on,
-        revision_sessions: p.revision_sessions,
-        practice_sessions: p.practice_sessions,
+        session_length_minutes: p.session_length_minutes ?? 60,
       }))
     )
     setIsSavingParams(false)
@@ -180,13 +304,13 @@ export default function PlannerPage() {
         exam_date: configRes.config.exam_date,
         weekday_capacity_minutes: configRes.config.weekday_capacity_minutes,
         weekend_capacity_minutes: configRes.config.weekend_capacity_minutes,
-        session_length_minutes: configRes.config.session_length_minutes,
-        final_revision_days: configRes.config.final_revision_days,
-        buffer_percentage: configRes.config.buffer_percentage,
+        plan_order: (configRes.config.plan_order as ConstraintValues["plan_order"]) ?? "balanced",
+        final_revision_days: configRes.config.final_revision_days ?? 2,
+        buffer_percentage: configRes.config.buffer_percentage ?? 10,
+        max_active_subjects: configRes.config.max_active_subjects ?? 0,
       })
     }
 
-    addToast("Parameters saved.", "success")
     goToPhase(3)
   }
 
@@ -208,7 +332,11 @@ export default function PlannerPage() {
     if (plan.status === "READY") {
       setSessions(plan.schedule)
       setFeasibility(plan.feasibility)
-      addToast("Plan generated!", "success")
+      if (!plan.feasibility.feasible) {
+        addToast("Plan generated with warnings — review the plan preview carefully.", "info")
+      } else {
+        addToast("Plan generated!", "success")
+      }
       goToPhase(4)
     } else if (plan.status === "INFEASIBLE") {
       setFeasibility(plan.feasibility)
@@ -234,18 +362,15 @@ export default function PlannerPage() {
   }
 
   // Phase 5 commit
-  const handleCommit = async () => {
+  const handleCommit = async (keepMode: KeepPreviousMode) => {
     setIsCommitting(true)
     setCommitResult(null)
-    const res = await commitPlan(sessions)
+    const res = await commitPlan(sessions, keepMode)
     setIsCommitting(false)
 
     if (res.status === "SUCCESS") {
       setCommitResult({ status: "SUCCESS", taskCount: res.taskCount })
       addToast(`Plan committed — ${res.taskCount} tasks created!`, "success")
-      // Refresh history
-      const histRes = await getPlanHistory()
-      if (histRes.status === "SUCCESS") setHistory(histRes.snapshots)
     } else {
       setCommitResult({ status: "ERROR" })
       addToast("Failed to commit plan.", "error")
@@ -300,8 +425,10 @@ export default function PlannerPage() {
             <PlanPreview
               sessions={sessions}
               feasibility={feasibility}
+              constraints={constraints}
               onEdit={handleEditSessions}
               onConfirm={handlePreviewConfirm}
+              onGoToPhase={goToPhase}
             />
           )}
 
@@ -315,37 +442,6 @@ export default function PlannerPage() {
             />
           )}
         </section>
-
-        {/* Plan History */}
-        {history.length > 0 && (
-          <section className="glass-card space-y-3">
-            <h2 className="text-lg font-bold">Plan History</h2>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {history.map((snap) => {
-                const timeStr = new Date(snap.created_at).toLocaleDateString(
-                  "en-US",
-                  { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }
-                )
-                return (
-                  <div
-                    key={snap.id}
-                    className="flex items-center gap-3 text-sm bg-white/[0.04] rounded-xl px-3 py-2"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <span className="font-medium text-white/80">
-                        {snap.task_count} tasks
-                      </span>
-                      {snap.summary && (
-                        <span className="text-white/40 ml-2">{snap.summary}</span>
-                      )}
-                    </div>
-                    <span className="text-xs text-white/25 shrink-0">{timeStr}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        )}
       </div>
     </main>
   )

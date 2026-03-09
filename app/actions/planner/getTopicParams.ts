@@ -14,7 +14,7 @@ export async function getTopicParams(): Promise<GetTopicParamsResponse> {
 
   const { data, error } = await supabase
     .from("topic_params")
-    .select("id, user_id, topic_id, estimated_hours, priority, deadline, earliest_start, depends_on, revision_sessions, practice_sessions, created_at, updated_at")
+    .select("id, user_id, topic_id, estimated_hours, priority, deadline, earliest_start, depends_on, revision_sessions, practice_sessions, session_length_minutes, created_at, updated_at")
     .eq("user_id", user.id)
 
   if (error) return { status: "SUCCESS", params: [] }

@@ -10,8 +10,7 @@ interface TopicParamInput {
   deadline: string | null
   earliest_start: string | null
   depends_on: string[]
-  revision_sessions: number
-  practice_sessions: number
+  session_length_minutes: number
 }
 
 export type SaveTopicParamsResponse =
@@ -33,6 +32,9 @@ export async function saveTopicParams(
     if (p.priority < 1 || p.priority > 5) {
       return { status: "ERROR", message: "Priority must be between 1 and 5." }
     }
+    if (p.session_length_minutes < 1) {
+      return { status: "ERROR", message: "Session length must be at least 1 minute." }
+    }
 
     const { error } = await supabase
       .from("topic_params")
@@ -45,8 +47,10 @@ export async function saveTopicParams(
           deadline: p.deadline,
           earliest_start: p.earliest_start,
           depends_on: p.depends_on,
-          revision_sessions: Math.max(0, p.revision_sessions),
-          practice_sessions: Math.max(0, p.practice_sessions),
+          session_length_minutes: Math.max(1, p.session_length_minutes),
+          // keep columns populated for DB compat; not used by planner engine
+          revision_sessions: 0,
+          practice_sessions: 0,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "topic_id" }

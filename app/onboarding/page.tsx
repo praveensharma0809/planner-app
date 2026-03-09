@@ -7,6 +7,7 @@ import { useToast } from "@/app/components/Toast";
 import { addSubject } from "@/app/actions/subjects/addSubject";
 import { addOffDay } from "@/app/actions/offdays/addOffDay";
 import { deleteOffDay } from "@/app/actions/offdays/deleteOffDay";
+import { quickStartPlan } from "@/app/actions/planner/quickStartPlan";
 
 interface SubjectDraft {
   name: string;
@@ -44,6 +45,7 @@ export default function OnboardingPage() {
   const [offDate, setOffDate] = useState("");
   const [offReason, setOffReason] = useState("");
   const [offSaving, setOffSaving] = useState(false);
+  const [quickStarting, setQuickStarting] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -176,6 +178,37 @@ export default function OnboardingPage() {
   // Step 4 — Go to planner
   const handleGoToPlanner = () => {
     router.push("/planner");
+  };
+
+  const handleQuickStart = async () => {
+    setQuickStarting(true);
+    try {
+      const result = await quickStartPlan();
+
+      if (result.status === "SUCCESS") {
+        addToast(`Quick plan ready: ${result.taskCount} sessions scheduled.`, "success");
+        router.push("/dashboard");
+        return;
+      }
+
+      if (result.status === "NO_SUBJECTS") {
+        addToast("Add at least one subject before quick start.", "error");
+        setStep(2);
+        return;
+      }
+
+      if (result.status === "UNAUTHORIZED") {
+        addToast("Session expired. Please log in again.", "error");
+        router.push("/auth/login");
+        return;
+      }
+
+      addToast(result.message, "error");
+    } catch {
+      addToast("Could not create quick plan right now.", "error");
+    } finally {
+      setQuickStarting(false);
+    }
   };
 
   const handleGoToDashboard = () => {
@@ -482,6 +515,14 @@ export default function OnboardingPage() {
                 </svg>
               </div>
             </div>
+
+            <button
+              onClick={handleQuickStart}
+              disabled={quickStarting}
+              className="w-full mb-3 p-3 rounded-xl btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {quickStarting ? "Building quick plan..." : "Quick Start Plan (Recommended)"}
+            </button>
 
             <div className="flex gap-3">
               <button

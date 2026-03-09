@@ -13,11 +13,13 @@ export function generatePlan(input: PlanInput): PlanResult {
 
   const feasibility = checkFeasibility(units, constraints, offDays)
 
-  if (!feasibility.feasible) {
+  // Always attempt scheduling — even when technically infeasible the
+  // scheduler can produce a best-effort plan the user can review.
+  const sessions = schedule(units, constraints, offDays)
+
+  if (sessions.length === 0 && !feasibility.feasible) {
     return { status: "INFEASIBLE", feasibility }
   }
-
-  const sessions = schedule(units, constraints, offDays)
 
   return {
     status: "READY",

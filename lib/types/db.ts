@@ -51,6 +51,7 @@ export interface TopicParams {
   depends_on: string[]
   revision_sessions: number
   practice_sessions: number
+  session_length_minutes: number
   created_at: string
   updated_at: string
 }
@@ -62,9 +63,10 @@ export interface PlanConfig {
   exam_date: string
   weekday_capacity_minutes: number
   weekend_capacity_minutes: number
-  session_length_minutes: number
+  plan_order: string
   final_revision_days: number
   buffer_percentage: number
+  max_active_subjects: number
   created_at: string
   updated_at: string
 }
@@ -79,6 +81,8 @@ export interface Task {
   duration_minutes: number
   session_type: "core" | "revision" | "practice"
   priority: number
+  session_number: number | null
+  total_sessions: number | null
   completed: boolean
   is_plan_generated: boolean
   plan_version: string | null

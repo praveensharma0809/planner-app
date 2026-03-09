@@ -8,9 +8,10 @@ interface PlanConfigInput {
   exam_date: string
   weekday_capacity_minutes: number
   weekend_capacity_minutes: number
-  session_length_minutes: number
+  plan_order: string
   final_revision_days: number
   buffer_percentage: number
+  max_active_subjects: number
 }
 
 export type SavePlanConfigResponse =
@@ -34,8 +35,9 @@ export async function savePlanConfig(
   if (config.weekday_capacity_minutes < 0 || config.weekend_capacity_minutes < 0) {
     return { status: "ERROR", message: "Capacity cannot be negative." }
   }
-  if (config.session_length_minutes < 1) {
-    return { status: "ERROR", message: "Session length must be at least 1 minute." }
+  const validOrders = ["priority", "deadline", "subject", "balanced"]
+  if (!validOrders.includes(config.plan_order)) {
+    return { status: "ERROR", message: "Invalid plan generation order." }
   }
 
   const { error } = await supabase
@@ -47,9 +49,10 @@ export async function savePlanConfig(
         exam_date: config.exam_date,
         weekday_capacity_minutes: config.weekday_capacity_minutes,
         weekend_capacity_minutes: config.weekend_capacity_minutes,
-        session_length_minutes: config.session_length_minutes,
+        plan_order: config.plan_order,
         final_revision_days: Math.max(0, config.final_revision_days),
         buffer_percentage: Math.min(50, Math.max(0, config.buffer_percentage)),
+        max_active_subjects: Math.max(0, config.max_active_subjects ?? 0),
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" }

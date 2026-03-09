@@ -1,6 +1,6 @@
-import { TopNav } from "./Sidebar"
+import { TopNav } from "@/app/dashboard/Sidebar"
 
-export default function DashboardLayout({
+export default function ExecutionLayout({
   children,
 }: {
   children: React.ReactNode
@@ -9,8 +9,6 @@ export default function DashboardLayout({
     <div className="min-h-screen text-white" style={{ background: "var(--background)" }}>
       <div className="mesh-bg" />
       <TopNav />
-
-      {/* Main Content */}
       <main className="pt-14 min-h-screen">
         {children}
       </main>
