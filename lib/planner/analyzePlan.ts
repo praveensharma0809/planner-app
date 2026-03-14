@@ -17,8 +17,27 @@ export function generatePlan(input: PlanInput): PlanResult {
   // scheduler can produce a best-effort plan the user can review.
   const sessions = schedule(units, constraints, offDays)
 
-  if (sessions.length === 0 && !feasibility.feasible) {
-    return { status: "INFEASIBLE", feasibility }
+  if (sessions.length === 0) {
+    if (!feasibility.feasible) {
+      return { status: "INFEASIBLE", feasibility }
+    }
+    return { status: "NO_DAYS" }
+  }
+
+  // Compute expected vs placed sessions to detect partial plans
+  const expectedSessions = feasibility.units.reduce(
+    (sum, u) => sum + u.totalSessions,
+    0
+  )
+  const droppedSessions = Math.max(0, expectedSessions - sessions.length)
+
+  if (droppedSessions > 0 && !feasibility.feasible) {
+    return {
+      status: "PARTIAL",
+      schedule: sessions,
+      feasibility,
+      droppedSessions,
+    }
   }
 
   return {

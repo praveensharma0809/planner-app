@@ -71,4 +71,56 @@ describe("generatePlan", () => {
       expect(result.feasibility.feasible).toBe(true)
     }
   })
+
+  it("returns PARTIAL when some sessions can be placed but not the full plan", () => {
+    const result = generatePlan({
+      units: [buildUnit({ estimated_minutes: 180, deadline: "2024-01-02" })],
+      constraints: {
+        ...baseConstraints,
+        exam_date: "2024-01-02",
+        weekday_capacity_minutes: 60,
+        weekend_capacity_minutes: 60,
+      },
+      offDays: new Set<string>(),
+    })
+
+    expect(result.status).toBe("PARTIAL")
+    if (result.status === "PARTIAL") {
+      expect(result.schedule).toHaveLength(2)
+      expect(result.droppedSessions).toBe(1)
+      expect(result.feasibility.feasible).toBe(false)
+    }
+  })
+
+  it("returns READY with flexFeasible when base capacity is short but flex closes the gap", () => {
+    const result = generatePlan({
+      units: [
+        buildUnit({ id: "topic-1", estimated_minutes: 120, deadline: "2024-01-03" }),
+        buildUnit({
+          subject_id: "subject-2",
+          subject_name: "Chemistry",
+          id: "topic-2",
+          topic_name: "Dynamics",
+          estimated_minutes: 60,
+          deadline: "2024-01-03",
+        }),
+      ],
+      constraints: {
+        ...baseConstraints,
+        exam_date: "2024-01-03",
+        weekday_capacity_minutes: 50,
+        weekend_capacity_minutes: 50,
+        flexibility_minutes: 10,
+        max_daily_minutes: 120,
+      },
+      offDays: new Set<string>(),
+    })
+
+    expect(result.status).toBe("READY")
+    if (result.status === "READY") {
+      expect(result.schedule).toHaveLength(3)
+      expect(result.feasibility.feasible).toBe(false)
+      expect(result.feasibility.flexFeasible).toBe(true)
+    }
+  })
 })

@@ -1,14 +1,16 @@
 # StudyHard Progress
 
-Last updated: March 9, 2026
+Last updated: March 14, 2026
 
 ## What is complete
 
 - Auth flow with Supabase session handling
-- Protected app shell and onboarding gating in middleware
+- Protected app shell and onboarding gating in edge proxy
 - Planner analyze -> resolve -> commit pipeline
 - Per-subject overload analysis and adjustment suggestions
-- Scheduler support for deadlines and off-days
+- Scheduler support for deadlines, off-days, flex capacity, reservation-aware re-optimization, and missed-work recovery
+- Planner constraint system with per-subject ordering modes, custom day/date capacity overrides, live feasibility, and revision reserve
+- Interactive planner preview with delete, drag-move, pin, swap, manual session add, and re-optimize-around-edits flows
 - Dashboard summary cards, backlog, streak, and deadline views
 - Week and month calendar task views
 - Subject CRUD with archive support and subtopics
@@ -17,8 +19,8 @@ Last updated: March 9, 2026
 - Monthly execution board with categories, items, entries, metrics, and month cloning
 - Live schema reconciliation for DB docs and AI handoff docs
 - Off-day insert flow fixed to work with the live `off_days` schema
-- Quick-start onboarding path to auto-generate and commit a first plan
-- Missed-work reschedule flow from dashboard backlog warning
+- Planner-first onboarding flow (quick-start path removed)
+- Missed-work reschedule flow from dashboard backlog warning, including dropped-reason reporting
 - Production trust layer baseline:
 	- CI workflow with typecheck, lint, test, and build gates
 	- Structured server telemetry for planner critical actions

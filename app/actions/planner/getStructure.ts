@@ -18,7 +18,7 @@ export async function getStructure(): Promise<GetStructureResponse> {
 
   const { data: subjects } = await supabase
     .from("subjects")
-    .select("id, user_id, name, sort_order, archived, created_at")
+    .select("id, user_id, name, sort_order, archived, deadline, created_at")
     .eq("user_id", user.id)
     .eq("archived", false)
     .order("sort_order", { ascending: true })

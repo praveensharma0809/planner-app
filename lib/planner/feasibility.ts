@@ -23,35 +23,71 @@ function addDays(date: Date, n: number): Date {
   return d
 }
 
+/**
+ * Build the array of usable study days with base + flex capacity.
+ *
+ * Capacity resolution order (highest priority first):
+ *   1. Custom day capacity for a specific date
+ *   2. Per-day-of-week override
+ *   3. Weekend / weekday default
+ *
+ * Buffer percentage is deprecated and intentionally ignored.
+ * Base capacity is always explicit user capacity; flex extends from there.
+ */
 export function buildDaySlots(
   constraints: GlobalConstraints,
   offDays: Set<string>
 ): DaySlot[] {
   const start = new Date(constraints.study_start_date)
-  const revisionCutoff = addDays(
-    new Date(constraints.exam_date),
-    -constraints.final_revision_days
-  )
-  const bufferMultiplier = 1 - constraints.buffer_percentage / 100
-  const slots: DaySlot[] = []
+  // Backward compat: if final_revision_days is set, subtract from exam date
+  const revisionDays = constraints.final_revision_days ?? 0
+  const endDate = addDays(new Date(constraints.exam_date), -revisionDays)
 
+  const flexMinutes = constraints.flexibility_minutes ?? 0
+  const maxDaily = constraints.max_daily_minutes ?? 480
+
+  const slots: DaySlot[] = []
   let cursor = new Date(start)
-  while (cursor <= revisionCutoff) {
+
+  while (cursor <= endDate) {
     const iso = toISO(cursor)
     if (!offDays.has(iso)) {
       const weekend = isWeekend(cursor)
-      const rawCapacity = weekend
-        ? constraints.weekend_capacity_minutes
-        : constraints.weekday_capacity_minutes
-      const effectiveCapacity = Math.floor(rawCapacity * bufferMultiplier)
-      // Keep the day if there's any capacity at all (individual topic session
-      // lengths determine whether they can actually fit)
-      if (effectiveCapacity > 0) {
+      const dayOfWeek = cursor.getDay() // 0 = Sun, 6 = Sat
+
+      // Resolve raw capacity with priority chain
+      let rawCapacity: number
+      if (constraints.custom_day_capacity && iso in constraints.custom_day_capacity) {
+        rawCapacity = constraints.custom_day_capacity[iso]
+      } else if (
+        constraints.day_of_week_capacity &&
+        constraints.day_of_week_capacity[dayOfWeek] != null
+      ) {
+        rawCapacity = constraints.day_of_week_capacity[dayOfWeek]!
+      } else {
+        rawCapacity = weekend
+          ? constraints.weekend_capacity_minutes
+          : constraints.weekday_capacity_minutes
+      }
+
+      // A user-assigned 0-capacity day must remain non-study even with flexibility.
+      const normalizedRawCapacity = Math.max(0, rawCapacity)
+      const isZeroCapacityDay = normalizedRawCapacity === 0
+      const baseCapacity = isZeroCapacityDay
+        ? 0
+        : Math.min(normalizedRawCapacity, maxDaily)
+      const flexCap = isZeroCapacityDay
+        ? 0
+        : Math.min(baseCapacity + flexMinutes, maxDaily)
+
+      if (baseCapacity > 0 || flexCap > 0) {
         slots.push({
           date: iso,
-          capacity: effectiveCapacity,
-          remainingMinutes: effectiveCapacity,
+          capacity: baseCapacity,
+          flexCapacity: flexCap,
+          remainingMinutes: baseCapacity,
           isWeekend: weekend,
+          flexUsed: 0,
         })
       }
     }
@@ -107,7 +143,8 @@ export function checkFeasibility(
   offDays: Set<string>
 ): FeasibilityResult {
   const daySlots = buildDaySlots(constraints, offDays)
-  const totalMinutesAvailable = daySlots.reduce((s, d) => s + d.capacity, 0)
+  const totalBaseAvailable = daySlots.reduce((s, d) => s + d.capacity, 0)
+  const totalFlexAvailable = daySlots.reduce((s, d) => s + d.flexCapacity, 0)
 
   let totalMinutesNeeded = 0
   const unitResults: UnitFeasibility[] = []
@@ -134,7 +171,7 @@ export function checkFeasibility(
     const status = classifyUnit(minutesNeeded, availableMinutes)
 
     const avgDailyCapacity =
-      daySlots.length > 0 ? totalMinutesAvailable / daySlots.length : 0
+      daySlots.length > 0 ? totalBaseAvailable / daySlots.length : 0
     const suggestions = buildUnitSuggestions(
       unit,
       minutesNeeded,
@@ -153,8 +190,12 @@ export function checkFeasibility(
     })
   }
 
-  const globalGap = Math.max(0, totalMinutesNeeded - totalMinutesAvailable)
+  const globalGap = Math.max(0, totalMinutesNeeded - totalBaseAvailable)
   const feasible = globalGap === 0 && unitResults.every((u) => u.status !== "impossible")
+  const flexFeasible =
+    !feasible &&
+    totalMinutesNeeded <= totalFlexAvailable &&
+    unitResults.every((u) => u.status !== "impossible")
 
   const globalSuggestions: FeasibilitySuggestion[] = []
   if (globalGap > 0) {
@@ -166,12 +207,12 @@ export function checkFeasibility(
       value: extraMinutesPerDay,
     })
 
-    const avgDailyCapacity = totalMinutesAvailable / activeDays
+    const avgDailyCapacity = totalBaseAvailable / activeDays
     if (avgDailyCapacity > 0) {
       const extraDays = Math.ceil(globalGap / avgDailyCapacity)
       globalSuggestions.push({
         kind: "extend_deadline",
-        message: `Extend exam date by ${extraDays} day(s)`,
+        message: `Extend deadline by ${extraDays} day(s)`,
         value: extraDays,
       })
     }
@@ -186,8 +227,10 @@ export function checkFeasibility(
 
   return {
     feasible,
+    flexFeasible: flexFeasible || undefined,
     totalSessionsNeeded: totalMinutesNeeded,
-    totalSlotsAvailable: totalMinutesAvailable,
+    totalSlotsAvailable: totalBaseAvailable,
+    totalFlexAvailable,
     globalGap,
     units: unitResults,
     suggestions: globalSuggestions,

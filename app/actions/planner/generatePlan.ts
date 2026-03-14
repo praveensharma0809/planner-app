@@ -66,16 +66,18 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
   // Load subjects for name lookup
   const { data: subjects } = await supabase
     .from("subjects")
-    .select("id, name, sort_order")
+    .select("id, name, sort_order, deadline")
     .eq("user_id", user.id)
     .eq("archived", false)
     .order("sort_order", { ascending: true })
 
   const subjectNameMap = new Map<string, string>()
   const subjectOrderMap = new Map<string, number>()
+  const subjectDeadlineMap = new Map<string, string>()
   for (const s of subjects ?? []) {
     subjectNameMap.set(s.id, s.name)
     subjectOrderMap.set(s.id, s.sort_order ?? 0)
+    if (s.deadline) subjectDeadlineMap.set(s.id, s.deadline)
   }
 
   // Filter out topics for archived subjects
@@ -129,13 +131,17 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
       topic_name: t.name,
       estimated_minutes: Math.round(p.estimated_hours * 60),
       session_length_minutes: p.session_length_minutes ?? 60,
-      priority: p.priority,
-      deadline: p.deadline ?? planConfig.exam_date,
+      priority: 3,
+      deadline: p.deadline ?? subjectDeadlineMap.get(t.subject_id) ?? planConfig.exam_date,
       depends_on: p.depends_on ?? [],
     }
 
-    if (p.earliest_start) {
-      unit.earliest_start = p.earliest_start
+    if (p.earliest_start) unit.earliest_start = p.earliest_start
+    if (p.rest_after_days != null) unit.rest_after_days = p.rest_after_days
+    if (p.max_sessions_per_day != null) unit.max_sessions_per_day = p.max_sessions_per_day
+    if (p.study_frequency) {
+      unit.study_frequency =
+        p.study_frequency === "spaced" ? "spaced" : "daily"
     }
 
     return [unit]
@@ -155,17 +161,26 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
     final_revision_days: planConfig.final_revision_days,
     buffer_percentage: planConfig.buffer_percentage,
     max_active_subjects: planConfig.max_active_subjects ?? 0,
+    ...(planConfig.day_of_week_capacity && { day_of_week_capacity: planConfig.day_of_week_capacity }),
+    ...(planConfig.custom_day_capacity && { custom_day_capacity: planConfig.custom_day_capacity }),
+    ...(planConfig.plan_order_stack && { plan_order_stack: planConfig.plan_order_stack as GlobalConstraints["plan_order_stack"] }),
+    ...(planConfig.flexibility_minutes != null && { flexibility_minutes: planConfig.flexibility_minutes }),
+    ...(planConfig.max_daily_minutes != null && { max_daily_minutes: planConfig.max_daily_minutes }),
+    ...(planConfig.max_topics_per_subject_per_day != null && { max_topics_per_subject_per_day: planConfig.max_topics_per_subject_per_day }),
+    ...(planConfig.subject_ordering && { subject_ordering: planConfig.subject_ordering as GlobalConstraints["subject_ordering"] }),
   }
 
   const result = generatePlan({ units, constraints, offDays })
 
-  const isFeasibilityResult = result.status === "READY" || result.status === "INFEASIBLE"
+  const hasFeasibility = result.status === "READY" || result.status === "INFEASIBLE" || result.status === "PARTIAL"
+  const hasSchedule = result.status === "READY" || result.status === "PARTIAL"
 
   await track(result.status === "READY" ? "success" : "warning", {
     resultStatus: result.status,
     unitCount: units.length,
-    sessionCount: result.status === "READY" ? result.schedule.length : 0,
-    feasible: isFeasibilityResult ? result.feasibility.feasible : null,
+    sessionCount: hasSchedule ? result.schedule.length : 0,
+    feasible: hasFeasibility ? result.feasibility.feasible : null,
+    droppedSessions: result.status === "PARTIAL" ? result.droppedSessions : 0,
   })
 
   return result

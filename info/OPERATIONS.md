@@ -5,7 +5,7 @@ This document defines the production trust layer for StudyHard.
 ## 1. Reliability Targets
 
 - Planner action success rate (generate, commit): >= 99.5%
-- Quick start success rate: >= 98%
+- Missed-work reschedule success rate: >= 98%
 - Dashboard server action P95 latency: < 1500 ms
 - Commit action P95 latency: < 2500 ms
 
@@ -34,7 +34,6 @@ Critical events currently emitted:
 
 - `planner.generate`
 - `planner.commit`
-- `planner.quick_start`
 - `planner.reschedule_missed`
 
 Payload fields:
@@ -94,14 +93,14 @@ group by event_name
 order by p95_ms desc;
 ```
 
-Quick start funnel (last 7 days):
+Missed-work reschedule funnel (last 7 days):
 
 ```sql
 select
   event_status,
   count(*)
 from ops_events
-where event_name = 'planner.quick_start'
+where event_name = 'planner.reschedule_missed'
   and created_at >= now() - interval '7 days'
 group by event_status
 order by event_status;

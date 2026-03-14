@@ -393,4 +393,509 @@ describe("schedule", () => {
     expect(result).toEqual([])
   })
 
+  it("respects rest_after_days before unlocking the next topic in a subject", () => {
+    const topic1 = buildUnit({
+      id: "topic-1",
+      topic_name: "Topic 1",
+      estimated_minutes: 120,
+      session_length_minutes: 60,
+      rest_after_days: 2,
+      deadline: "2024-01-07",
+    })
+    const topic2 = buildUnit({
+      id: "topic-2",
+      topic_name: "Topic 2",
+      estimated_minutes: 60,
+      session_length_minutes: 60,
+      deadline: "2024-01-07",
+    })
+
+    const result = schedule(
+      [topic1, topic2],
+      { ...baseConstraints, weekday_capacity_minutes: 120, weekend_capacity_minutes: 120 },
+      new Set<string>()
+    )
+
+    const lastTopic1Date = result.filter((s) => s.topic_id === "topic-1").at(-1)?.scheduled_date
+    const firstTopic2Date = result.find((s) => s.topic_id === "topic-2")?.scheduled_date
+    expect(lastTopic1Date).toBe("2024-01-01")
+    expect(firstTopic2Date).toBe("2024-01-03")
+  })
+
+  it("allows already-started topics to continue during a rest-after block", () => {
+    const topic1 = buildUnit({
+      id: "topic-1",
+      topic_name: "Topic 1",
+      estimated_minutes: 60,
+      rest_after_days: 2,
+      deadline: "2024-01-03",
+    })
+    const topic2 = buildUnit({
+      id: "topic-2",
+      topic_name: "Topic 2",
+      estimated_minutes: 180,
+      deadline: "2024-01-03",
+    })
+    const topic3 = buildUnit({
+      id: "topic-3",
+      topic_name: "Topic 3",
+      estimated_minutes: 60,
+      deadline: "2024-01-03",
+    })
+
+    const result = schedule(
+      [topic1, topic2, topic3],
+      {
+        ...baseConstraints,
+        exam_date: "2024-01-03",
+        weekday_capacity_minutes: 120,
+        weekend_capacity_minutes: 120,
+        subject_ordering: { "subject-1": "parallel" },
+        max_topics_per_subject_per_day: 2,
+      },
+      new Set<string>()
+    )
+
+    const day2Topics = result
+      .filter((session) => session.scheduled_date === "2024-01-02")
+      .map((session) => session.topic_id)
+
+    expect(day2Topics).toContain("topic-2")
+    expect(day2Topics).not.toContain("topic-3")
+
+    const firstTopic3Date = result.find((session) => session.topic_id === "topic-3")?.scheduled_date
+    expect(firstTopic3Date).toBe("2024-01-03")
+  })
+
+  it("respects max_sessions_per_day for a topic", () => {
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 180, max_sessions_per_day: 1, deadline: "2024-01-05" })],
+      { ...baseConstraints, weekday_capacity_minutes: 180, weekend_capacity_minutes: 180 },
+      new Set<string>()
+    )
+
+    const sessionsByDay = new Map<string, number>()
+    for (const session of result) {
+      sessionsByDay.set(session.scheduled_date, (sessionsByDay.get(session.scheduled_date) ?? 0) + 1)
+    }
+
+    expect(Math.max(...sessionsByDay.values())).toBe(1)
+  })
+
+  it("applies spaced frequency by leaving at least one day between sessions", () => {
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 180, study_frequency: "spaced", deadline: "2024-01-07" })],
+      { ...baseConstraints, weekday_capacity_minutes: 60, weekend_capacity_minutes: 60 },
+      new Set<string>()
+    )
+
+    expect(result.map((session) => session.scheduled_date)).toEqual([
+      "2024-01-01",
+      "2024-01-03",
+      "2024-01-05",
+    ])
+  })
+
+  it("treats legacy dense frequency as daily for backward compatibility", () => {
+    const legacyDense = {
+      ...buildUnit({ estimated_minutes: 180, deadline: "2024-01-05" }),
+      study_frequency: "dense",
+    } as unknown as PlannableUnit
+
+    const result = schedule(
+      [legacyDense],
+      { ...baseConstraints, weekday_capacity_minutes: 60, weekend_capacity_minutes: 60 },
+      new Set<string>()
+    )
+
+    expect(result.map((session) => session.scheduled_date)).toEqual([
+      "2024-01-01",
+      "2024-01-02",
+      "2024-01-03",
+    ])
+  })
+
+  it("supports parallel subject ordering within the same subject", () => {
+    const topic1 = buildUnit({
+      id: "topic-1",
+      topic_name: "Topic 1",
+      estimated_minutes: 60,
+      deadline: "2024-01-05",
+    })
+    const topic2 = buildUnit({
+      id: "topic-2",
+      topic_name: "Topic 2",
+      estimated_minutes: 60,
+      deadline: "2024-01-05",
+    })
+
+    const result = schedule(
+      [topic1, topic2],
+      {
+        ...baseConstraints,
+        weekday_capacity_minutes: 120,
+        weekend_capacity_minutes: 120,
+        subject_ordering: { "subject-1": "parallel" },
+        max_topics_per_subject_per_day: 2,
+      },
+      new Set<string>()
+    )
+
+    const firstDayTopics = result
+      .filter((session) => session.scheduled_date === "2024-01-01")
+      .map((session) => session.topic_id)
+
+    expect(new Set(firstDayTopics).size).toBe(2)
+  })
+
+  it("supports flexible sequential unlocking before the previous topic fully completes", () => {
+    const topic1 = buildUnit({
+      id: "topic-1",
+      topic_name: "Topic 1",
+      estimated_minutes: 240,
+      deadline: "2024-01-07",
+    })
+    const topic2 = buildUnit({
+      id: "topic-2",
+      topic_name: "Topic 2",
+      estimated_minutes: 60,
+      deadline: "2024-01-07",
+    })
+
+    const result = schedule(
+      [topic1, topic2],
+      {
+        ...baseConstraints,
+        weekday_capacity_minutes: 120,
+        weekend_capacity_minutes: 120,
+        subject_ordering: { "subject-1": "flexible_sequential" },
+        flexible_threshold: { "subject-1": 0.5 },
+        max_topics_per_subject_per_day: 2,
+      },
+      new Set<string>()
+    )
+
+    const firstTopic2Date = result.find((session) => session.topic_id === "topic-2")?.scheduled_date
+    const lastTopic1Date = result.filter((session) => session.topic_id === "topic-1").at(-1)?.scheduled_date
+
+    // Custom threshold is intentionally ignored; adaptive threshold decides unlock timing.
+    expect(firstTopic2Date).toBe("2024-01-04")
+    expect(lastTopic1Date).toBe("2024-01-03")
+  })
+
+  it("adapts flexible unlock threshold for high vs medium pressure", () => {
+    const runScenario = (examDate: string) =>
+      schedule(
+        [
+          buildUnit({
+            id: "topic-1",
+            topic_name: "Topic 1",
+            estimated_minutes: 480,
+            deadline: examDate,
+          }),
+          buildUnit({
+            id: "topic-2",
+            topic_name: "Topic 2",
+            estimated_minutes: 60,
+            deadline: examDate,
+          }),
+        ],
+        {
+          ...baseConstraints,
+          exam_date: examDate,
+          weekday_capacity_minutes: 120,
+          weekend_capacity_minutes: 120,
+          subject_ordering: { "subject-1": "flexible_sequential" },
+          max_topics_per_subject_per_day: 2,
+        },
+        new Set<string>()
+      )
+
+    const highPressure = runScenario("2024-01-04")
+    const mediumPressure = runScenario("2024-01-05")
+
+    expect(
+      highPressure.find((session) => session.topic_id === "topic-2")?.scheduled_date
+    ).toBe("2024-01-03")
+    expect(
+      mediumPressure.find((session) => session.topic_id === "topic-2")?.scheduled_date
+    ).toBe("2024-01-04")
+  })
+
+  it("adapts flexible unlock threshold for medium vs low pressure", () => {
+    const runScenario = (examDate: string) =>
+      schedule(
+        [
+          buildUnit({
+            id: "topic-1",
+            topic_name: "Topic 1",
+            estimated_minutes: 540,
+            deadline: examDate,
+          }),
+          buildUnit({
+            id: "topic-2",
+            topic_name: "Topic 2",
+            estimated_minutes: 60,
+            deadline: examDate,
+          }),
+        ],
+        {
+          ...baseConstraints,
+          exam_date: examDate,
+          weekday_capacity_minutes: 120,
+          weekend_capacity_minutes: 120,
+          subject_ordering: { "subject-1": "flexible_sequential" },
+          max_topics_per_subject_per_day: 2,
+        },
+        new Set<string>()
+      )
+
+    const mediumPressure = runScenario("2024-01-06")
+    const lowPressure = runScenario("2024-01-07")
+
+    expect(
+      mediumPressure.find((session) => session.topic_id === "topic-2")?.scheduled_date
+    ).toBe("2024-01-04")
+    expect(
+      lowPressure.find((session) => session.topic_id === "topic-2")?.scheduled_date
+    ).toBe("2024-01-05")
+  })
+
+  it("ignores legacy tier ordering and keeps sequential topic flow", () => {
+    const firstInOrder = buildUnit({
+      id: "topic-1",
+      topic_name: "First",
+      estimated_minutes: 180,
+      deadline: "2024-01-02",
+      tier: 5,
+    })
+    const secondInOrder = buildUnit({
+      id: "topic-2",
+      topic_name: "Second",
+      estimated_minutes: 60,
+      deadline: "2024-01-02",
+      tier: 0,
+    })
+
+    const result = schedule(
+      [firstInOrder, secondInOrder],
+      {
+        ...baseConstraints,
+        exam_date: "2024-01-02",
+        weekday_capacity_minutes: 120,
+        weekend_capacity_minutes: 120,
+        subject_ordering: { "subject-1": "sequential" },
+        max_topics_per_subject_per_day: 2,
+      },
+      new Set<string>()
+    )
+
+    const firstSecondTopicDate = result.find((session) => session.topic_id === "topic-2")?.scheduled_date
+    expect(firstSecondTopicDate).toBe("2024-01-02")
+  })
+
+  it("respects min_subject_gap_days between sessions of the same subject", () => {
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 180, deadline: "2024-01-10" })],
+      {
+        ...baseConstraints,
+        exam_date: "2024-01-10",
+        weekday_capacity_minutes: 60,
+        weekend_capacity_minutes: 60,
+        min_subject_gap_days: 1,
+      },
+      new Set<string>()
+    )
+
+    expect(result.map((session) => session.scheduled_date)).toEqual([
+      "2024-01-01",
+      "2024-01-03",
+      "2024-01-05",
+    ])
+  })
+
+  it("respects max_topics_per_subject_per_day even in parallel mode", () => {
+    const topic1 = buildUnit({ id: "topic-1", topic_name: "Topic 1", estimated_minutes: 120 })
+    const topic2 = buildUnit({ id: "topic-2", topic_name: "Topic 2", estimated_minutes: 60 })
+
+    const result = schedule(
+      [topic1, topic2],
+      {
+        ...baseConstraints,
+        weekday_capacity_minutes: 120,
+        weekend_capacity_minutes: 120,
+        subject_ordering: { "subject-1": "parallel" },
+        max_topics_per_subject_per_day: 1,
+      },
+      new Set<string>()
+    )
+
+    const firstDayTopics = result
+      .filter((session) => session.scheduled_date === "2024-01-01")
+      .map((session) => session.topic_id)
+
+    expect(new Set(firstDayTopics).size).toBe(1)
+  })
+
+  it("applies day-of-week capacity overrides", () => {
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 180, deadline: "2024-01-05" })],
+      {
+        ...baseConstraints,
+        weekday_capacity_minutes: 60,
+        weekend_capacity_minutes: 60,
+        day_of_week_capacity: [null, null, null, 0, null, null, null],
+      },
+      new Set<string>()
+    )
+
+    expect(result.map((session) => session.scheduled_date)).not.toContain("2024-01-03")
+  })
+
+  it("keeps day-of-week 0-capacity days blocked even with flexibility", () => {
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 180, deadline: "2024-01-05" })],
+      {
+        ...baseConstraints,
+        weekday_capacity_minutes: 60,
+        weekend_capacity_minutes: 60,
+        day_of_week_capacity: [null, null, null, 0, null, null, null],
+        flexibility_minutes: 60,
+        max_daily_minutes: 180,
+      },
+      new Set<string>()
+    )
+
+    expect(result.map((session) => session.scheduled_date)).not.toContain("2024-01-03")
+  })
+
+  it("applies custom day capacity overrides", () => {
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 180, deadline: "2024-01-05" })],
+      {
+        ...baseConstraints,
+        weekday_capacity_minutes: 60,
+        weekend_capacity_minutes: 60,
+        custom_day_capacity: { "2024-01-02": 0 },
+      },
+      new Set<string>()
+    )
+
+    expect(result.map((session) => session.scheduled_date)).not.toContain("2024-01-02")
+  })
+
+  it("keeps custom 0-capacity days blocked even with flexibility", () => {
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 180, deadline: "2024-01-05" })],
+      {
+        ...baseConstraints,
+        weekday_capacity_minutes: 60,
+        weekend_capacity_minutes: 60,
+        custom_day_capacity: { "2024-01-02": 0 },
+        flexibility_minutes: 60,
+        max_daily_minutes: 180,
+      },
+      new Set<string>()
+    )
+
+    expect(result.map((session) => session.scheduled_date)).not.toContain("2024-01-02")
+  })
+
+  it("uses flexibility minutes to place a session that exceeds base daily capacity", () => {
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 60, deadline: "2024-01-01" })],
+      {
+        ...baseConstraints,
+        exam_date: "2024-01-01",
+        weekday_capacity_minutes: 50,
+        weekend_capacity_minutes: 50,
+        flexibility_minutes: 10,
+        max_daily_minutes: 60,
+      },
+      new Set<string>()
+    )
+
+    expect(result).toHaveLength(1)
+    expect(result[0].is_flex_day).toBe(true)
+    expect(result[0].flex_extra_minutes).toBe(10)
+  })
+
+  it("caps total schedulable minutes by max_daily_minutes", () => {
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 240, deadline: "2024-01-01" })],
+      {
+        ...baseConstraints,
+        exam_date: "2024-01-01",
+        weekday_capacity_minutes: 200,
+        weekend_capacity_minutes: 200,
+        flexibility_minutes: 60,
+        max_daily_minutes: 180,
+      },
+      new Set<string>()
+    )
+
+    expect(result).toHaveLength(3)
+    expect(result.every((session) => session.scheduled_date === "2024-01-01")).toBe(true)
+    const totalMinutes = result.reduce((sum, session) => sum + session.duration_minutes, 0)
+    expect(totalMinutes).toBe(180)
+  })
+
+  it("treats priority stack criterion as a compatibility no-op", () => {
+    const highPriority = buildUnit({
+      id: "priority-first",
+      topic_name: "Priority First",
+      priority: 1,
+      deadline: "2024-01-05",
+      estimated_minutes: 60,
+    })
+    const urgentDeadline = buildUnit({
+      id: "deadline-first",
+      topic_name: "Deadline First",
+      priority: 5,
+      deadline: "2024-01-02",
+      estimated_minutes: 60,
+      subject_id: "subject-2",
+      subject_name: "Chemistry",
+    })
+
+    const priorityFirstStack = schedule(
+      [highPriority, urgentDeadline],
+      {
+        ...baseConstraints,
+        weekday_capacity_minutes: 60,
+        weekend_capacity_minutes: 60,
+        plan_order_stack: ["priority", "deadline"],
+      },
+      new Set<string>()
+    )
+
+    const deadlineFirstStack = schedule(
+      [highPriority, urgentDeadline],
+      {
+        ...baseConstraints,
+        weekday_capacity_minutes: 60,
+        weekend_capacity_minutes: 60,
+        plan_order_stack: ["deadline", "priority"],
+      },
+      new Set<string>()
+    )
+
+    expect(priorityFirstStack[0].topic_id).toBe("deadline-first")
+    expect(deadlineFirstStack[0].topic_id).toBe("deadline-first")
+  })
+
+  it("reserves fixed calendar capacity before scheduling free sessions", () => {
+    const result = schedule(
+      [buildUnit({ estimated_minutes: 120, deadline: "2024-01-03" })],
+      { ...baseConstraints, exam_date: "2024-01-03", weekday_capacity_minutes: 60, weekend_capacity_minutes: 60 },
+      new Set<string>(),
+      [{ date: "2024-01-01", minutes: 60 }]
+    )
+
+    expect(result.map((session) => session.scheduled_date)).toEqual([
+      "2024-01-02",
+      "2024-01-03",
+    ])
+  })
+
 })

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache"
 import type { ScheduledSession } from "@/lib/planner/types"
 import { durationSince, trackServerEvent } from "@/lib/ops/telemetry"
 
-export type KeepPreviousMode = "future" | "until" | "none"
+export type KeepPreviousMode = "future" | "until" | "none" | "merge"
 
 export type CommitPlanResponse =
   | { status: "UNAUTHORIZED" }

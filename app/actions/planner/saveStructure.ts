@@ -1,12 +1,14 @@
 "use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { normalizePlannerName } from "@/lib/planner/validation"
 import { revalidatePath } from "next/cache"
 
 interface SubjectInput {
   id?: string
   name: string
   sort_order: number
+  deadline?: string
   topics: TopicInput[]
 }
 
@@ -28,12 +30,41 @@ export type SaveStructureResponse =
   | { status: "ERROR"; message: string }
   | { status: "SUCCESS" }
 
+function validateStructure(subjects: SubjectInput[]): string | null {
+  for (const subject of subjects) {
+    if (!subject.name.trim()) {
+      return "Subject name is required."
+    }
+
+    const topicNames = new Map<string, string>()
+    for (const topic of subject.topics) {
+      if (!topic.name.trim()) {
+        return "Topic name is required."
+      }
+
+      const normalizedTopicName = normalizePlannerName(topic.name)
+      if (topicNames.has(normalizedTopicName)) {
+        return `Duplicate topic \"${topic.name.trim()}\" in \"${subject.name.trim()}\".`
+      }
+
+      topicNames.set(normalizedTopicName, topic.name.trim())
+    }
+  }
+
+  return null
+}
+
 export async function saveStructure(
   subjects: SubjectInput[]
 ): Promise<SaveStructureResponse> {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { status: "UNAUTHORIZED" }
+
+  const validationError = validateStructure(subjects)
+  if (validationError) {
+    return { status: "ERROR", message: validationError }
+  }
 
   // Collect all IDs that should survive (sent from UI)
   const keepSubjectIds = new Set<string>()
@@ -123,16 +154,12 @@ export async function saveStructure(
 
   // ── Upsert surviving / new items ──────────────────────────────────────────
   for (const subj of subjects) {
-    if (!subj.name.trim()) {
-      return { status: "ERROR", message: "Subject name is required." }
-    }
-
     let subjectId = subj.id
 
     if (subjectId) {
       const { error } = await supabase
         .from("subjects")
-        .update({ name: subj.name.trim(), sort_order: subj.sort_order })
+        .update({ name: subj.name.trim(), sort_order: subj.sort_order, deadline: subj.deadline ?? null })
         .eq("id", subjectId)
         .eq("user_id", user.id)
       if (error) return { status: "ERROR", message: error.message }
@@ -143,6 +170,7 @@ export async function saveStructure(
           user_id: user.id,
           name: subj.name.trim(),
           sort_order: subj.sort_order,
+          deadline: subj.deadline ?? null,
           archived: false,
         })
         .select("id")
@@ -152,10 +180,6 @@ export async function saveStructure(
     }
 
     for (const topic of subj.topics) {
-      if (!topic.name.trim()) {
-        return { status: "ERROR", message: "Topic name is required." }
-      }
-
       let topicId = topic.id
 
       if (topicId) {

@@ -111,4 +111,158 @@ describe("commitPlan", () => {
     expect(supabase.from).not.toHaveBeenCalled()
     expect(supabase.rpc).not.toHaveBeenCalled()
   })
+
+  it("passes merge mode and the earliest plan date to the RPC", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        user_id: "user-1",
+        study_start_date: "2024-01-01",
+        exam_date: "2024-01-31",
+      },
+      error: null,
+    })
+
+    const supabase = {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table !== "plan_config") {
+          throw new Error(`Unexpected table: ${table}`)
+        }
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle,
+            })),
+          })),
+        }
+      }),
+      rpc: vi.fn().mockResolvedValue({
+        data: {
+          status: "SUCCESS",
+          task_count: 2,
+          snapshot_id: "snapshot-merge",
+        },
+        error: null,
+      }),
+    }
+
+    createServerSupabaseClientMock.mockResolvedValue(supabase as never)
+
+    const { commitPlan } = await import("@/app/actions/plan/commitPlan")
+
+    const sessions: ScheduledSession[] = [
+      {
+        subject_id: "subject-1",
+        topic_id: "topic-2",
+        title: "Math - Geometry",
+        scheduled_date: "2024-01-07",
+        duration_minutes: 60,
+        session_type: "core",
+        priority: 2,
+        session_number: 1,
+        total_sessions: 2,
+      },
+      {
+        subject_id: "subject-1",
+        topic_id: "topic-1",
+        title: "Math - Algebra",
+        scheduled_date: "2024-01-03",
+        duration_minutes: 60,
+        session_type: "core",
+        priority: 1,
+        session_number: 1,
+        total_sessions: 1,
+      },
+    ]
+
+    await commitPlan(sessions, "merge", "Merge commit")
+
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      "commit_plan_atomic",
+      expect.objectContaining({
+        p_keep_mode: "merge",
+        p_new_plan_start_date: "2024-01-03",
+        p_snapshot_summary: "Merge commit",
+      })
+    )
+  })
+
+  it("passes until mode and the earliest plan date to the RPC", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        user_id: "user-1",
+        study_start_date: "2024-01-01",
+        exam_date: "2024-01-31",
+      },
+      error: null,
+    })
+
+    const supabase = {
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table !== "plan_config") {
+          throw new Error(`Unexpected table: ${table}`)
+        }
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle,
+            })),
+          })),
+        }
+      }),
+      rpc: vi.fn().mockResolvedValue({
+        data: {
+          status: "SUCCESS",
+          task_count: 2,
+          snapshot_id: "snapshot-until",
+        },
+        error: null,
+      }),
+    }
+
+    createServerSupabaseClientMock.mockResolvedValue(supabase as never)
+
+    const { commitPlan } = await import("@/app/actions/plan/commitPlan")
+
+    const sessions: ScheduledSession[] = [
+      {
+        subject_id: "subject-1",
+        topic_id: "topic-2",
+        title: "Math - Geometry",
+        scheduled_date: "2024-01-08",
+        duration_minutes: 60,
+        session_type: "core",
+        priority: 2,
+        session_number: 1,
+        total_sessions: 2,
+      },
+      {
+        subject_id: "subject-1",
+        topic_id: "topic-1",
+        title: "Math - Algebra",
+        scheduled_date: "2024-01-04",
+        duration_minutes: 60,
+        session_type: "core",
+        priority: 1,
+        session_number: 1,
+        total_sessions: 1,
+      },
+    ]
+
+    await commitPlan(sessions, "until", "Until commit")
+
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      "commit_plan_atomic",
+      expect.objectContaining({
+        p_keep_mode: "until",
+        p_new_plan_start_date: "2024-01-04",
+        p_snapshot_summary: "Until commit",
+      })
+    )
+  })
 })
