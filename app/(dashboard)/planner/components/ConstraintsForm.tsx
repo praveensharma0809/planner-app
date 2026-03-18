@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   CUSTOM_DAY_CAPACITY_PRESETS,
-} from "@/lib/planner/constants"
+} from "@/lib/planner/draft"
 import type {
   PlannerConstraintValues as ConstraintValues,
   PlannerParamValues as ParamValues,
   PlannerSubjectOption,
-} from "@/lib/planner/draftTypes"
-import type { PlanOrderCriterion, TopicOrderingMode } from "@/lib/planner/types"
+} from "@/lib/planner/draft"
+import type { PlanOrderCriterion, TopicOrderingMode } from "@/lib/planner/engine"
 import { PlannerFeasibilityBar, useDraftFeasibility } from "./planner-feasibility"
 import StudyOrderPanel from "./StudyOrderPanel"
 
@@ -83,7 +83,7 @@ function buildInitialConfig(
     flexibility_minutes: initial?.flexibility_minutes ?? 0,
     max_daily_minutes: initial?.max_daily_minutes ?? 480,
     max_topics_per_subject_per_day: initial?.max_topics_per_subject_per_day ?? 1,
-    min_subject_gap_days: 0,
+    min_subject_gap_days: initial?.min_subject_gap_days ?? 0,
     subject_ordering: {
       ...buildSubjectOrderingDefaults(subjects),
       ...(initial?.subject_ordering ?? {}),

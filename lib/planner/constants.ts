@@ -1,7 +1,0 @@
-export const MIN_SESSION_LENGTH_MINUTES = 15
-export const MAX_SESSION_LENGTH_MINUTES = 240
-
-export const DEFAULT_FLEXIBLE_THRESHOLD = 0.8
-export const FLEXIBLE_THRESHOLD_PRESETS = [0.5, 0.6, 0.8, 1] as const
-
-export const CUSTOM_DAY_CAPACITY_PRESETS = [0, 30, 60, 90, 120, 180, 240] as const

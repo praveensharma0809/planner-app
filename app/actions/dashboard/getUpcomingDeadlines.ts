@@ -50,10 +50,15 @@ export async function getUpcomingDeadlines(): Promise<GetUpcomingDeadlinesRespon
 
   const subjectIds = [...new Set((topics ?? []).map((t) => t.subject_id))]
 
-  const { data: subjects } = await supabase
-    .from("subjects")
-    .select("id, name")
-    .in("id", subjectIds.length > 0 ? subjectIds : ["__none__"])
+  let subjects: Array<{ id: string; name: string }> = []
+  if (subjectIds.length > 0) {
+    const { data: subjectRows } = await supabase
+      .from("subjects")
+      .select("id, name")
+      .eq("archived", false)
+      .in("id", subjectIds)
+    subjects = (subjectRows ?? []) as Array<{ id: string; name: string }>
+  }
 
   const subjectNameMap = new Map<string, string>()
   for (const s of subjects ?? []) {

@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import type { PlannerSubjectOption } from "@/lib/planner/draftTypes"
-import type { ScheduledSession, FeasibilityResult } from "@/lib/planner/types"
+import type { PlannerSubjectOption } from "@/lib/planner/draft"
+import type { ScheduledSession, FeasibilityResult } from "@/lib/planner/engine"
 import type { ConstraintValues } from "./ConstraintsForm"
 
 interface PreviewTopicOption {

@@ -9,37 +9,40 @@ import ConstraintsForm from "./components/ConstraintsForm"
 import PlanPreview from "./components/PlanPreview"
 import PlanConfirm from "./components/PlanConfirm"
 import PlanIssueModal from "./components/PlanIssueModal"
-import { getStructure } from "@/app/actions/planner/getStructure"
-import { saveStructure } from "@/app/actions/planner/saveStructure"
-import { getTopicParams } from "@/app/actions/planner/getTopicParams"
-import { saveTopicParams } from "@/app/actions/planner/saveTopicParams"
-import { getPlanConfig } from "@/app/actions/planner/getPlanConfig"
-import { savePlanConfig } from "@/app/actions/planner/savePlanConfig"
-import { generatePlanAction } from "@/app/actions/planner/generatePlan"
-import { commitPlan } from "@/app/actions/planner/commitPlan"
-import { reoptimizePreviewPlan } from "@/app/actions/planner/reoptimizePreviewPlan"
-import { saveSubjectDeadlines } from "@/app/actions/planner/saveSubjectDeadlines"
-import type { KeepPreviousMode } from "@/app/actions/planner/commitPlan"
-import type {
-  PlannerConstraintValues as ConstraintValues,
-  PlannerParamValues as ParamValues,
-  PlannerSubjectOption,
-  PlannerTopicForParams as TopicForParams,
-} from "@/lib/planner/draftTypes"
-import type {
-  ScheduledSession,
-  FeasibilityResult,
-  PlanOrderCriterion,
-  TopicOrderingMode,
-} from "@/lib/planner/types"
+import {
+  getPlanConfig,
+  getStructure,
+  getTopicParams,
+  savePlanConfig,
+  saveStructure,
+  saveSubjectDeadlines,
+  saveTopicParams,
+} from "@/app/actions/planner/setup"
 import {
   buildPlanIssues,
   hasCriticalIssues,
   type PlanIssue,
   type PlanIssueAction,
   type PlanIssueConstraintField,
-} from "@/lib/planner/planIssues"
+  type PlannerConstraintValues as ConstraintValues,
+  type PlannerParamValues as ParamValues,
+  type PlannerSubjectOption,
+  type PlannerTopicForParams as TopicForParams,
+} from "@/lib/planner/draft"
+import {
+  commitPlan,
+  generatePlanAction,
+  reoptimizePreviewPlan,
+  type KeepPreviousMode,
+} from "@/app/actions/planner/plan"
+import type {
+  ScheduledSession,
+  FeasibilityResult,
+  PlanOrderCriterion,
+  TopicOrderingMode,
+} from "@/lib/planner/engine"
 import { PageHeader } from "@/app/components/layout/PageHeader"
+import { PlanHistory } from "../dashboard/PlanHistory"
 
 // ── sessionStorage helpers ────────────────────────────────────────────────────
 const STORAGE_KEY = "planner-wizard-state"
@@ -396,11 +399,6 @@ export default function PlannerPage() {
       return
     }
 
-    if (action.kind === "constraint_set") {
-      applyIssueConstraintField(action.field, action.value)
-      return
-    }
-
     applyIssueConstraintField(action.field, ((constraints?.[action.field] as number | undefined) ?? 0) + action.delta)
   }, [constraints, goToPhase, updateConstraintsWith, applyIssueConstraintField])
 
@@ -712,11 +710,13 @@ export default function PlannerPage() {
         title="Planner"
       />
 
-      <PlannerStepper
-        currentPhase={phase}
-        onPhaseClick={goToPhase}
-        maxReachedPhase={maxPhase}
-      />
+      <div className="mt-6">
+        <PlannerStepper
+          currentPhase={phase}
+          onPhaseClick={goToPhase}
+          maxReachedPhase={maxPhase}
+        />
+      </div>
 
       <div className="ui-card mt-6 p-6">
         {phase === 1 && structureLoaded && (
@@ -765,16 +765,25 @@ export default function PlannerPage() {
           )}
 
           {phase === 5 && feasibility && (
-            <PlanConfirm
-              sessions={sessions}
-              feasibility={feasibility}
-              onCommit={handleCommit}
-              isCommitting={isCommitting}
-              commitResult={commitResult}
-              commitBlocked={hasCriticalPlanIssues}
-              commitBlockedReason={hasCriticalPlanIssues ? "Critical issues still need fixes in the issue window." : undefined}
-              onResolveIssues={() => setIsIssueModalOpen(true)}
-            />
+            <div className="space-y-5">
+              <PlanConfirm
+                sessions={sessions}
+                feasibility={feasibility}
+                onCommit={handleCommit}
+                isCommitting={isCommitting}
+                commitResult={commitResult}
+                commitBlocked={hasCriticalPlanIssues}
+                commitBlockedReason={hasCriticalPlanIssues ? "Critical issues still need fixes in the issue window." : undefined}
+                onResolveIssues={() => setIsIssueModalOpen(true)}
+              />
+
+              <PlanHistory
+                title="Recent Plans"
+                showPlannerLinks={false}
+                emptyMessage="No plans committed yet."
+                emptyHint="Commit a schedule to start building history."
+              />
+            </div>
           )}
         </div>
 

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/app/components/Toast"
-import { rescheduleMissedPlan } from "@/app/actions/plan/rescheduleMissedPlan"
+import { rescheduleMissedPlan } from "@/app/actions/planner/plan"
 
 export function RescheduleMissedButton() {
   const [loading, setLoading] = useState(false)

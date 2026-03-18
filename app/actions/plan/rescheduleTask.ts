@@ -51,5 +51,6 @@ export async function rescheduleTask(taskId: string, newDate: string): Promise<R
 
   revalidatePath("/dashboard/calendar")
   revalidatePath("/dashboard")
+  revalidatePath("/schedule")
   return { status: "SUCCESS" }
 }

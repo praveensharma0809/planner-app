@@ -23,7 +23,7 @@ describe("saveTopicParams", () => {
 
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
-    const { saveTopicParams } = await import("@/app/actions/planner/saveTopicParams")
+    const { saveTopicParams } = await import("@/app/actions/planner/setup")
 
     const result = await saveTopicParams([
       {
@@ -82,7 +82,7 @@ describe("saveTopicParams", () => {
 
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
-    const { saveTopicParams } = await import("@/app/actions/planner/saveTopicParams")
+    const { saveTopicParams } = await import("@/app/actions/planner/setup")
 
     const result = await saveTopicParams([
       {

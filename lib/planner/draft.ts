@@ -1,8 +1,110 @@
 import type {
-  PlannerConstraintValues,
-  PlannerParamValues,
-} from "./draftTypes"
-import type { FeasibilityResult, ScheduledSession } from "./types"
+  FeasibilityResult,
+  PlanOrderCriterion,
+  ScheduledSession,
+  StudyFrequency,
+  TopicOrderingMode,
+} from "./engine"
+
+export interface PlannerTopicForParams {
+  id: string
+  subject_name: string
+  topic_name: string
+}
+
+export interface PlannerParamValues {
+  topic_id: string
+  estimated_hours: number
+  priority: number
+  deadline: string
+  earliest_start: string
+  depends_on: string[]
+  session_length_minutes: number
+  rest_after_days: number
+  max_sessions_per_day: number
+  study_frequency: StudyFrequency
+  tier: number
+}
+
+export interface PlannerConstraintValues {
+  study_start_date: string
+  exam_date: string
+  weekday_capacity_minutes: number
+  weekend_capacity_minutes: number
+  plan_order: "priority" | "deadline" | "subject" | "balanced"
+  final_revision_days: number
+  buffer_percentage: number
+  max_active_subjects: number
+  day_of_week_capacity: (number | null)[]
+  custom_day_capacity: Record<string, number>
+  plan_order_stack: PlanOrderCriterion[]
+  flexibility_minutes: number
+  max_daily_minutes: number
+  max_topics_per_subject_per_day: number
+  min_subject_gap_days: number
+  subject_ordering: Record<string, TopicOrderingMode>
+  flexible_threshold: Record<string, number>
+}
+
+export interface PlannerSubjectOption {
+  id: string
+  name: string
+  deadline?: string
+  topicIds?: string[]
+  topics?: Array<{ id: string; name: string }>
+}
+
+export const MIN_SESSION_LENGTH_MINUTES = 15
+export const MAX_SESSION_LENGTH_MINUTES = 240
+
+export const CUSTOM_DAY_CAPACITY_PRESETS = [0, 30, 60, 90, 120, 180, 240] as const
+
+export function normalizePlannerName(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLowerCase()
+}
+
+export function findDependencyCycle(
+  edges: Map<string, string[]>
+): string[] | null {
+  const visited = new Set<string>()
+  const active = new Set<string>()
+  const path: string[] = []
+
+  function dfs(node: string): string[] | null {
+    if (active.has(node)) {
+      const cycleStart = path.lastIndexOf(node)
+      return [...path.slice(cycleStart), node]
+    }
+
+    if (visited.has(node)) {
+      return null
+    }
+
+    visited.add(node)
+    active.add(node)
+    path.push(node)
+
+    for (const next of edges.get(node) ?? []) {
+      const cycle = dfs(next)
+      if (cycle) {
+        return cycle
+      }
+    }
+
+    path.pop()
+    active.delete(node)
+    return null
+  }
+
+  for (const node of edges.keys()) {
+    const cycle = dfs(node)
+    if (cycle) {
+      return cycle
+    }
+  }
+
+  return null
+}
 
 export type PlanIssueSeverity = "critical" | "warning"
 
@@ -43,13 +145,6 @@ export type PlanIssueAction =
   | {
       id: string
       label: string
-      kind: "constraint_set"
-      field: PlanIssueConstraintField
-      value: number
-    }
-  | {
-      id: string
-      label: string
       kind: "date_delta"
       field: "study_start_date" | "exam_date"
       days: number
@@ -84,19 +179,24 @@ function getTopicDeadlineMap(
   params: PlannerParamValues[],
   constraints: PlannerConstraintValues
 ): Map<string, string> {
-  const map = new Map<string, string>()
-  for (const p of params) {
-    map.set(p.topic_id, p.deadline || constraints.exam_date)
+  const deadlineMap = new Map<string, string>()
+  for (const param of params) {
+    deadlineMap.set(param.topic_id, param.deadline || constraints.exam_date)
   }
-  return map
+  return deadlineMap
 }
 
 function daySpreadMinutes(sessions: ScheduledSession[]): number {
   if (sessions.length === 0) return 0
+
   const byDate = new Map<string, number>()
-  for (const s of sessions) {
-    byDate.set(s.scheduled_date, (byDate.get(s.scheduled_date) ?? 0) + s.duration_minutes)
+  for (const session of sessions) {
+    byDate.set(
+      session.scheduled_date,
+      (byDate.get(session.scheduled_date) ?? 0) + session.duration_minutes
+    )
   }
+
   const values = [...byDate.values()]
   if (values.length === 0) return 0
   return Math.max(...values) - Math.min(...values)
@@ -114,8 +214,8 @@ export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
   const issues: PlanIssue[] = []
 
   if (
-    planStatus === "NO_DAYS"
-    || (feasibility != null && feasibility.totalSlotsAvailable <= 0)
+    planStatus === "NO_DAYS" ||
+    (feasibility != null && feasibility.totalSlotsAvailable <= 0)
   ) {
     issues.push({
       issueId: "no-usable-days",
@@ -192,7 +292,11 @@ export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
     )
     droppedSessions = Math.max(0, expectedSessions - sessions.length)
 
-    if (droppedSessions > 0 || planStatus === "PARTIAL" || planStatus === "INFEASIBLE") {
+    if (
+      droppedSessions > 0 ||
+      planStatus === "PARTIAL" ||
+      planStatus === "INFEASIBLE"
+    ) {
       issues.push({
         issueId: "unscheduled-sessions",
         severity: "critical",
@@ -301,7 +405,9 @@ export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
           "Impossible topics": impossibleTopics.length,
           "Global minute gap": feasibility.globalGap,
         },
-        inlineEdits: [{ field: "exam_date", label: "Global deadline", type: "date" }],
+        inlineEdits: [
+          { field: "exam_date", label: "Global deadline", type: "date" },
+        ],
         options: [
           {
             id: "impossible-extend-deadline",
@@ -337,7 +443,8 @@ export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
           "Increase baseline daily capacity to reduce pressure.",
         rootCauseValues: {
           "Base available": feasibility.totalSlotsAvailable,
-          "With flexibility": feasibility.totalFlexAvailable ?? feasibility.totalSlotsAvailable,
+          "With flexibility":
+            feasibility.totalFlexAvailable ?? feasibility.totalSlotsAvailable,
           Needed: feasibility.totalSessionsNeeded,
         },
         inlineEdits: [
@@ -404,9 +511,11 @@ export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
           "Tighten topic windows by updating topic deadlines or increasing capacity.",
         rootCauseValues: {
           "Late sessions": lateSessions.length,
-          "Affected topics": new Set(lateSessions.map((s) => s.topic_id)).size,
+          "Affected topics": new Set(lateSessions.map((session) => session.topic_id)).size,
         },
-        inlineEdits: [{ field: "exam_date", label: "Global deadline", type: "date" }],
+        inlineEdits: [
+          { field: "exam_date", label: "Global deadline", type: "date" },
+        ],
         options: [
           {
             id: "late-jump-2",
@@ -463,8 +572,8 @@ export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
     }
   }
 
-  return issues.sort((a, b) => {
-    if (a.severity === b.severity) return 0
-    return a.severity === "critical" ? -1 : 1
+  return issues.sort((aIssue, bIssue) => {
+    if (aIssue.severity === bIssue.severity) return 0
+    return aIssue.severity === "critical" ? -1 : 1
   })
 }

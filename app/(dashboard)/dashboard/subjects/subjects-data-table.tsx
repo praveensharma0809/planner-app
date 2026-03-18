@@ -2,332 +2,561 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import { completeTask } from "@/app/actions/plan/completeTask"
+import { uncompleteTask } from "@/app/actions/plan/uncompleteTask"
 import { useToast } from "@/app/components/Toast"
 import { toggleArchiveSubject } from "@/app/actions/subjects/toggleArchiveSubject"
-import { deleteSubject } from "@/app/actions/subjects/deleteSubject"
 import { SubjectDrawer } from "./SubjectDrawer"
-import { Badge, Button, Progress } from "@/app/components/ui"
+import { Badge, Button } from "@/app/components/ui"
 import { PageHeader } from "@/app/components/layout/PageHeader"
-import { StatsRow } from "@/app/components/layout/StatsRow"
 
-export interface SubjectTableRow {
+export interface SubjectNavTopic {
+  id: string
+  name: string
+}
+
+export interface SubjectNavChapter {
+  id: string
+  name: string
+  topics: SubjectNavTopic[]
+}
+
+export interface SubjectNavItem {
   id: string
   name: string
   archived: boolean
-  topicCount: number
-  estimatedHours: number
-  totalTasks: number
-  completedTasks: number
-  earliestDeadline: string | null
-  priority: number | null
+  chapters: SubjectNavChapter[]
+}
+
+export interface TopicTaskItem {
+  id: string
+  topicId: string
+  title: string
+  completed: boolean
+  durationMinutes: number
+  sessionType: "core" | "revision" | "practice"
+  scheduledDate: string
 }
 
 interface Props {
-  initialSubjects: SubjectTableRow[]
+  initialSubjects: SubjectNavItem[]
+  initialTasksByChapter: Record<string, TopicTaskItem[]>
 }
 
-// Deterministic accent colours (matches calendar palette)
-const ACCENT_COLORS = [
-  "#7C6CFF", "#34D399", "#F59E0B", "#EF4444",
-  "#8B5CF6", "#06B6D4", "#F472B6", "#10B981",
-]
-
-const PRIORITY_CONFIG: Record<number, { variant: "danger" | "warning" | "primary"; label: string }> = {
-  1: { variant: "danger",  label: "Critical" },
-  2: { variant: "warning", label: "High"     },
-  3: { variant: "primary", label: "Medium"   },
+interface ColumnItem {
+  id: string
+  label: string
+  hint?: string
 }
 
-function progressPercent(s: SubjectTableRow): number {
-  if (s.totalTasks === 0) return 0
-  return Math.round((s.completedTasks / s.totalTasks) * 100)
+const SESSION_META: Record<
+  TopicTaskItem["sessionType"],
+  { label: string; variant: "default" | "success" | "warning" }
+> = {
+  core: { label: "Study", variant: "default" },
+  practice: { label: "Exercise", variant: "success" },
+  revision: { label: "Revision", variant: "warning" },
 }
 
-function progressVariant(pct: number): "success" | "warning" | "danger" | "default" {
-  if (pct >= 75) return "success"
-  if (pct >= 40) return "default"
-  if (pct >= 15) return "warning"
-  return "danger"
+function formatDateLabel(isoDate: string): string {
+  const date = new Date(isoDate)
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
-function deadlineDaysLeft(iso: string): number {
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const d     = new Date(iso); d.setHours(0, 0, 0, 0)
-  return Math.round((d.getTime() - today.getTime()) / 86_400_000)
-}
-
-function deadlineLabel(iso: string | null): string {
-  if (!iso) return "No deadline"
-  const days = deadlineDaysLeft(iso)
-  if (days < 0)   return `${Math.abs(days)}d overdue`
-  if (days === 0) return "Due today"
-  if (days === 1) return "Due tomorrow"
-  if (days <= 7)  return `${days}d left`
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-}
-
-function deadlineVariant(iso: string | null): "danger" | "warning" | "success" | "default" {
-  if (!iso) return "default"
-  const days = deadlineDaysLeft(iso)
-  if (days < 0)  return "danger"
-  if (days <= 3)  return "danger"
-  if (days <= 10) return "warning"
-  return "success"
-}
-
-export function SubjectsDataTable({ initialSubjects }: Props) {
+export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Props) {
   const router = useRouter()
   const { addToast } = useToast()
-  const [subjects, setSubjects]         = useState<SubjectTableRow[]>(initialSubjects)
+  const [subjects, setSubjects] = useState<SubjectNavItem[]>(initialSubjects)
+  const [tasksByChapter, setTasksByChapter] =
+    useState<Record<string, TopicTaskItem[]>>(initialTasksByChapter)
   const [showArchived, setShowArchived] = useState(false)
-  const [pendingId, setPendingId]       = useState<string | null>(null)
-  const [drawerOpen, setDrawerOpen]     = useState(false)
-  const [drawerMode, setDrawerMode]     = useState<"create" | "edit">("create")
-  const [selectedId, setSelectedId]     = useState<string | null>(null)
+  const [pendingSubjectId, setPendingSubjectId] = useState<string | null>(null)
+  const [pendingTaskIds, setPendingTaskIds] = useState<Set<string>>(new Set())
+
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerMode, setDrawerMode] = useState<"create" | "edit">("create")
+  const [selectedSubjectIdForDrawer, setSelectedSubjectIdForDrawer] = useState<string | null>(null)
+
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null)
+  const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null)
 
   useEffect(() => { setSubjects(initialSubjects) }, [initialSubjects])
+  useEffect(() => { setTasksByChapter(initialTasksByChapter) }, [initialTasksByChapter])
 
-  const activeSubjects   = useMemo(() => subjects.filter((s) => !s.archived), [subjects])
-  const archivedSubjects = useMemo(() => subjects.filter((s) => s.archived),  [subjects])
-  const displaySubjects  = showArchived ? archivedSubjects : activeSubjects
+  const activeSubjects = useMemo(
+    () => subjects.filter((subject) => !subject.archived),
+    [subjects]
+  )
+  const archivedSubjects = useMemo(
+    () => subjects.filter((subject) => subject.archived),
+    [subjects]
+  )
+  const displaySubjects = showArchived ? archivedSubjects : activeSubjects
 
-  // Summary stats (active only)
-  const totalTopics = activeSubjects.reduce((n, s) => n + s.topicCount, 0)
-  const avgProgress = activeSubjects.length
-    ? Math.round(activeSubjects.reduce((n, s) => n + progressPercent(s), 0) / activeSubjects.length)
-    : 0
-  const urgentCount = activeSubjects.filter(
-    (s) => s.earliestDeadline && deadlineDaysLeft(s.earliestDeadline) <= 7
-  ).length
-
-  async function handleArchive(id: string, e: React.MouseEvent) {
-    e.stopPropagation()
-    setPendingId(id)
-    const res = await toggleArchiveSubject(id)
-    if (res.status === "SUCCESS") {
-      setSubjects((prev) => prev.map((s) => s.id === id ? { ...s, archived: res.archived } : s))
-      addToast(res.archived ? "Subject archived" : "Subject restored", "success")
-      router.refresh()
-    } else {
-      addToast(res.status === "ERROR" ? res.message : "Unauthorized", "error")
+  useEffect(() => {
+    if (displaySubjects.length === 0) {
+      setSelectedSubjectId(null)
+      return
     }
-    setPendingId(null)
-  }
 
-  async function handleDelete(id: string, e: React.MouseEvent) {
-    e.stopPropagation()
-    if (!confirm("Delete this subject? This cannot be undone.")) return
-    setPendingId(id)
-    const res = await deleteSubject(id)
-    if (res.status === "SUCCESS") {
-      setSubjects((prev) => prev.filter((s) => s.id !== id))
-      addToast("Subject deleted", "info")
-      router.refresh()
-    } else {
-      addToast(res.status === "ERROR" ? res.message : "Unauthorized", "error")
+    setSelectedSubjectId((current) => {
+      if (current && displaySubjects.some((subject) => subject.id === current)) return current
+      return displaySubjects[0].id
+    })
+  }, [displaySubjects])
+
+  const selectedSubject =
+    displaySubjects.find((subject) => subject.id === selectedSubjectId) ?? null
+
+  useEffect(() => {
+    const chapters = selectedSubject?.chapters ?? []
+    if (chapters.length === 0) {
+      setSelectedChapterId(null)
+      return
     }
-    setPendingId(null)
-  }
+
+    setSelectedChapterId((current) => {
+      if (current && chapters.some((chapter) => chapter.id === current)) return current
+      return chapters[0].id
+    })
+  }, [selectedSubject])
+
+  const selectedChapter =
+    selectedSubject?.chapters.find((chapter) => chapter.id === selectedChapterId) ?? null
+
+  useEffect(() => {
+    const topics = selectedChapter?.topics ?? []
+    if (topics.length === 0) {
+      setSelectedTopicId(null)
+      return
+    }
+
+    setSelectedTopicId((current) => {
+      if (current && topics.some((topic) => topic.id === current)) return current
+      return topics[0].id
+    })
+  }, [selectedChapter])
+
+  const selectedTopic =
+    selectedChapter?.topics.find((topic) => topic.id === selectedTopicId) ?? null
+
+  const chapterTasks = selectedChapter ? tasksByChapter[selectedChapter.id] ?? [] : []
+  const completedCount = chapterTasks.filter((task) => task.completed).length
+
+  const subjectColumnItems: ColumnItem[] = displaySubjects.map((subject) => ({
+    id: subject.id,
+    label: subject.name,
+    hint: `${subject.chapters.length} chapter${subject.chapters.length === 1 ? "" : "s"}`,
+  }))
+
+  const chapterColumnItems: ColumnItem[] = (selectedSubject?.chapters ?? []).map((chapter) => {
+    const taskCount = (tasksByChapter[chapter.id] ?? []).length
+    return {
+      id: chapter.id,
+      label: chapter.name,
+      hint: `${taskCount} task${taskCount === 1 ? "" : "s"}`,
+    }
+  })
+
+  const topicColumnItems: ColumnItem[] = (selectedChapter?.topics ?? []).map((topic) => ({
+    id: topic.id,
+    label: topic.name,
+  }))
 
   function openCreate() {
-    setDrawerMode("create"); setSelectedId(null); setDrawerOpen(true)
+    setDrawerMode("create")
+    setSelectedSubjectIdForDrawer(null)
+    setDrawerOpen(true)
   }
-  function openEdit(id: string) {
-    setDrawerMode("edit"); setSelectedId(id); setDrawerOpen(true)
+
+  function openEditSelected() {
+    if (!selectedSubjectId) return
+    setDrawerMode("edit")
+    setSelectedSubjectIdForDrawer(selectedSubjectId)
+    setDrawerOpen(true)
+  }
+
+  async function handleArchiveSelected() {
+    if (!selectedSubjectId || pendingSubjectId) return
+
+    setPendingSubjectId(selectedSubjectId)
+    const result = await toggleArchiveSubject(selectedSubjectId)
+
+    if (result.status === "SUCCESS") {
+      setSubjects((previous) =>
+        previous.map((subject) =>
+          subject.id === selectedSubjectId ? { ...subject, archived: result.archived } : subject
+        )
+      )
+      addToast(result.archived ? "Subject archived." : "Subject restored.", "success")
+      router.refresh()
+    } else {
+      addToast(result.status === "ERROR" ? result.message : "Unauthorized", "error")
+    }
+
+    setPendingSubjectId(null)
+  }
+
+  async function handleToggleTask(taskId: string, nextCompleted: boolean) {
+    if (!selectedChapter) return
+    if (pendingTaskIds.has(taskId)) return
+
+    const chapterId = selectedChapter.id
+    const currentTask = (tasksByChapter[chapterId] ?? []).find((task) => task.id === taskId)
+    if (!currentTask) return
+
+    setPendingTaskIds((current) => {
+      const next = new Set(current)
+      next.add(taskId)
+      return next
+    })
+
+    setTasksByChapter((previous) => ({
+      ...previous,
+      [chapterId]: (previous[chapterId] ?? []).map((task) =>
+        task.id === taskId ? { ...task, completed: nextCompleted } : task
+      ),
+    }))
+
+    try {
+      if (nextCompleted) {
+        await completeTask(taskId)
+      } else {
+        await uncompleteTask(taskId)
+      }
+      router.refresh()
+    } catch {
+      setTasksByChapter((previous) => ({
+        ...previous,
+        [chapterId]: (previous[chapterId] ?? []).map((task) =>
+          task.id === taskId ? { ...task, completed: currentTask.completed } : task
+        ),
+      }))
+      addToast("Could not update task status.", "error")
+    } finally {
+      setPendingTaskIds((current) => {
+        const next = new Set(current)
+        next.delete(taskId)
+        return next
+      })
+    }
   }
 
   return (
-    <div className="page-root fade-in">
-      {/* Page header */}
+    <div className="page-root fade-in max-w-none">
       <PageHeader
         eyebrow="Curriculum"
         title="Subjects"
-        subtitle="Track progress across all your subjects. Configure topics and workload in the Planner."
+        subtitle="Navigate your syllabus with a left-to-right subject flow that keeps structure and execution in one place."
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowArchived((value) => !value)}>
+              {showArchived ? "Show Active" : "Show Archived"}
+            </Button>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setShowArchived((v) => !v)}
+              onClick={openEditSelected}
+              disabled={!selectedSubject}
             >
-              {showArchived ? "← Active" : "Archived"}
+              Edit Subject
             </Button>
             <Button variant="primary" size="sm" onClick={openCreate}>
-              + Add Subject
+              Add Subject
             </Button>
           </div>
         }
       />
 
-      {/* Summary stats (active view only) */}
-      {!showArchived && activeSubjects.length > 0 && (
-        <StatsRow
-          stats={[
-            { label: "Active subjects", value: activeSubjects.length, dotColor: "bg-indigo-400"  },
-            { label: "Total topics",    value: totalTopics,           dotColor: "bg-violet-400"  },
-            { label: "Avg progress",    value: `${avgProgress}%`,     dotColor: "bg-emerald-400" },
-            ...(urgentCount > 0
-              ? [{ label: "Due soon", value: urgentCount, dotColor: "bg-red-400" }]
-              : []),
-          ]}
-        />
-      )}
-
-      {/* Empty state */}
-      {displaySubjects.length === 0 && (
+      {displaySubjects.length === 0 ? (
         <div className="empty-state">
-          <div className="text-5xl mb-4 opacity-20">📚</div>
-          <p className="text-base font-semibold mb-1" style={{ color: "var(--sh-text-primary)" }}>
-            {showArchived ? "No archived subjects" : "No subjects yet"}
+          <p className="text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+            {showArchived ? "No archived subjects." : "No subjects yet."}
           </p>
-          <p className="text-sm mb-6" style={{ color: "var(--sh-text-muted)" }}>
+          <p className="mt-1 text-sm" style={{ color: "var(--sh-text-muted)" }}>
             {showArchived
-              ? "Archive a subject to see it here."
-              : "Add your first subject to start building your curriculum."}
+              ? "Archive a subject to see it in this view."
+              : "Create your first subject to start building your structure."}
           </p>
           {!showArchived && (
-            <Button variant="primary" onClick={openCreate}>Add first subject</Button>
+            <div className="mt-5">
+              <Button variant="primary" onClick={openCreate}>
+                Add first subject
+              </Button>
+            </div>
           )}
         </div>
-      )}
+      ) : (
+        <div
+          className="rounded-2xl border p-3 sm:p-4"
+          style={{
+            borderColor: "var(--sh-border)",
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",
+            boxShadow: "var(--sh-shadow-sm)",
+          }}
+        >
+          <p className="mb-3 text-xs font-medium sm:hidden" style={{ color: "var(--sh-text-muted)" }}>
+            Swipe horizontally to move from Subjects to Tasks.
+          </p>
 
-      {/* Subject card grid */}
-      {displaySubjects.length > 0 && (
-        <div className="subject-grid">
-          {displaySubjects.map((subject, i) => {
-            const pct       = progressPercent(subject)
-            const pVar      = progressVariant(pct)
-            const accent    = ACCENT_COLORS[i % ACCENT_COLORS.length]
-            const dLabel    = deadlineLabel(subject.earliestDeadline)
-            const dVar      = deadlineVariant(subject.earliestDeadline)
-            const isPending = pendingId === subject.id
-            const remaining = subject.totalTasks - subject.completedTasks
-            const pConfig   = subject.priority != null
-              ? (PRIORITY_CONFIG[subject.priority] ?? null)
-              : null
+          <div className="flex h-[min(76vh,760px)] min-h-[540px] gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
+            <NavigationColumn
+              title="Subjects"
+              items={subjectColumnItems}
+              activeId={selectedSubjectId}
+              emptyMessage="No subjects available."
+              onSelect={setSelectedSubjectId}
+            />
 
-            return (
-              <div
-                key={subject.id}
-                onClick={() => openEdit(subject.id)}
-                className="ui-card ui-card-interactive overflow-hidden focus-ring group"
-                tabIndex={0}
-                role="button"
-                aria-label={`${subject.name} — click to edit`}
-                onKeyDown={(e) => e.key === "Enter" && openEdit(subject.id)}
-              >
-                {/* Colour accent stripe */}
-                <div style={{ height: "3px", background: accent }} aria-hidden="true" />
+            <NavigationColumn
+              title="Chapters"
+              items={chapterColumnItems}
+              activeId={selectedChapterId}
+              emptyMessage="No chapters in this subject."
+              onSelect={setSelectedChapterId}
+            />
 
-                <div className="p-5">
-                  {/* Header: name + priority badge */}
-                  <div className="flex items-start justify-between gap-2 mb-4">
-                    <div className="flex-1 min-w-0">
-                      <h3
-                        className="font-semibold text-[15px] leading-snug truncate"
-                        style={{ color: "var(--sh-text-primary)" }}
-                      >
-                        {subject.name}
-                      </h3>
-                      {subject.archived && (
-                        <span
-                          className="text-[10px] uppercase tracking-widest"
-                          style={{ color: "var(--sh-text-muted)" }}
-                        >
-                          archived
-                        </span>
-                      )}
-                    </div>
-                    {pConfig && (
-                      <Badge variant={pConfig.variant} size="sm">{pConfig.label}</Badge>
-                    )}
-                  </div>
+            <NavigationColumn
+              title="Topics"
+              items={topicColumnItems}
+              activeId={selectedTopicId}
+              emptyMessage="No topics in this chapter."
+              onSelect={setSelectedTopicId}
+            />
 
-                  {/* Progress bar */}
-                  <Progress value={pct} variant={pVar} height={5} className="mb-1.5" />
-                  <div
-                    className="flex justify-between text-[11px] mb-5"
+            <section
+              className="min-w-[340px] flex-1 rounded-xl border px-5 py-5 sm:px-6 sm:py-6 snap-start"
+              style={{
+                borderColor: "var(--sh-border)",
+                background: "var(--sh-card)",
+              }}
+            >
+              {selectedSubject && selectedChapter ? (
+                <div className="flex h-full flex-col">
+                  <nav
+                    className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide"
                     style={{ color: "var(--sh-text-muted)" }}
                   >
-                    <span>{subject.completedTasks}/{subject.totalTasks} tasks</span>
-                    <span
-                      className="font-semibold"
-                      style={{ color: pct > 0 ? "var(--sh-text-secondary)" : undefined }}
-                    >
-                      {pct}%
+                    <span>{selectedSubject.name}</span>
+                    <span>{">"}</span>
+                    <span>{selectedChapter.name}</span>
+                    <span>{">"}</span>
+                    <span style={{ color: "var(--sh-text-secondary)" }}>
+                      {selectedTopic?.name ?? "Overview"}
                     </span>
+                  </nav>
+
+                  <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2
+                        className="text-3xl font-extrabold tracking-tight"
+                        style={{ color: "var(--sh-text-primary)" }}
+                      >
+                        {selectedTopic?.name ?? selectedChapter.name}
+                      </h2>
+                      <p className="mt-1 text-sm" style={{ color: "var(--sh-text-secondary)" }}>
+                        {completedCount}/{chapterTasks.length} tasks completed
+                      </p>
+                      <p className="mt-1 text-xs" style={{ color: "var(--sh-text-muted)" }}>
+                        Chapter: {selectedChapter.name}
+                      </p>
+                    </div>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleArchiveSelected}
+                      disabled={pendingSubjectId === selectedSubject.id}
+                    >
+                      {selectedSubject.archived ? "Restore Subject" : "Archive Subject"}
+                    </Button>
                   </div>
 
-                  {/* Stat tiles */}
-                  <div className="grid grid-cols-3 gap-2.5 mb-5">
-                    {[
-                      { value: subject.topicCount,                      label: "Topics"    },
-                      { value: `${subject.estimatedHours.toFixed(0)}h`, label: "Estimated" },
-                      { value: remaining,                               label: "Remaining" },
-                    ].map(({ value, label }) => (
-                      <div key={label} className="subject-stat-tile">
+                  <div className="mt-6 flex-1 overflow-y-auto pr-1">
+                    <div className="space-y-3">
+                      {chapterTasks.length === 0 && (
                         <div
-                          className="text-[17px] font-bold leading-none mb-1"
-                          style={{ color: "var(--sh-text-primary)" }}
+                          className="rounded-xl border border-dashed px-4 py-8 text-center text-sm"
+                          style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
                         >
-                          {value}
+                          No tasks for this chapter yet.
                         </div>
-                        <div
-                          className="text-[10px]"
-                          style={{ color: "var(--sh-text-muted)" }}
-                        >
-                          {label}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      )}
 
-                  {/* Footer: deadline badge + action buttons */}
-                  <div
-                    className="flex items-center justify-between pt-4"
-                    style={{ borderTop: "1px solid var(--sh-border)" }}
-                  >
-                    <Badge variant={dVar} size="sm">{dLabel}</Badge>
+                      {chapterTasks.map((task) => {
+                        const meta = SESSION_META[task.sessionType]
+                        const isPending = pendingTaskIds.has(task.id)
 
-                    {/* Hover-reveal action buttons */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                      <button
-                        type="button"
-                        onClick={(e) => handleArchive(subject.id, e)}
-                        disabled={isPending}
-                        className="text-[11px] px-2 py-1 rounded-md transition-colors focus-ring disabled:opacity-40"
-                        style={{ color: "var(--sh-text-muted)" }}
-                        title={subject.archived ? "Restore" : "Archive"}
-                      >
-                        {isPending ? "…" : subject.archived ? "Restore" : "Archive"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => handleDelete(subject.id, e)}
-                        disabled={isPending}
-                        className="text-[11px] px-2 py-1 rounded-md transition-colors focus-ring disabled:opacity-40"
-                        style={{ color: "#EF4444" }}
-                        title="Delete subject"
-                      >
-                        {isPending ? "…" : "Delete"}
-                      </button>
+                        return (
+                          <div
+                            key={task.id}
+                            className="group rounded-xl border px-4 py-3 transition-colors"
+                            style={{
+                              borderColor: "var(--sh-border)",
+                              background: task.completed
+                                ? "rgba(52, 211, 153, 0.08)"
+                                : "rgba(255, 255, 255, 0.02)",
+                            }}
+                          >
+                            <div className="flex items-start gap-3">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTask(task.id, !task.completed)}
+                                disabled={isPending}
+                                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors disabled:opacity-50"
+                                style={{
+                                  borderColor: task.completed
+                                    ? "var(--sh-success)"
+                                    : "var(--sh-border)",
+                                  background: task.completed ? "var(--sh-success)" : "transparent",
+                                }}
+                                aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
+                              >
+                                {task.completed && (
+                                  <svg
+                                    className="h-3.5 w-3.5 text-white"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.2"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                )}
+                              </button>
+
+                              <div className="min-w-0 flex-1">
+                                <p
+                                  className={`truncate text-sm font-semibold ${task.completed ? "line-through opacity-60" : ""}`}
+                                  style={{ color: "var(--sh-text-primary)" }}
+                                >
+                                  {task.title}
+                                </p>
+                                <p
+                                  className={`mt-1 text-xs ${task.completed ? "line-through opacity-50" : ""}`}
+                                  style={{ color: "var(--sh-text-muted)" }}
+                                >
+                                  {formatDateLabel(task.scheduledDate)} | {task.durationMinutes} min
+                                </p>
+                              </div>
+
+                              <Badge variant={meta.variant} size="sm">
+                                {meta.label}
+                              </Badge>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
-              </div>
-            )
-          })}
+              ) : (
+                <div
+                  className="flex h-full items-center justify-center rounded-xl border border-dashed text-sm"
+                  style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
+                >
+                  Select a subject and chapter to view details.
+                </div>
+              )}
+            </section>
+          </div>
         </div>
       )}
 
-      {/* Slide-over drawer */}
       <SubjectDrawer
         open={drawerOpen}
         mode={drawerMode}
-        subjectId={selectedId}
+        subjectId={selectedSubjectIdForDrawer}
         onClose={() => setDrawerOpen(false)}
-        onSaved={() => { setDrawerOpen(false); router.refresh() }}
+        onSaved={() => {
+          setDrawerOpen(false)
+          router.refresh()
+        }}
       />
     </div>
+  )
+}
+
+interface NavigationColumnProps {
+  title: string
+  items: ColumnItem[]
+  activeId: string | null
+  emptyMessage: string
+  onSelect: (id: string) => void
+}
+
+function NavigationColumn({
+  title,
+  items,
+  activeId,
+  emptyMessage,
+  onSelect,
+}: NavigationColumnProps) {
+  return (
+    <section
+      className="w-[248px] min-w-[248px] shrink-0 rounded-xl border p-2 snap-start"
+      style={{
+        borderColor: "var(--sh-border)",
+        background: "color-mix(in srgb, var(--sh-card) 94%, var(--foreground) 6%)",
+      }}
+    >
+      <p
+        className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em]"
+        style={{ color: "var(--sh-text-muted)" }}
+      >
+        {title}
+      </p>
+
+      <div className="max-h-full space-y-1.5 overflow-y-auto pr-1">
+        {items.length === 0 && (
+          <p className="px-2 py-6 text-sm" style={{ color: "var(--sh-text-muted)" }}>
+            {emptyMessage}
+          </p>
+        )}
+
+        {items.map((item) => {
+          const isActive = item.id === activeId
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onSelect(item.id)}
+              className="w-full rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[rgba(124,108,255,0.08)]"
+              style={{
+                borderColor: isActive ? "var(--sh-primary-glow)" : "transparent",
+                background: isActive ? "var(--sh-primary-muted)" : "transparent",
+              }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p
+                    className="truncate text-sm font-semibold"
+                    style={{
+                      color: isActive ? "var(--sh-primary-light)" : "var(--sh-text-primary)",
+                    }}
+                  >
+                    {item.label}
+                  </p>
+                  {item.hint && (
+                    <p className="mt-0.5 text-xs" style={{ color: "var(--sh-text-muted)" }}>
+                      {item.hint}
+                    </p>
+                  )}
+                </div>
+                <span
+                  className="pt-0.5 text-xs"
+                  style={{ color: isActive ? "var(--sh-primary-light)" : "var(--sh-text-muted)" }}
+                >
+                  {">"}
+                </span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </section>
   )
 }

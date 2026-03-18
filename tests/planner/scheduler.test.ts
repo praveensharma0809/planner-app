@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { schedule } from "@/lib/planner/scheduler"
-import type { GlobalConstraints, PlannableUnit } from "@/lib/planner/types"
+import { schedule } from "@/lib/planner/engine"
+import type { GlobalConstraints, PlannableUnit } from "@/lib/planner/engine"
 
 function buildUnit(overrides: Partial<PlannableUnit> = {}): PlannableUnit {
   return {
@@ -53,6 +53,39 @@ describe("schedule", () => {
     )
 
     expect(result.every((t) => t.scheduled_date <= "2024-01-02")).toBe(true)
+  })
+
+  it("does not place overflow sessions after a topic deadline", () => {
+    const topic1 = buildUnit({
+      id: "topic-1",
+      topic_name: "Topic 1",
+      estimated_minutes: 180,
+      deadline: "2024-01-03",
+    })
+    const topic2 = buildUnit({
+      id: "topic-2",
+      topic_name: "Topic 2",
+      estimated_minutes: 60,
+      deadline: "2024-01-02",
+    })
+
+    const result = schedule(
+      [topic1, topic2],
+      {
+        ...baseConstraints,
+        exam_date: "2024-01-05",
+        weekday_capacity_minutes: 60,
+        weekend_capacity_minutes: 60,
+      },
+      new Set<string>()
+    )
+
+    expect(result.some((session) => session.topic_id === "topic-2")).toBe(false)
+    expect(
+      result
+        .filter((session) => session.topic_id === "topic-1")
+        .every((session) => session.scheduled_date <= "2024-01-03")
+    ).toBe(true)
   })
 
   it("respects earliest_start", () => {
@@ -328,7 +361,7 @@ describe("schedule", () => {
     expect(result.length).toBe(1)
   })
 
-  it("overflow recovery: topic delayed by predecessor gets scheduled past its deadline", () => {
+  it("overflow recovery keeps delayed topics unscheduled when deadline has passed", () => {
     // Topic 1: needs 3 sessions (180 min), deadline Jan 3
     // Topic 2: needs 1 session (60 min), deadline Jan 2
     // Daily capacity: 60 min
@@ -365,11 +398,7 @@ describe("schedule", () => {
     const topic2Sessions = result.filter((s) => s.topic_id === "topic-2")
 
     expect(topic1Sessions).toHaveLength(3)
-    // Topic 2 should be placed despite its deadline having passed
-    expect(topic2Sessions).toHaveLength(1)
-    // Topic 2 must come after the last Topic 1 session
-    const lastT1Date = topic1Sessions.at(-1)!.scheduled_date
-    expect(topic2Sessions[0].scheduled_date >= lastT1Date).toBe(true)
+    expect(topic2Sessions).toHaveLength(0)
   })
 
   it("does not overflow a single topic past its deadline", () => {
@@ -840,7 +869,7 @@ describe("schedule", () => {
     expect(totalMinutes).toBe(180)
   })
 
-  it("treats priority stack criterion as a compatibility no-op", () => {
+  it("applies priority criterion when present in the plan order stack", () => {
     const highPriority = buildUnit({
       id: "priority-first",
       topic_name: "Priority First",
@@ -880,7 +909,7 @@ describe("schedule", () => {
       new Set<string>()
     )
 
-    expect(priorityFirstStack[0].topic_id).toBe("deadline-first")
+    expect(priorityFirstStack[0].topic_id).toBe("priority-first")
     expect(deadlineFirstStack[0].topic_id).toBe("deadline-first")
   })
 

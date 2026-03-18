@@ -4,13 +4,13 @@ import { useMemo, useState } from "react"
 import {
   MAX_SESSION_LENGTH_MINUTES,
   MIN_SESSION_LENGTH_MINUTES,
-} from "@/lib/planner/constants"
+} from "@/lib/planner/draft"
 import type {
   PlannerConstraintValues as ConstraintValues,
   PlannerParamValues as ParamValues,
   PlannerSubjectOption,
   PlannerTopicForParams as TopicForParams,
-} from "@/lib/planner/draftTypes"
+} from "@/lib/planner/draft"
 import {
   PlannerFeasibilityBar,
   RiskDot,

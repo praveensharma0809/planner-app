@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { createServerSupabaseClientMock } from "../utils/supabaseMock"
-import type { ScheduledSession } from "@/lib/planner/types"
+import type { ScheduledSession } from "@/lib/planner/engine"
 
 const revalidatePathMock = vi.fn()
 
@@ -52,7 +52,7 @@ describe("commitPlan", () => {
 
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
-    const { commitPlan } = await import("@/app/actions/plan/commitPlan")
+    const { commitPlan } = await import("@/app/actions/planner/plan")
 
     const sessions: ScheduledSession[] = [
       {
@@ -103,7 +103,7 @@ describe("commitPlan", () => {
 
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
-    const { commitPlan } = await import("@/app/actions/plan/commitPlan")
+    const { commitPlan } = await import("@/app/actions/planner/plan")
 
     const result = await commitPlan([])
 
@@ -150,7 +150,7 @@ describe("commitPlan", () => {
 
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
-    const { commitPlan } = await import("@/app/actions/plan/commitPlan")
+    const { commitPlan } = await import("@/app/actions/planner/plan")
 
     const sessions: ScheduledSession[] = [
       {
@@ -227,7 +227,7 @@ describe("commitPlan", () => {
 
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
-    const { commitPlan } = await import("@/app/actions/plan/commitPlan")
+    const { commitPlan } = await import("@/app/actions/planner/plan")
 
     const sessions: ScheduledSession[] = [
       {

@@ -23,7 +23,7 @@ describe("saveStructure", () => {
 
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
-    const { saveStructure } = await import("@/app/actions/planner/saveStructure")
+    const { saveStructure } = await import("@/app/actions/planner/setup")
 
     const result = await saveStructure([
       {

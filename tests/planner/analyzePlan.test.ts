@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { generatePlan } from "@/lib/planner/analyzePlan"
-import type { GlobalConstraints, PlannableUnit } from "@/lib/planner/types"
+import { generatePlan } from "@/lib/planner/engine"
+import type { GlobalConstraints, PlannableUnit } from "@/lib/planner/engine"
 
 function buildUnit(overrides: Partial<PlannableUnit> = {}): PlannableUnit {
   return {

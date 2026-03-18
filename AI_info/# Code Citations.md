@@ -204,10 +204,8 @@ Namespace: `app/actions/planner/*`
 
 Files:
 
-- `lib/planner/types.ts`
-- `lib/planner/feasibility.ts`
-- `lib/planner/scheduler.ts`
-- `lib/planner/analyzePlan.ts` (exports `generatePlan`)
+- `lib/planner/engine.ts`
+- `lib/planner/draft.ts`
 
 High-level behavior:
 
@@ -435,11 +433,11 @@ Read in this order for fastest accurate mental model:
 
 1. `README.md`
 2. `app/planner/page.tsx`
-3. `app/actions/planner/generatePlan.ts`
-4. `lib/planner/analyzePlan.ts`
-5. `lib/planner/feasibility.ts`
-6. `lib/planner/scheduler.ts`
-7. `app/actions/planner/commitPlan.ts`
+3. `app/actions/planner/plan.ts`
+4. `app/actions/planner/setup.ts`
+5. `lib/planner/engine.ts`
+6. `lib/planner/draft.ts`
+7. `app/actions/planner/plan.ts`
 8. `supabase/migrations/001_planner_redesign.sql`
 9. `supabase/migrations/004_commit_keep_previous.sql`
 10. `app/dashboard/page.tsx`

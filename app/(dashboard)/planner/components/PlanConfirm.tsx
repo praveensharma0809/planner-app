@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import type { ScheduledSession, FeasibilityResult } from "@/lib/planner/types"
-import type { KeepPreviousMode } from "@/app/actions/planner/commitPlan"
+import type { ScheduledSession, FeasibilityResult } from "@/lib/planner/engine"
+import type { KeepPreviousMode } from "@/app/actions/planner/plan"
 
 interface PlanConfirmProps {
   sessions: ScheduledSession[]

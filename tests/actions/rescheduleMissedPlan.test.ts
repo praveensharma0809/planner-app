@@ -246,7 +246,7 @@ describe("rescheduleMissedPlan", () => {
     const { supabase } = buildRescheduleSupabaseMock({ userId: null })
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
-    const { rescheduleMissedPlan } = await import("@/app/actions/plan/rescheduleMissedPlan")
+    const { rescheduleMissedPlan } = await import("@/app/actions/planner/plan")
 
     const result = await rescheduleMissedPlan()
 
@@ -296,7 +296,7 @@ describe("rescheduleMissedPlan", () => {
     })
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
-    const { rescheduleMissedPlan } = await import("@/app/actions/plan/rescheduleMissedPlan")
+    const { rescheduleMissedPlan } = await import("@/app/actions/planner/plan")
 
     const result = await rescheduleMissedPlan()
 
@@ -361,7 +361,7 @@ describe("rescheduleMissedPlan", () => {
     })
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
-    const { rescheduleMissedPlan } = await import("@/app/actions/plan/rescheduleMissedPlan")
+    const { rescheduleMissedPlan } = await import("@/app/actions/planner/plan")
 
     const result = await rescheduleMissedPlan()
 
@@ -474,7 +474,7 @@ describe("rescheduleMissedPlan", () => {
     })
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
-    const { rescheduleMissedPlan } = await import("@/app/actions/plan/rescheduleMissedPlan")
+    const { rescheduleMissedPlan } = await import("@/app/actions/planner/plan")
 
     const result = await rescheduleMissedPlan()
 
@@ -622,7 +622,7 @@ describe("rescheduleMissedPlan", () => {
     })
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
-    const { rescheduleMissedPlan } = await import("@/app/actions/plan/rescheduleMissedPlan")
+    const { rescheduleMissedPlan } = await import("@/app/actions/planner/plan")
 
     const result = await rescheduleMissedPlan()
 

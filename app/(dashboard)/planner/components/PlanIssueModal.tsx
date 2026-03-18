@@ -4,8 +4,8 @@ import type {
   PlanIssue,
   PlanIssueAction,
   PlanIssueConstraintField,
-} from "@/lib/planner/planIssues"
-import type { PlannerConstraintValues } from "@/lib/planner/draftTypes"
+  PlannerConstraintValues,
+} from "@/lib/planner/draft"
 
 interface PlanIssueModalProps {
   open: boolean

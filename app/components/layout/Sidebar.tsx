@@ -52,6 +52,14 @@ const PlannerIcon = () => (
   </Icon>
 )
 
+const ScheduleIcon = () => (
+  <Icon>
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4M8 2v4M3 10h18" />
+    <path d="M8 14h8M8 18h5" />
+  </Icon>
+)
+
 const SubjectsIcon = () => (
   <Icon>
     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -139,6 +147,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/dashboard",          label: "Overview",  icon: <OverviewIcon />,  exact: true },
       { href: "/dashboard/calendar", label: "Calendar",  icon: <CalendarIcon /> },
+      { href: "/schedule",           label: "Schedule",  icon: <ScheduleIcon /> },
       { href: "/planner",            label: "Planner",   icon: <PlannerIcon /> },
       { href: "/dashboard/subjects", label: "Subjects",  icon: <SubjectsIcon /> },
       { href: "/execution",          label: "Execution", icon: <ExecutionIcon /> },

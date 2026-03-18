@@ -59,11 +59,16 @@ export async function getSubjectProgress(): Promise<GetSubjectProgressResponse> 
 
   // Get earliest deadline per subject from topic_params
   const allTopicIds = (topics ?? []).map((t) => t.id)
-  const { data: params } = await supabase
-    .from("topic_params")
-    .select("topic_id, deadline")
-    .in("topic_id", allTopicIds.length > 0 ? allTopicIds : ["__none__"])
-    .not("deadline", "is", null)
+  let params: Array<{ topic_id: string; deadline: string | null }> = []
+  if (allTopicIds.length > 0) {
+    const { data } = await supabase
+      .from("topic_params")
+      .select("topic_id, deadline")
+      .in("topic_id", allTopicIds)
+      .not("deadline", "is", null)
+
+    params = data ?? []
+  }
 
   const topicSubjectMap = new Map<string, string>()
   for (const t of topics ?? []) {

@@ -32,4 +32,5 @@ export async function uncompleteTask(taskId: string) {
 
   revalidatePath("/dashboard/calendar")
   revalidatePath("/dashboard")
+  revalidatePath("/schedule")
 }

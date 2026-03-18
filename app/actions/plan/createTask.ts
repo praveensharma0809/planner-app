@@ -67,5 +67,6 @@ export async function createTask(input: CreateTaskInput): Promise<CreateTaskResp
 
   revalidatePath("/dashboard/calendar")
   revalidatePath("/dashboard")
+  revalidatePath("/schedule")
   return { status: "SUCCESS", taskId: task.id }
 }

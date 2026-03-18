@@ -160,7 +160,7 @@ export function MonthView({
   const selectedTasks = selectedDay ? (tasksByDate.get(selectedDay) ?? []) : []
 
   return (
-    <div className="page-root">
+    <div className="page-root space-y-3">
       {/* Page Header with month nav */}
       <PageHeader
         eyebrow="Timeline"
@@ -202,7 +202,7 @@ export function MonthView({
 
       {/* Calendar grid */}
       <div
-        className="rounded-2xl overflow-hidden mb-5"
+        className="mb-4 overflow-hidden rounded-2xl"
         style={{ border: "1px solid var(--sh-border)", background: "var(--sh-card)" }}
       >
         {/* Day-of-week header */}
@@ -213,7 +213,7 @@ export function MonthView({
           {WEEK_DAYS.map((d, i) => (
             <div
               key={d}
-              className="text-center text-[10.5px] font-bold py-3 tracking-widest uppercase"
+              className="py-2 text-center text-[10px] font-bold tracking-widest uppercase"
               style={{ color: i === 6 ? "rgba(239,68,68,0.70)" : "var(--sh-text-muted)" }}
             >
               {d}
@@ -226,7 +226,7 @@ export function MonthView({
           {Array.from({ length: firstDayOfWeek }).map((_, i) => (
             <div
               key={`empty-${i}`}
-              className="min-h-[90px] sm:min-h-[120px]"
+              className="min-h-[72px] sm:min-h-[92px]"
               style={{ borderRight: "1px solid var(--sh-border)", borderBottom: "1px solid var(--sh-border)" }}
             />
           ))}
@@ -244,8 +244,8 @@ export function MonthView({
               .filter((t) => t.is_plan_generated)
               .reduce((s, t) => s + t.duration_minutes, 0)
             const studyHrs      = studyMin / 60
-            const previewTasks  = dayTasks.slice(0, 4)
-            const overflowCount = Math.max(0, dayTasks.length - 4)
+            const previewTasks  = dayTasks.slice(0, 3)
+            const overflowCount = Math.max(0, dayTasks.length - 3)
 
             return (
               <button
@@ -256,7 +256,7 @@ export function MonthView({
                     ? `, ${dayTasks.length} task${dayTasks.length !== 1 ? "s" : ""}`
                     : ""
                 }`}
-                className="min-h-[90px] sm:min-h-[120px] p-2 text-left transition-colors duration-150 cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-indigo-500/60"
+                className="min-h-[72px] cursor-pointer p-1.5 text-left transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-indigo-500/60 sm:min-h-[92px]"
                 style={{
                   borderRight: "1px solid var(--sh-border)",
                   borderBottom: "1px solid var(--sh-border)",
@@ -264,9 +264,9 @@ export function MonthView({
                 }}
               >
                 {/* Date number + study badge */}
-                <div className="flex items-center justify-between gap-1 mb-1.5">
+                <div className="mb-1 flex items-center justify-between gap-1">
                   <span
-                    className="text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full leading-none"
+                    className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold leading-none"
                     style={{
                       background: isToday ? "var(--sh-primary)" : "transparent",
                       color: isToday
@@ -289,7 +289,7 @@ export function MonthView({
 
                 {/* Task pills or Sunday icon */}
                 {dayTasks.length === 0 && isSunday ? (
-                  <div className="text-base opacity-15 text-center mt-3">☀</div>
+                  <div className="mt-1.5 text-center text-sm opacity-15">☀</div>
                 ) : (
                   <div className="space-y-[3px]">
                     {previewTasks.map((task) => {

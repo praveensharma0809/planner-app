@@ -1,29 +1,19 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import type { Subject, Subtopic, Task, Topic } from "@/lib/types/db"
 import { redirect } from "next/navigation"
-import { SubjectsDataTable, type SubjectTableRow } from "./subjects-data-table"
+import {
+  SubjectsDataTable,
+  type SubjectNavItem,
+  type TopicTaskItem,
+} from "./subjects-data-table"
 
-interface SubjectRow {
-  id: string
-  name: string
-  archived: boolean
-}
-
-interface TopicRow {
-  id: string
-  subject_id: string
-}
-
-interface TopicParamsRow {
-  topic_id: string
-  estimated_hours: number
-  priority: number
-  deadline: string | null
-}
-
-interface TaskRow {
-  subject_id: string
-  completed: boolean
-}
+type SubjectRow = Pick<Subject, "id" | "name" | "archived" | "sort_order">
+type TopicRow = Pick<Topic, "id" | "subject_id" | "name" | "sort_order">
+type SubtopicRow = Pick<Subtopic, "id" | "topic_id" | "name" | "sort_order">
+type TaskRow = Pick<
+  Task,
+  "id" | "topic_id" | "title" | "completed" | "duration_minutes" | "session_type" | "scheduled_date"
+>
 
 export default async function SubjectsPage() {
   const supabase = await createServerSupabaseClient()
@@ -35,121 +25,101 @@ export default async function SubjectsPage() {
 
   const { data: subjectRows } = await supabase
     .from("subjects")
-    .select("id, name, archived")
+    .select("id, name, archived, sort_order")
     .eq("user_id", user.id)
     .order("sort_order", { ascending: true })
 
   const subjects = (subjectRows ?? []) as SubjectRow[]
   if (subjects.length === 0) {
-    return <SubjectsDataTable initialSubjects={[]} />
+    return <SubjectsDataTable initialSubjects={[]} initialTasksByChapter={{}} />
   }
 
-  const subjectIds = subjects.map((s) => s.id)
+  const subjectIds = subjects.map((subject) => subject.id)
 
-  const { data: topicRows } = await supabase
-    .from("topics")
-    .select("id, subject_id")
-    .eq("user_id", user.id)
-    .in("subject_id", subjectIds)
+  let topics: TopicRow[] = []
+  if (subjectIds.length > 0) {
+    const { data: topicRows } = await supabase
+      .from("topics")
+      .select("id, subject_id, name, sort_order")
+      .eq("user_id", user.id)
+      .in("subject_id", subjectIds)
+      .order("sort_order", { ascending: true })
 
-  const topics = (topicRows ?? []) as TopicRow[]
-  const topicIds = topics.map((t) => t.id)
+    topics = (topicRows ?? []) as TopicRow[]
+  }
 
-  const { data: topicParamRows } = await supabase
-    .from("topic_params")
-    .select("topic_id, estimated_hours, priority, deadline")
-    .eq("user_id", user.id)
-    .in("topic_id", topicIds.length > 0 ? topicIds : ["__none__"])
+  const topicIds = topics.map((topic) => topic.id)
 
-  const params = (topicParamRows ?? []) as TopicParamsRow[]
+  let subtopics: SubtopicRow[] = []
+  let tasks: TaskRow[] = []
 
-  const { data: taskRows } = await supabase
-    .from("tasks")
-    .select("subject_id, completed")
-    .eq("user_id", user.id)
-    .in("subject_id", subjectIds)
+  if (topicIds.length > 0) {
+    const [{ data: subtopicRows }, { data: taskRows }] = await Promise.all([
+      supabase
+        .from("subtopics")
+        .select("id, topic_id, name, sort_order")
+        .eq("user_id", user.id)
+        .in("topic_id", topicIds)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("tasks")
+        .select("id, topic_id, title, completed, duration_minutes, session_type, scheduled_date")
+        .eq("user_id", user.id)
+        .in("topic_id", topicIds)
+        .order("scheduled_date", { ascending: true })
+        .order("created_at", { ascending: true }),
+    ])
 
-  const tasks = (taskRows ?? []) as TaskRow[]
+    subtopics = (subtopicRows ?? []) as SubtopicRow[]
+    tasks = (taskRows ?? []) as TaskRow[]
+  }
 
-  const topicToSubject = new Map<string, string>()
+  const subtopicsByTopic = new Map<string, { id: string; name: string }[]>()
+  for (const subtopic of subtopics) {
+    const list = subtopicsByTopic.get(subtopic.topic_id) ?? []
+    list.push({ id: subtopic.id, name: subtopic.name })
+    subtopicsByTopic.set(subtopic.topic_id, list)
+  }
+
+  const chaptersBySubject = new Map<string, SubjectNavItem["chapters"]>()
   for (const topic of topics) {
-    topicToSubject.set(topic.id, topic.subject_id)
-  }
-
-  const summaryBySubject = new Map<
-    string,
-    {
-      topicCount: number
-      estimatedHours: number
-      totalTasks: number
-      completedTasks: number
-      earliestDeadline: string | null
-      priority: number | null
-    }
-  >()
-
-  for (const subject of subjects) {
-    summaryBySubject.set(subject.id, {
-      topicCount: 0,
-      estimatedHours: 0,
-      totalTasks: 0,
-      completedTasks: 0,
-      earliestDeadline: null,
-      priority: null,
+    const list = chaptersBySubject.get(topic.subject_id) ?? []
+    list.push({
+      id: topic.id,
+      name: topic.name,
+      topics: subtopicsByTopic.get(topic.id) ?? [],
     })
+    chaptersBySubject.set(topic.subject_id, list)
   }
 
-  for (const topic of topics) {
-    const summary = summaryBySubject.get(topic.subject_id)
-    if (!summary) continue
-    summary.topicCount += 1
-  }
+  const initialSubjects: SubjectNavItem[] = subjects.map((subject) => ({
+    id: subject.id,
+    name: subject.name,
+    archived: subject.archived,
+    chapters: chaptersBySubject.get(subject.id) ?? [],
+  }))
 
-  for (const param of params) {
-    const subjectId = topicToSubject.get(param.topic_id)
-    if (!subjectId) continue
-
-    const summary = summaryBySubject.get(subjectId)
-    if (!summary) continue
-
-    summary.estimatedHours += param.estimated_hours
-
-    if (summary.priority === null || param.priority < summary.priority) {
-      summary.priority = param.priority
-    }
-
-    if (param.deadline) {
-      if (!summary.earliestDeadline || param.deadline < summary.earliestDeadline) {
-        summary.earliestDeadline = param.deadline
-      }
-    }
-  }
-
+  const initialTasksByChapter: Record<string, TopicTaskItem[]> = {}
   for (const task of tasks) {
-    const summary = summaryBySubject.get(task.subject_id)
-    if (!summary) continue
+    if (!task.topic_id) continue
 
-    summary.totalTasks += 1
-    if (task.completed) {
-      summary.completedTasks += 1
-    }
+    const list = initialTasksByChapter[task.topic_id] ?? []
+    list.push({
+      id: task.id,
+      topicId: task.topic_id,
+      title: task.title,
+      completed: task.completed,
+      durationMinutes: task.duration_minutes,
+      sessionType: task.session_type,
+      scheduledDate: task.scheduled_date,
+    })
+    initialTasksByChapter[task.topic_id] = list
   }
 
-  const rows: SubjectTableRow[] = subjects.map((subject) => {
-    const summary = summaryBySubject.get(subject.id)
-
-    return {
-      id: subject.id,
-      name: subject.name,
-      archived: subject.archived,
-      topicCount: summary?.topicCount ?? 0,
-      estimatedHours: summary?.estimatedHours ?? 0,
-      totalTasks: summary?.totalTasks ?? 0,
-      completedTasks: summary?.completedTasks ?? 0,
-      earliestDeadline: summary?.earliestDeadline ?? null,
-      priority: summary?.priority ?? null,
-    }
-  })
-
-  return <SubjectsDataTable initialSubjects={rows} />
+  return (
+    <SubjectsDataTable
+      initialSubjects={initialSubjects}
+      initialTasksByChapter={initialTasksByChapter}
+    />
+  )
 }

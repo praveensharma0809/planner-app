@@ -16,9 +16,37 @@ interface Props {
 
 export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props) {
   const { addToast } = useToast()
-  
+
   const [name, setName] = useState("")
   const [loading, setLoading] = useState(false)
+  const [shouldRender, setShouldRender] = useState(open)
+
+  useEffect(() => {
+    if (open) {
+      setShouldRender(true)
+      document.body.style.overflow = "hidden"
+      return () => {
+        document.body.style.overflow = ""
+      }
+    }
+
+    const timer = window.setTimeout(() => setShouldRender(false), 260)
+    document.body.style.overflow = ""
+    return () => window.clearTimeout(timer)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose()
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [open, onClose])
 
   useEffect(() => {
     if (!open) return
@@ -48,6 +76,8 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
       }
     }
   }, [open, mode, subjectId, addToast])
+
+  if (!shouldRender) return null
 
   async function handleSaveSubject(e: React.FormEvent) {
     e.preventDefault()
@@ -84,18 +114,21 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
   return (
     <>
       {/* Backdrop */}
-      {open && (
-        <div
-          className="fixed inset-0 z-40 transition-opacity"
-          style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
-          onClick={onClose}
-        />
-      )}
+      <button
+        type="button"
+        className={`fixed inset-0 z-40 transition-opacity duration-200 ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        style={{ background: "rgba(0,0,0,0.52)", backdropFilter: "blur(3px)" }}
+        onClick={onClose}
+        aria-label="Close drawer"
+      />
 
       {/* Slide-over panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-full max-w-md z-50 flex flex-col overflow-y-auto shadow-2xl transform transition-transform duration-300 ease-in-out ${open ? "translate-x-0" : "translate-x-full"}`}
+        className={`fixed top-0 right-0 h-full w-full max-w-md z-50 flex flex-col overflow-y-auto shadow-2xl transform transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}
         style={{ background: "var(--sh-card)", borderLeft: "1px solid var(--sh-border)" }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={mode === "create" ? "Add New Subject" : "Edit Subject"}
       >
         <div
           className="flex items-center justify-between p-6 shrink-0"

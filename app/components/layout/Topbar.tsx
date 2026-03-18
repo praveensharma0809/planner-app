@@ -81,6 +81,7 @@ const ROUTE_TITLES: Array<{ pattern: RegExp; title: string }> = [
   { pattern: /^\/dashboard\/habits/,        title: "Habits"     },
   { pattern: /^\/dashboard\/notes/,         title: "Notes"      },
   { pattern: /^\/dashboard\/resources/,     title: "Resources"  },
+  { pattern: /^\/schedule/,                 title: "Schedule"   },
   { pattern: /^\/planner/,                  title: "Planner"    },
   { pattern: /^\/execution/,                title: "Execution"  },
   { pattern: /^\/onboarding/,               title: "Onboarding" },

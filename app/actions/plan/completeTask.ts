@@ -76,4 +76,5 @@ export async function completeTask(taskId: string) {
 
   revalidatePath("/dashboard/calendar")
   revalidatePath("/dashboard")
+  revalidatePath("/schedule")
 }
