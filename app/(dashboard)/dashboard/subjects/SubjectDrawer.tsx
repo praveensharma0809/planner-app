@@ -169,8 +169,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
             </div>
 
             <p className="text-xs leading-relaxed" style={{ color: "var(--sh-text-muted)" }}>
-              Topics, deadlines, and workload parameters are configured in the{" "}
-              <a href="/planner" style={{ color: "var(--sh-primary, #7c6cff)" }}>Planner wizard</a>.
+              This page is for structure storage. Keep subjects, chapters, topics, and task titles organized here.
             </p>
           </form>
         </div>

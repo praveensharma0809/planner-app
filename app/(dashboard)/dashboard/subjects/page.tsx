@@ -8,12 +8,9 @@ import {
 } from "./subjects-data-table"
 
 type SubjectRow = Pick<Subject, "id" | "name" | "archived" | "sort_order">
-type TopicRow = Pick<Topic, "id" | "subject_id" | "name" | "sort_order">
+type TopicRow = Pick<Topic, "id" | "subject_id" | "name" | "sort_order" | "archived">
 type SubtopicRow = Pick<Subtopic, "id" | "topic_id" | "name" | "sort_order">
-type TaskRow = Pick<
-  Task,
-  "id" | "topic_id" | "title" | "completed" | "duration_minutes" | "session_type" | "scheduled_date"
->
+type TaskRow = Pick<Task, "id" | "topic_id" | "subtopic_id" | "title" | "completed" | "sort_order" | "created_at">
 
 export default async function SubjectsPage() {
   const supabase = await createServerSupabaseClient()
@@ -40,7 +37,7 @@ export default async function SubjectsPage() {
   if (subjectIds.length > 0) {
     const { data: topicRows } = await supabase
       .from("topics")
-      .select("id, subject_id, name, sort_order")
+      .select("id, subject_id, name, sort_order, archived")
       .eq("user_id", user.id)
       .in("subject_id", subjectIds)
       .order("sort_order", { ascending: true })
@@ -63,10 +60,10 @@ export default async function SubjectsPage() {
         .order("sort_order", { ascending: true }),
       supabase
         .from("tasks")
-        .select("id, topic_id, title, completed, duration_minutes, session_type, scheduled_date")
+        .select("id, topic_id, subtopic_id, title, completed, sort_order, created_at")
         .eq("user_id", user.id)
         .in("topic_id", topicIds)
-        .order("scheduled_date", { ascending: true })
+        .order("sort_order", { ascending: true })
         .order("created_at", { ascending: true }),
     ])
 
@@ -87,6 +84,7 @@ export default async function SubjectsPage() {
     list.push({
       id: topic.id,
       name: topic.name,
+      archived: topic.archived ?? false,
       topics: subtopicsByTopic.get(topic.id) ?? [],
     })
     chaptersBySubject.set(topic.subject_id, list)
@@ -107,11 +105,9 @@ export default async function SubjectsPage() {
     list.push({
       id: task.id,
       topicId: task.topic_id,
+      clusterId: task.subtopic_id,
       title: task.title,
       completed: task.completed,
-      durationMinutes: task.duration_minutes,
-      sessionType: task.session_type,
-      scheduledDate: task.scheduled_date,
     })
     initialTasksByChapter[task.topic_id] = list
   }

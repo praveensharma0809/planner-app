@@ -99,6 +99,37 @@ export type DeleteSubtopicResponse =
   | { status: "ERROR"; message: string }
   | { status: "SUCCESS" }
 
+export type UpdateSubtopicResponse =
+  | { status: "UNAUTHORIZED" }
+  | { status: "ERROR"; message: string }
+  | { status: "SUCCESS" }
+
+export async function updateSubtopic(
+  subtopicId: string,
+  name: string
+): Promise<UpdateSubtopicResponse> {
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { status: "UNAUTHORIZED" }
+
+    if (!name.trim()) return { status: "ERROR", message: "Name is required" }
+
+    const { error } = await supabase
+      .from("subtopics")
+      .update({ name: name.trim() })
+      .eq("id", subtopicId)
+      .eq("user_id", user.id)
+
+    if (error) return { status: "ERROR", message: error.message }
+
+    revalidatePath("/dashboard/subjects")
+    return { status: "SUCCESS" }
+  } catch {
+    return { status: "ERROR", message: "Failed to update subtopic." }
+  }
+}
+
 export async function deleteSubtopic(subtopicId: string): Promise<DeleteSubtopicResponse> {
   try {
     const supabase = await createServerSupabaseClient()

@@ -210,9 +210,10 @@ export async function getStructure(): Promise<GetStructureResponse> {
   if (subjectIds.length > 0) {
     const { data: topicRows } = await supabase
       .from("topics")
-      .select("id, user_id, subject_id, name, sort_order, created_at")
+      .select("id, user_id, subject_id, name, sort_order, archived, created_at")
       .eq("user_id", user.id)
       .in("subject_id", subjectIds)
+      .eq("archived", false)
       .order("sort_order", { ascending: true })
     topics = (topicRows ?? []) as Topic[]
   }

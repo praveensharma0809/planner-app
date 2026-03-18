@@ -173,8 +173,9 @@ export async function upsertScheduleTask(
       priority: 3,
       completed: false,
       is_plan_generated: false,
-      session_number: null,
-      total_sessions: null,
+      session_number: 0,
+      total_sessions: 1,
+      sort_order: 0,
       plan_version: null,
     })
     .select("id")

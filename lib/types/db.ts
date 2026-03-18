@@ -29,6 +29,7 @@ export interface Topic {
   subject_id: string
   name: string
   sort_order: number
+  archived: boolean
   created_at: string
 }
 
@@ -104,13 +105,15 @@ export interface Task {
   user_id: string
   subject_id: string
   topic_id: string | null
+  subtopic_id: string | null
   title: string
   scheduled_date: string
   duration_minutes: number
   session_type: "core" | "revision" | "practice"
   priority: number
-  session_number: number | null
-  total_sessions: number | null
+  session_number: number
+  total_sessions: number
+  sort_order: number
   completed: boolean
   is_plan_generated: boolean
   plan_version: string | null
