@@ -45,7 +45,8 @@ export async function getWeeklySnapshot(weekOf?: string): Promise<GetWeeklySnaps
 
   const { data } = await supabase
     .from("tasks")
-    .select("id, user_id, subject_id, topic_id, title, scheduled_date, duration_minutes, priority, completed, is_plan_generated, session_type, plan_version, session_number, total_sessions, created_at")    .eq("user_id", user.id)
+    .select("id, user_id, subject_id, topic_id, subtopic_id, title, scheduled_date, duration_minutes, priority, completed, is_plan_generated, session_type, plan_version, session_number, total_sessions, sort_order, created_at")
+    .eq("user_id", user.id)
     .gte("scheduled_date", startISO)
     .lte("scheduled_date", endISO)
     .order("scheduled_date", { ascending: true })

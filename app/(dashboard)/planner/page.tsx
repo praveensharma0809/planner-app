@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useToast } from "@/app/components/Toast"
 import PlannerStepper from "./components/PlannerStepper"
-import StructureBuilder, { type SubjectDraft } from "./components/StructureBuilder"
+import StructureBuilder, {
+  type StructureImportOptions,
+  type StructureSavePayload,
+  type SubjectDraft,
+} from "./components/StructureBuilder"
 import ParamsEditor from "./components/ParamsEditor"
 import ConstraintsForm from "./components/ConstraintsForm"
 import PlanPreview from "./components/PlanPreview"
@@ -21,6 +25,8 @@ import {
 import {
   buildPlanIssues,
   hasCriticalIssues,
+  MAX_SESSION_LENGTH_MINUTES,
+  MIN_SESSION_LENGTH_MINUTES,
   type PlanIssue,
   type PlanIssueAction,
   type PlanIssueConstraintField,
@@ -122,6 +128,9 @@ interface IssueComputationOverrides {
   planStatus?: string | null
 }
 
+type StructureResponse = Awaited<ReturnType<typeof getStructure>>
+type StructureSubject = Extract<StructureResponse, { status: "SUCCESS" }>['tree']['subjects'][number]
+
 // ── Mapping helpers (DB → UI types) ──────────────────────────────────────────
 function mapDbToParamValues(p: {
   topic_id: string; estimated_hours: number; priority: number;
@@ -178,6 +187,138 @@ function mapDbToConstraintValues(c: {
   }
 }
 
+function clampSessionLength(minutes: number): number {
+  if (!Number.isFinite(minutes)) return MIN_SESSION_LENGTH_MINUTES
+  return Math.min(
+    MAX_SESSION_LENGTH_MINUTES,
+    Math.max(MIN_SESSION_LENGTH_MINUTES, Math.trunc(minutes))
+  )
+}
+
+function mapStructureSubjectsToDrafts(subjects: StructureSubject[]): SubjectDraft[] {
+  return subjects.map((subject) => ({
+    id: subject.id,
+    name: subject.name,
+    sort_order: subject.sort_order,
+    topics: subject.topics.map((topic) => {
+      const averageTaskMinutes = topic.tasks.length > 0
+        ? Math.round(
+            topic.tasks.reduce((sum, task) => sum + clampSessionLength(task.duration_minutes), 0)
+            / topic.tasks.length
+          )
+        : 45
+
+      return {
+        id: topic.id,
+        name: topic.name,
+        sort_order: topic.sort_order,
+        default_task_minutes: averageTaskMinutes,
+        subtopics: topic.subtopics.map((subtopic) => ({
+          id: subtopic.id,
+          name: subtopic.name,
+          sort_order: subtopic.sort_order,
+        })),
+        tasks: topic.tasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          completed: task.completed,
+          subtopic_id: task.subtopic_id,
+          effort_minutes: clampSessionLength(task.duration_minutes),
+          sort_order: task.sort_order,
+        })),
+      }
+    }),
+  }))
+}
+
+function buildTopicListFromSubjects(subjects: SubjectDraft[]): TopicForParams[] {
+  const topicList: TopicForParams[] = []
+
+  for (const subject of subjects) {
+    for (const topic of subject.topics) {
+      if (!topic.id) continue
+      topicList.push({
+        id: topic.id,
+        subject_name: subject.name,
+        topic_name: topic.name,
+      })
+    }
+  }
+
+  return topicList
+}
+
+function buildDeadlineMap(subjects: StructureSubject[]): Map<string, string> {
+  const deadlineMap = new Map<string, string>()
+
+  for (const subject of subjects) {
+    if (!subject.deadline) continue
+    deadlineMap.set(subject.id, subject.deadline)
+  }
+
+  return deadlineMap
+}
+
+function applyTopicEffortPrefill(
+  source: Map<string, ParamValues>,
+  prefill: StructureSavePayload['topicEffortPrefill']
+): Map<string, ParamValues> {
+  const next = new Map(source)
+
+  for (const [topicId, values] of Object.entries(prefill)) {
+    const existing = next.get(topicId)
+    const estimatedHours = Number.isFinite(values.estimated_hours)
+      ? Math.max(0, Number(values.estimated_hours.toFixed(2)))
+      : 0
+    const sessionLengthMinutes = clampSessionLength(values.session_length_minutes)
+
+    if (!existing) {
+      next.set(topicId, {
+        topic_id: topicId,
+        estimated_hours: estimatedHours,
+        priority: 3,
+        deadline: "",
+        earliest_start: "",
+        depends_on: [],
+        session_length_minutes: sessionLengthMinutes,
+        rest_after_days: 0,
+        max_sessions_per_day: 0,
+        study_frequency: "daily",
+        tier: 0,
+      })
+      continue
+    }
+
+    next.set(topicId, {
+      ...existing,
+      estimated_hours: estimatedHours,
+      session_length_minutes: sessionLengthMinutes,
+    })
+  }
+
+  return next
+}
+
+function mapDbParamsToMap(rows: Array<{
+  topic_id: string
+  estimated_hours: number
+  priority: number
+  deadline?: string | null
+  earliest_start?: string | null
+  depends_on?: string[] | null
+  session_length_minutes?: number
+  rest_after_days?: number
+  max_sessions_per_day?: number
+  study_frequency?: string
+  tier?: number
+}>): Map<string, ParamValues> {
+  const map = new Map<string, ParamValues>()
+  for (const row of rows) {
+    map.set(row.topic_id, mapDbToParamValues(row))
+  }
+  return map
+}
+
 export default function PlannerPage() {
   const { addToast } = useToast()
 
@@ -215,6 +356,12 @@ export default function PlannerPage() {
 
   // Track whether initial hydration from sessionStorage is done
   const hydratedRef = useRef(false)
+
+  const loadTopicParamMap = useCallback(async (): Promise<Map<string, ParamValues>> => {
+    const paramsRes = await getTopicParams()
+    if (paramsRes.status !== "SUCCESS") return new Map<string, ParamValues>()
+    return mapDbParamsToMap(paramsRes.params)
+  }, [])
 
   // ── Persist progress whenever key state changes ──────────────────────────
   useEffect(() => {
@@ -258,47 +405,14 @@ export default function PlannerPage() {
       // 2. Always fetch live structure from DB (source of truth for Phase 1)
       const res = await getStructure()
       if (res.status === "SUCCESS") {
-        const mapped: SubjectDraft[] = res.tree.subjects.map((s) => ({
-          id: s.id,
-          name: s.name,
-          sort_order: s.sort_order,
-          topics: s.topics.map((t) => ({
-            id: t.id,
-            name: t.name,
-            sort_order: t.sort_order,
-            subtopics: t.subtopics.map((st) => ({
-              id: st.id,
-              name: st.name,
-              sort_order: st.sort_order,
-            })),
-          })),
-        }))
+        const mapped = mapStructureSubjectsToDrafts(res.tree.subjects)
         setSubjects(mapped)
 
-        // Build subject deadline map from DB
-        const deadlineMap = new Map<string, string>()
-        for (const s of res.tree.subjects) {
-          if (s.deadline) deadlineMap.set(s.id, s.deadline)
-        }
-        setSubjectDeadlineState(deadlineMap)
-
-        const topicList: TopicForParams[] = []
-        for (const s of res.tree.subjects) {
-          for (const t of s.topics) {
-            topicList.push({ id: t.id, subject_name: s.name, topic_name: t.name })
-          }
-        }
-        setTopics(topicList)
+        setSubjectDeadlineState(buildDeadlineMap(res.tree.subjects))
+        setTopics(buildTopicListFromSubjects(mapped))
 
         if (!saved?.paramMap?.length) {
-          const paramsRes = await getTopicParams()
-          if (paramsRes.status === "SUCCESS") {
-            const map = new Map<string, ParamValues>()
-            for (const p of paramsRes.params) {
-              map.set(p.topic_id, mapDbToParamValues(p))
-            }
-            setParamMap(map)
-          }
+          setParamMap(await loadTopicParamMap())
         }
 
         if (!saved?.constraints) {
@@ -313,7 +427,7 @@ export default function PlannerPage() {
       hydratedRef.current = true
     }
     init()
-  }, [])
+  }, [loadTopicParamMap])
 
   const goToPhase = useCallback((p: number) => {
     setPhase(p)
@@ -404,72 +518,75 @@ export default function PlannerPage() {
 
   const hasCriticalPlanIssues = hasCriticalIssues(planIssues)
 
+  const importStructureFromSubjects = useCallback(async (
+    options: StructureImportOptions
+  ): Promise<SubjectDraft[]> => {
+    const res = await getStructure({
+      onlyUndoneTasks: options.onlyUndoneTasks,
+      dropTopicsWithoutTasks: options.dropTopicsWithoutTasks,
+    })
+
+    if (res.status !== "SUCCESS") {
+      addToast("Please sign in to import structure.", "error")
+      return subjects
+    }
+
+    return mapStructureSubjectsToDrafts(res.tree.subjects)
+  }, [addToast, subjects])
+
   useEffect(() => {
     if (!constraints && !feasibility && sessions.length === 0 && !lastPlanStatus) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPlanIssues(recomputeIssues())
   }, [constraints, feasibility, sessions, lastPlanStatus, recomputeIssues])
 
   // Phase 1 save
-  const handleSaveStructure = async (drafts: SubjectDraft[]) => {
+  const handleSaveStructure = async (
+    drafts: SubjectDraft[],
+    payload: StructureSavePayload
+  ) => {
     setIsSavingStructure(true)
-    const res = await saveStructure(drafts)
-    setIsSavingStructure(false)
 
-    if (res.status !== "SUCCESS") {
-      addToast(res.status === "ERROR" ? res.message : "Please sign in.", "error")
-      return
-    }
+    try {
+      const prefill = payload.topicEffortPrefill ?? {}
 
-    // Reload structure to get server-assigned IDs
-    const fresh = await getStructure()
-    if (fresh.status === "SUCCESS") {
-      const mapped: SubjectDraft[] = fresh.tree.subjects.map((s) => ({
-        id: s.id,
-        name: s.name,
-        sort_order: s.sort_order,
-        topics: s.topics.map((t) => ({
-          id: t.id,
-          name: t.name,
-          sort_order: t.sort_order,
-          subtopics: t.subtopics.map((st) => ({
-            id: st.id,
-            name: st.name,
-            sort_order: st.sort_order,
-          })),
-        })),
-      }))
+      if (payload.plannerOnly) {
+        setSubjects(drafts)
+        setTopics(buildTopicListFromSubjects(drafts))
+
+        const fromDb = await loadTopicParamMap()
+        setParamMap(applyTopicEffortPrefill(fromDb, prefill))
+
+        addToast("Imported snapshot applied for this planner run.", "success")
+        goToPhase(2)
+        return
+      }
+
+      const res = await saveStructure(drafts)
+      if (res.status !== "SUCCESS") {
+        addToast(res.status === "ERROR" ? res.message : "Please sign in.", "error")
+        return
+      }
+
+      // Reload structure to get server-assigned IDs and synced task snapshots.
+      const fresh = await getStructure()
+      if (fresh.status !== "SUCCESS") {
+        addToast("Structure was saved but refresh failed. Reload planner once.", "error")
+        return
+      }
+
+      const mapped = mapStructureSubjectsToDrafts(fresh.tree.subjects)
       setSubjects(mapped)
+      setSubjectDeadlineState(buildDeadlineMap(fresh.tree.subjects))
+      setTopics(buildTopicListFromSubjects(mapped))
 
-      // Refresh subject deadline map
-      const deadlineMap = new Map<string, string>()
-      for (const s of fresh.tree.subjects) {
-        if (s.deadline) deadlineMap.set(s.id, s.deadline)
-      }
-      setSubjectDeadlineState(deadlineMap)
+      const fromDb = await loadTopicParamMap()
+      setParamMap(applyTopicEffortPrefill(fromDb, prefill))
 
-      // Build topics list for params editor
-      const topicList: TopicForParams[] = []
-      for (const s of fresh.tree.subjects) {
-        for (const t of s.topics) {
-          topicList.push({ id: t.id, subject_name: s.name, topic_name: t.name })
-        }
-      }
-      setTopics(topicList)
-
-      // Load existing params
-      const paramsRes = await getTopicParams()
-      if (paramsRes.status === "SUCCESS") {
-        const map = new Map<string, ParamValues>()
-        for (const p of paramsRes.params) {
-          map.set(p.topic_id, mapDbToParamValues(p))
-        }
-        setParamMap(map)
-      }
+      addToast("Structure saved.", "success")
+      goToPhase(2)
+    } finally {
+      setIsSavingStructure(false)
     }
-
-    addToast("Structure saved.", "success")
-    goToPhase(2)
   }
 
   // Phase 2 save
@@ -723,6 +840,7 @@ export default function PlannerPage() {
             <StructureBuilder
               initialSubjects={subjects}
               onSave={handleSaveStructure}
+              onImportFromSubjects={importStructureFromSubjects}
               isSaving={isSavingStructure}
             />
           )}

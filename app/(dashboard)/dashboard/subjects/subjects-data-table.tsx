@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core"
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { completeTask } from "@/app/actions/plan/completeTask"
@@ -30,6 +30,7 @@ import {
   updateSubjectTaskTitle,
 } from "@/app/actions/subjects/tasks"
 import { toggleArchiveSubject } from "@/app/actions/subjects/toggleArchiveSubject"
+import { useSidebar } from "@/app/components/layout/AppShell"
 import { PageHeader } from "@/app/components/layout/PageHeader"
 import { useToast } from "@/app/components/Toast"
 import { Button, Input, Modal } from "@/app/components/ui"
@@ -118,9 +119,86 @@ function composeSeriesName(
   return cleanSeparator ? `${baseName}${cleanSeparator}${numeric}` : `${baseName}${numeric}`
 }
 
+function buildNumericPatternKey(title: string): string | null {
+  const normalized = title.trim().toLowerCase()
+  if (!normalized) return null
+
+  if (!/\d/.test(normalized)) return null
+  return normalized.replace(/\d+/g, "#")
+}
+
+function extractNumericParts(title: string): number[] {
+  const matches = title.match(/\d+/g)
+  if (!matches) return []
+
+  return matches
+    .map((token) => Number.parseInt(token, 10))
+    .filter((value) => Number.isFinite(value))
+}
+
+function shouldAutoOrderTasks(tasks: TopicTaskItem[]): boolean {
+  if (tasks.length < 2) return false
+
+  const patternCounts = new Map<string, number>()
+  for (const task of tasks) {
+    const key = buildNumericPatternKey(task.title)
+    if (!key) continue
+    patternCounts.set(key, (patternCounts.get(key) ?? 0) + 1)
+  }
+
+  let maxPatternCount = 0
+  for (const count of patternCounts.values()) {
+    if (count > maxPatternCount) {
+      maxPatternCount = count
+    }
+  }
+
+  return maxPatternCount >= 2
+}
+
+function compareTasksNaturally(left: TopicTaskItem, right: TopicTaskItem): number {
+  const leftTitle = left.title.trim()
+  const rightTitle = right.title.trim()
+
+  if (!leftTitle && !rightTitle) {
+    return left.id.localeCompare(right.id)
+  }
+  if (!leftTitle) return 1
+  if (!rightTitle) return -1
+
+  const leftPattern = buildNumericPatternKey(leftTitle)
+  const rightPattern = buildNumericPatternKey(rightTitle)
+
+  if (leftPattern && rightPattern && leftPattern === rightPattern) {
+    const leftNumbers = extractNumericParts(leftTitle)
+    const rightNumbers = extractNumericParts(rightTitle)
+    const maxLength = Math.max(leftNumbers.length, rightNumbers.length)
+
+    for (let index = 0; index < maxLength; index += 1) {
+      const leftValue = leftNumbers[index]
+      const rightValue = rightNumbers[index]
+
+      if (leftValue === undefined && rightValue === undefined) break
+      if (leftValue === undefined) return -1
+      if (rightValue === undefined) return 1
+      if (leftValue !== rightValue) return leftValue - rightValue
+    }
+  }
+
+  const byTitle = leftTitle.localeCompare(rightTitle, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  })
+
+  if (byTitle !== 0) return byTitle
+  return left.id.localeCompare(right.id)
+}
+
 export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Props) {
   const router = useRouter()
   const { addToast } = useToast()
+  const { collapsed } = useSidebar()
+  const sidebarExpanded = !collapsed
   const [subjects, setSubjects] = useState<SubjectNavItem[]>(initialSubjects)
   const [tasksByChapter, setTasksByChapter] =
     useState<Record<string, TopicTaskItem[]>>(initialTasksByChapter)
@@ -164,6 +242,8 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null)
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
   const [clusterFilterValue, setClusterFilterValue] = useState(ALL_CLUSTER_FILTER_VALUE)
+  const [clusterManagerExpanded, setClusterManagerExpanded] = useState(false)
+  const [manualOrderChapterIds, setManualOrderChapterIds] = useState<Set<string>>(new Set())
   const [reorderingTaskIds, setReorderingTaskIds] = useState<string[]>([])
 
   const sensors = useSensors(
@@ -227,6 +307,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     setAssignClusterValue(NONE_CLUSTER_VALUE)
     setComposerClusterValue(NONE_CLUSTER_VALUE)
     setComposerNewClusterName("")
+    setClusterManagerExpanded(false)
   }, [selectedChapter?.id, showArchived])
 
   const chapterTasks = selectedChapter ? tasksByChapter[selectedChapter.id] ?? [] : []
@@ -488,6 +569,16 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       return
     }
 
+    const chapterId = selectedChapter.id
+    const hadManualOverride = manualOrderChapterIds.has(chapterId)
+    if (!hadManualOverride) {
+      setManualOrderChapterIds((current) => {
+        const next = new Set(current)
+        next.add(chapterId)
+        return next
+      })
+    }
+
     const reorderedVisibleTasks = arrayMove(visibleTasks, fromIndex, toIndex)
     let reorderedChapterTasks: TopicTaskItem[]
 
@@ -513,21 +604,70 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     setReorderingTaskIds(orderedChapterTaskIds)
     setTasksByChapter((previous) => ({
       ...previous,
-      [selectedChapter.id]: reorderedChapterTasks,
+      [chapterId]: reorderedChapterTasks,
     }))
 
     const result = await reorderTasks({
-      chapterId: selectedChapter.id,
+      chapterId,
       taskIds: orderedChapterTaskIds,
     })
 
     if (result.status !== "SUCCESS") {
+      if (!hadManualOverride) {
+        setManualOrderChapterIds((current) => {
+          const next = new Set(current)
+          next.delete(chapterId)
+          return next
+        })
+      }
       addToast(result.status === "ERROR" ? result.message : "Failed to reorder tasks.", "error")
       router.refresh()
     }
 
     setReorderingTaskIds([])
   }
+
+  useEffect(() => {
+    if (!selectedChapter || showArchived) return
+    if (reorderingTaskIds.length > 0) return
+
+    const chapterId = selectedChapter.id
+    if (manualOrderChapterIds.has(chapterId)) return
+    if (!shouldAutoOrderTasks(chapterTasks)) return
+
+    const autoOrderedTasks = [...chapterTasks].sort(compareTasksNaturally)
+    const unchanged = autoOrderedTasks.every((task, index) => task.id === chapterTasks[index]?.id)
+    if (unchanged) return
+
+    const orderedTaskIds = autoOrderedTasks.map((task) => task.id)
+    setReorderingTaskIds(orderedTaskIds)
+    setTasksByChapter((previous) => ({
+      ...previous,
+      [chapterId]: autoOrderedTasks,
+    }))
+
+    let alive = true
+
+    void (async () => {
+      const result = await reorderTasks({
+        chapterId,
+        taskIds: orderedTaskIds,
+      })
+
+      if (!alive) return
+
+      if (result.status !== "SUCCESS") {
+        addToast(result.status === "ERROR" ? result.message : "Failed to auto-order tasks.", "error")
+        router.refresh()
+      }
+
+      setReorderingTaskIds([])
+    })()
+
+    return () => {
+      alive = false
+    }
+  }, [addToast, chapterTasks, manualOrderChapterIds, reorderingTaskIds.length, router, selectedChapter, showArchived])
 
 
   async function handleSaveChapter(event: FormEvent<HTMLFormElement>) {
@@ -1157,8 +1297,8 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                     )}
                   </nav>
 
-                  <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-                    <div>
+                  <div className="mt-3 flex flex-wrap items-start gap-3">
+                    <div className="min-w-0 flex-1">
                       <h2
                         className="text-2xl font-bold tracking-tight"
                         style={{ color: "var(--sh-text-primary)" }}
@@ -1173,7 +1313,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
                       <Button
                         variant="primary"
                         size="sm"
@@ -1190,9 +1330,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                       >
                         {manageMode ? "Done" : "Manage"}
                       </Button>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1213,32 +1350,46 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                   </div>
 
                   <section
-                    className="mt-4 rounded-lg border p-3"
+                    className={`mt-3 rounded-lg border p-2.5 ${sidebarExpanded ? "overflow-visible" : "overflow-hidden"}`}
                     style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
                         Clusters
                       </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={openCreateCluster}
-                        disabled={showArchived}
-                      >
-                        New Cluster
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={openCreateCluster}
+                          disabled={showArchived}
+                        >
+                          New Cluster
+                        </Button>
+
+                        {chapterClusters.length > 0 && !showArchived && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setClusterManagerExpanded((value) => !value)}
+                          >
+                            {clusterManagerExpanded ? "Hide Manager" : "Manage Clusters"}
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="mt-2 flex flex-wrap gap-1.5">
+                    <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
                       <FilterChip
                         label={`All (${chapterTasks.length})`}
                         active={clusterFilterValue === ALL_CLUSTER_FILTER_VALUE}
+                        compact={sidebarExpanded}
                         onClick={() => setClusterFilterValue(ALL_CLUSTER_FILTER_VALUE)}
                       />
                       <FilterChip
                         label={`Unclustered (${unclusteredTaskCount})`}
                         active={clusterFilterValue === UNCLUSTERED_FILTER_VALUE}
+                        compact={sidebarExpanded}
                         onClick={() => setClusterFilterValue(UNCLUSTERED_FILTER_VALUE)}
                       />
                       {chapterClusters.map((cluster) => (
@@ -1246,17 +1397,18 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                           key={cluster.id}
                           label={`${cluster.name} (${clusterTaskCounts.get(cluster.id) ?? 0})`}
                           active={clusterFilterValue === cluster.id}
+                          compact={sidebarExpanded}
                           onClick={() => setClusterFilterValue(cluster.id)}
                         />
                       ))}
                     </div>
 
-                    {chapterClusters.length > 0 && !showArchived && (
-                      <div className="mt-3 space-y-1.5">
+                    {clusterManagerExpanded && chapterClusters.length > 0 && !showArchived && (
+                      <div className="mt-2 grid max-h-28 gap-1.5 overflow-y-auto pr-1">
                         {chapterClusters.map((cluster) => (
                           <div
                             key={`cluster-manage-${cluster.id}`}
-                            className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5"
+                            className="flex items-center justify-between gap-2 rounded-md border px-2 py-1"
                             style={{ borderColor: "var(--sh-border)" }}
                           >
                             <p className="min-w-0 truncate text-xs" style={{ color: "var(--sh-text-secondary)" }}>
@@ -1284,71 +1436,71 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
                   {manageMode && (
                     <section
-                      className="mt-3 rounded-lg border p-3"
+                      className="mt-2 rounded-lg border p-2.5"
                       style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.015)" }}
                     >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                          {selectedTaskIds.size} selected
-                        </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
+                            {selectedTaskIds.size} selected
+                          </span>
 
-                        <select
-                          value={assignClusterValue}
-                          onChange={(event) => setAssignClusterValue(event.target.value)}
-                          className="ui-input h-9 min-w-[180px]"
-                        >
-                          <option value={NONE_CLUSTER_VALUE}>Unclustered</option>
-                          {chapterClusters.map((cluster) => (
-                            <option key={`assign-${cluster.id}`} value={cluster.id}>
-                              {cluster.name}
-                            </option>
-                          ))}
-                        </select>
+                          <select
+                            value={assignClusterValue}
+                            onChange={(event) => setAssignClusterValue(event.target.value)}
+                            className="ui-input h-9 min-w-[180px]"
+                          >
+                            <option value={NONE_CLUSTER_VALUE}>Unclustered</option>
+                            {chapterClusters.map((cluster) => (
+                              <option key={`assign-${cluster.id}`} value={cluster.id}>
+                                {cluster.name}
+                              </option>
+                            ))}
+                          </select>
 
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => {
-                            void handleAssignSelectedTasksToCluster()
-                          }}
-                          disabled={selectedTaskIds.size === 0 || assigningCluster}
-                        >
-                          {assigningCluster ? "Applying..." : "Apply Cluster"}
-                        </Button>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => {
+                              void handleAssignSelectedTasksToCluster()
+                            }}
+                            disabled={selectedTaskIds.size === 0 || assigningCluster}
+                          >
+                            {assigningCluster ? "Applying..." : "Apply Cluster"}
+                          </Button>
 
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={toggleSelectVisibleTasks}
-                          disabled={visibleTasks.length === 0}
-                        >
-                          {allVisibleSelected ? "Unselect Visible" : "Select Visible"}
-                        </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={toggleSelectVisibleTasks}
+                            disabled={visibleTasks.length === 0}
+                          >
+                            {allVisibleSelected ? "Unselect Visible" : "Select Visible"}
+                          </Button>
 
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedTaskIds(new Set())}
-                          disabled={selectedTaskIds.size === 0}
-                        >
-                          Clear
-                        </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedTaskIds(new Set())}
+                            disabled={selectedTaskIds.size === 0}
+                          >
+                            Clear
+                          </Button>
 
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => {
-                            void handleDeleteSelectedTasks()
-                          }}
-                          disabled={selectedTaskIds.size === 0 || deletingSelectedTasks}
-                        >
-                          {deletingSelectedTasks ? "Deleting..." : "Delete Selected"}
-                        </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => {
+                              void handleDeleteSelectedTasks()
+                            }}
+                            disabled={selectedTaskIds.size === 0 || deletingSelectedTasks}
+                          >
+                            {deletingSelectedTasks ? "Deleting..." : "Delete Selected"}
+                          </Button>
                       </div>
                     </section>
                   )}
 
-                  <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
+                  <div className="mt-3 min-h-[55%] flex-1 overflow-y-auto pr-1">
                     <div className="space-y-2">
                       {visibleTasks.length === 0 && (
                         <div
@@ -1367,9 +1519,9 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                         >
                           <SortableContext
                             items={visibleTasks.map((task) => task.id)}
-                            strategy={verticalListSortingStrategy}
+                            strategy={rectSortingStrategy}
                           >
-                            <div className="space-y-2">
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                               {visibleTasks.map((task) => (
                                 <DraggableTaskRow
                                   key={task.id}
@@ -1378,6 +1530,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                                   isReordering={reorderingTaskIds.includes(task.id)}
                                   clusterName={task.clusterId ? clusterNameById.get(task.clusterId) ?? null : null}
                                   showClusterBadge={clusterFilterValue === ALL_CLUSTER_FILTER_VALUE}
+                                  showFullTitle={sidebarExpanded}
                                   canEdit={!showArchived}
                                   onToggle={(nextCompleted) => handleToggleTask(task.id, nextCompleted)}
                                   onEdit={() => openEditTask(task.id, task.title)}
@@ -1390,7 +1543,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                       )}
 
                       {visibleTasks.length > 0 && manageMode && (
-                        <div className="space-y-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                           {visibleTasks.map((task) => {
                             const isPending = pendingTaskIds.has(task.id)
                             const clusterName = task.clusterId ? clusterNameById.get(task.clusterId) ?? null : null
@@ -1398,7 +1551,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                             return (
                               <div
                                 key={task.id}
-                                className="group rounded-lg border px-3 py-2 transition-colors"
+                                className="group rounded-lg border px-2.5 py-1.5 transition-colors"
                                 style={{
                                   borderColor: "var(--sh-border)",
                                   background: task.completed
@@ -1406,7 +1559,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                                     : "rgba(255, 255, 255, 0.02)",
                                 }}
                               >
-                                <div className="flex items-center gap-2">
+                                <div className={`flex gap-1.5 ${sidebarExpanded ? "items-start" : "items-center"}`}>
                                   <input
                                     type="checkbox"
                                     checked={selectedTaskIds.has(task.id)}
@@ -1442,7 +1595,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                                   </button>
 
                                   <p
-                                    className={`min-w-0 flex-1 truncate text-sm font-medium ${task.completed ? "line-through opacity-60" : ""}`}
+                                    className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through opacity-60" : ""} ${sidebarExpanded ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}
                                     style={{ color: "var(--sh-text-primary)" }}
                                     title={task.title}
                                   >
@@ -1451,7 +1604,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
                                   {clusterFilterValue === ALL_CLUSTER_FILTER_VALUE && (
                                     <span
-                                      className="max-w-[120px] truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                                      className="max-w-[104px] truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
                                       style={{
                                         color: "var(--sh-text-secondary)",
                                         background: "rgba(255,255,255,0.06)",
@@ -1750,6 +1903,7 @@ interface DraggableTaskRowProps {
   isReordering: boolean
   clusterName: string | null
   showClusterBadge: boolean
+  showFullTitle: boolean
   canEdit: boolean
   onToggle: (completed: boolean) => void
   onEdit: () => void
@@ -1762,6 +1916,7 @@ function DraggableTaskRow({
   isReordering,
   clusterName,
   showClusterBadge,
+  showFullTitle,
   canEdit,
   onToggle,
   onEdit,
@@ -1786,9 +1941,9 @@ function DraggableTaskRow({
             : "rgba(255, 255, 255, 0.02)",
         cursor: isDragging ? "grabbing" : "grab",
       }}
-      className="group rounded-lg border px-3 py-2 transition-colors"
+      className="group rounded-lg border px-2.5 py-1.5 transition-colors"
     >
-      <div className="flex items-center gap-2">
+      <div className={`flex gap-1.5 ${showFullTitle ? "items-start" : "items-center"}`}>
         <button
           type="button"
           {...attributes}
@@ -1835,7 +1990,7 @@ function DraggableTaskRow({
         </button>
 
         <p
-          className={`min-w-0 flex-1 truncate text-sm font-medium ${task.completed ? "line-through opacity-60" : ""}`}
+          className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through opacity-60" : ""} ${showFullTitle ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}
           style={{ color: "var(--sh-text-primary)" }}
           title={task.title}
         >
@@ -1844,7 +1999,7 @@ function DraggableTaskRow({
 
         {showClusterBadge && (
           <span
-            className="max-w-[120px] truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
+            className="max-w-[104px] truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
             style={{
               color: "var(--sh-text-secondary)",
               background: "rgba(255,255,255,0.06)",
@@ -2031,15 +2186,16 @@ function NameModal({
 interface FilterChipProps {
   label: string
   active: boolean
+  compact?: boolean
   onClick: () => void
 }
 
-function FilterChip({ label, active, onClick }: FilterChipProps) {
+function FilterChip({ label, active, compact = false, onClick }: FilterChipProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded-full border px-2 py-1 text-[11px] font-semibold transition-colors"
+      className={`shrink-0 whitespace-nowrap rounded-full border font-semibold transition-colors ${compact ? "px-2 py-0.5 text-[10px] leading-tight" : "px-2 py-1 text-[11px]"}`}
       style={{
         borderColor: active ? "var(--sh-primary-glow)" : "var(--sh-border)",
         background: active ? "var(--sh-primary-muted)" : "transparent",

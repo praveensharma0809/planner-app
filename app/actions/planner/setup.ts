@@ -20,12 +20,29 @@ import type {
   PlanConfig,
   Subject,
   Subtopic,
+  Task,
   Topic,
   TopicParams,
 } from "@/lib/types/db"
 
+export interface StructureTask {
+  id: string
+  topic_id: string | null
+  subtopic_id: string | null
+  title: string
+  completed: boolean
+  duration_minutes: number
+  sort_order: number
+  created_at: string
+}
+
 export interface StructureTree {
-  subjects: (Subject & { topics: (Topic & { subtopics: Subtopic[] })[] })[]
+  subjects: (Subject & { topics: (Topic & { subtopics: Subtopic[]; tasks: StructureTask[] })[] })[]
+}
+
+export interface GetStructureOptions {
+  onlyUndoneTasks?: boolean
+  dropTopicsWithoutTasks?: boolean
 }
 
 interface SubjectInput {
@@ -189,7 +206,7 @@ function buildDraftConstraints(
   }
 }
 
-export async function getStructure(): Promise<GetStructureResponse> {
+export async function getStructure(options: GetStructureOptions = {}): Promise<GetStructureResponse> {
   const supabase = await createServerSupabaseClient()
   const {
     data: { user },
@@ -231,6 +248,25 @@ export async function getStructure(): Promise<GetStructureResponse> {
     subtopics = (subtopicRows ?? []) as Subtopic[]
   }
 
+  let tasks: Task[] = []
+  if (topicIds.length > 0) {
+    let query = supabase
+      .from("tasks")
+      .select("id, topic_id, subtopic_id, title, completed, duration_minutes, sort_order, created_at")
+      .eq("user_id", user.id)
+      .in("topic_id", topicIds)
+
+    if (options.onlyUndoneTasks) {
+      query = query.eq("completed", false)
+    }
+
+    const { data: taskRows } = await query
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
+
+    tasks = (taskRows ?? []) as Task[]
+  }
+
   const subtopicsByTopic = new Map<string, Subtopic[]>()
   for (const subtopic of subtopics ?? []) {
     const list = subtopicsByTopic.get(subtopic.topic_id) ?? []
@@ -238,20 +274,55 @@ export async function getStructure(): Promise<GetStructureResponse> {
     subtopicsByTopic.set(subtopic.topic_id, list)
   }
 
-  const topicsBySubject = new Map<string, (Topic & { subtopics: Subtopic[] })[]>()
+  const tasksByTopic = new Map<string, StructureTask[]>()
+  for (const task of tasks ?? []) {
+    if (!task.topic_id) continue
+    const list = tasksByTopic.get(task.topic_id) ?? []
+    list.push({
+      id: task.id,
+      topic_id: task.topic_id,
+      subtopic_id: task.subtopic_id,
+      title: task.title,
+      completed: task.completed,
+      duration_minutes: task.duration_minutes,
+      sort_order: task.sort_order,
+      created_at: task.created_at,
+    })
+    tasksByTopic.set(task.topic_id, list)
+  }
+
+  const topicsBySubject = new Map<string, (Topic & { subtopics: Subtopic[]; tasks: StructureTask[] })[]>()
   for (const topic of topics ?? []) {
+    const topicTasks = tasksByTopic.get(topic.id) ?? []
+
+    if (options.dropTopicsWithoutTasks && topicTasks.length === 0) {
+      continue
+    }
+
+    const rawSubtopics = subtopicsByTopic.get(topic.id) ?? []
+    const pendingSubtopicIds = new Set(
+      topicTasks
+        .map((task) => task.subtopic_id)
+        .filter((value): value is string => Boolean(value))
+    )
+    const scopedSubtopics = options.onlyUndoneTasks && pendingSubtopicIds.size > 0
+      ? rawSubtopics.filter((subtopic) => pendingSubtopicIds.has(subtopic.id))
+      : rawSubtopics
+
     const list = topicsBySubject.get(topic.subject_id) ?? []
-    list.push({ ...topic, subtopics: subtopicsByTopic.get(topic.id) ?? [] })
+    list.push({ ...topic, subtopics: scopedSubtopics, tasks: topicTasks })
     topicsBySubject.set(topic.subject_id, list)
   }
 
   return {
     status: "SUCCESS",
     tree: {
-      subjects: subjects.map((subject) => ({
-        ...subject,
-        topics: topicsBySubject.get(subject.id) ?? [],
-      })),
+      subjects: subjects
+        .map((subject) => ({
+          ...subject,
+          topics: topicsBySubject.get(subject.id) ?? [],
+        }))
+        .filter((subject) => subject.topics.length > 0 || !options.dropTopicsWithoutTasks),
     },
   }
 }
