@@ -18,7 +18,7 @@ export async function getSubjectById(subjectId: string): Promise<GetSubjectByIdR
 
   const { data, error } = await supabase
     .from("subjects")
-    .select("id, user_id, name, sort_order, archived, created_at")
+    .select("id, user_id, name, sort_order, archived, deadline, start_date, rest_after_days, created_at")
     .eq("id", subjectId)
     .eq("user_id", user.id)
     .single()

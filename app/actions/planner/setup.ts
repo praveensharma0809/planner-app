@@ -49,7 +49,9 @@ interface SubjectInput {
   id?: string
   name: string
   sort_order: number
-  deadline?: string
+  deadline?: string | null
+  start_date?: string | null
+  rest_after_days?: number
   topics: TopicInput[]
 }
 
@@ -85,15 +87,16 @@ interface PlanConfigInput {
   exam_date: string
   weekday_capacity_minutes: number
   weekend_capacity_minutes: number
-  plan_order: string
-  final_revision_days: number
-  buffer_percentage: number
-  max_active_subjects: number
+  max_active_subjects?: number
   day_of_week_capacity?: (number | null)[] | null
   custom_day_capacity?: Record<string, number> | null
-  plan_order_stack?: string[] | null
   flexibility_minutes?: number
   max_daily_minutes?: number
+  // Legacy compatibility fields retained for DB backward compatibility.
+  plan_order?: string
+  final_revision_days?: number
+  buffer_percentage?: number
+  plan_order_stack?: string[] | null
   max_topics_per_subject_per_day?: number
   min_subject_gap_days?: number
   subject_ordering?: Record<string, string> | null
@@ -152,6 +155,12 @@ function validateStructure(subjects: SubjectInput[]): string | null {
       return "Subject name is required."
     }
 
+    const subjectStart = normalizeOptionalDate(subject.start_date)
+    const subjectDeadline = normalizeOptionalDate(subject.deadline)
+    if (subjectStart && subjectDeadline && subjectStart > subjectDeadline) {
+      return `Subject "${subject.name.trim()}" start date must be on or before its deadline.`
+    }
+
     const topicNames = new Map<string, string>()
     for (const topic of subject.topics) {
       if (!topic.name.trim()) {
@@ -168,6 +177,17 @@ function validateStructure(subjects: SubjectInput[]): string | null {
   }
 
   return null
+}
+
+function normalizeOptionalDate(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function clampNonNegativeInteger(value: number | null | undefined): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, Math.trunc(value ?? 0))
 }
 
 function emptyFeasibility(): FeasibilityResult {
@@ -215,7 +235,7 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
 
   const { data: subjects } = await supabase
     .from("subjects")
-    .select("id, user_id, name, sort_order, archived, deadline, created_at")
+    .select("id, user_id, name, sort_order, archived, deadline, start_date, rest_after_days, created_at")
     .eq("user_id", user.id)
     .eq("archived", false)
     .order("sort_order", { ascending: true })
@@ -428,7 +448,9 @@ export async function saveStructure(
         .update({
           name: subject.name.trim(),
           sort_order: subject.sort_order,
-          deadline: subject.deadline ?? null,
+          deadline: normalizeOptionalDate(subject.deadline),
+          start_date: normalizeOptionalDate(subject.start_date),
+          rest_after_days: clampNonNegativeInteger(subject.rest_after_days),
         })
         .eq("id", subjectId)
         .eq("user_id", user.id)
@@ -440,7 +462,9 @@ export async function saveStructure(
           user_id: user.id,
           name: subject.name.trim(),
           sort_order: subject.sort_order,
-          deadline: subject.deadline ?? null,
+          deadline: normalizeOptionalDate(subject.deadline),
+          start_date: normalizeOptionalDate(subject.start_date),
+          rest_after_days: clampNonNegativeInteger(subject.rest_after_days),
           archived: false,
         })
         .select("id")
@@ -541,6 +565,8 @@ export async function saveTopicParams(
 
   const normalizedParams = params.map((param) => ({
     ...param,
+    deadline: normalizeOptionalDate(param.deadline),
+    earliest_start: normalizeOptionalDate(param.earliest_start),
     depends_on: [
       ...new Set(param.depends_on.filter((depId) => depId !== param.topic_id)),
     ],
@@ -578,7 +604,7 @@ export async function saveTopicParams(
   const topicIds = [...new Set(normalizedParams.map((param) => param.topic_id))]
   const { data: topicRows, error: topicError } = await supabase
     .from("topics")
-    .select("id, name")
+    .select("id, name, subject_id")
     .eq("user_id", user.id)
     .in("id", topicIds)
 
@@ -586,16 +612,87 @@ export async function saveTopicParams(
 
   const knownTopics = topicRows ?? []
   const knownTopicIds = new Set(knownTopics.map((topic) => topic.id))
+  const knownTopicMap = new Map(knownTopics.map((topic) => [topic.id, topic]))
   const topicNameMap = new Map(knownTopics.map((topic) => [topic.id, topic.name]))
 
+  const subjectIds = [...new Set(knownTopics.map((topic) => topic.subject_id))]
+  let subjectRows: Array<{ id: string; name: string; start_date: string | null; deadline: string | null }> = []
+  if (subjectIds.length > 0) {
+    const { data, error: subjectError } = await supabase
+      .from("subjects")
+      .select("id, name, start_date, deadline")
+      .eq("user_id", user.id)
+      .in("id", subjectIds)
+
+    if (subjectError) return { status: "ERROR", message: subjectError.message }
+    subjectRows = (data ?? []) as Array<{
+      id: string
+      name: string
+      start_date: string | null
+      deadline: string | null
+    }>
+  }
+
+  const subjectMap = new Map((subjectRows ?? []).map((subject) => [subject.id, subject]))
+
   for (const param of normalizedParams) {
-    if (!knownTopicIds.has(param.topic_id)) {
+    const topic = knownTopicMap.get(param.topic_id)
+    if (!topic || !knownTopicIds.has(param.topic_id)) {
       return { status: "ERROR", message: "A selected topic could not be found." }
     }
+
     if (param.depends_on.some((depId) => !knownTopicIds.has(depId))) {
       return {
         status: "ERROR",
         message: "Dependencies must point to topics in the current plan.",
+      }
+    }
+
+    const subject = subjectMap.get(topic.subject_id)
+    if (!subject) {
+      return {
+        status: "ERROR",
+        message: `Subject not found for topic "${topic.name}".`,
+      }
+    }
+
+    const subjectStart = normalizeOptionalDate(subject.start_date)
+    const subjectDeadline = normalizeOptionalDate(subject.deadline)
+    const topicStart = normalizeOptionalDate(param.earliest_start)
+    const topicDeadline = normalizeOptionalDate(param.deadline)
+
+    if (subjectStart && subjectDeadline && subjectStart > subjectDeadline) {
+      return {
+        status: "ERROR",
+        message: `Subject "${subject.name}" start date must be on or before its deadline.`,
+      }
+    }
+
+    if (topicStart && topicDeadline && topicStart > topicDeadline) {
+      return {
+        status: "ERROR",
+        message: `Chapter "${topic.name}" start date must be on or before its deadline.`,
+      }
+    }
+
+    if (subjectStart && topicStart && topicStart < subjectStart) {
+      return {
+        status: "ERROR",
+        message: `Chapter "${topic.name}" cannot start before subject "${subject.name}" start date.`,
+      }
+    }
+
+    if (subjectDeadline && topicDeadline && topicDeadline > subjectDeadline) {
+      return {
+        status: "ERROR",
+        message: `Chapter "${topic.name}" deadline cannot be after subject "${subject.name}" deadline.`,
+      }
+    }
+
+    if (subjectStart && topicDeadline && topicDeadline < subjectStart) {
+      return {
+        status: "ERROR",
+        message: `Chapter "${topic.name}" deadline cannot be before subject "${subject.name}" start date.`,
       }
     }
   }
@@ -694,7 +791,8 @@ export async function savePlanConfig(
   }
 
   const validOrders = ["priority", "deadline", "subject", "balanced"]
-  if (!validOrders.includes(config.plan_order)) {
+  const normalizedPlanOrder = config.plan_order ?? "balanced"
+  if (config.plan_order && !validOrders.includes(config.plan_order)) {
     return { status: "ERROR", message: "Invalid plan generation order." }
   }
 
@@ -704,30 +802,20 @@ export async function savePlanConfig(
     exam_date: config.exam_date,
     weekday_capacity_minutes: config.weekday_capacity_minutes,
     weekend_capacity_minutes: config.weekend_capacity_minutes,
-    plan_order: config.plan_order,
-    final_revision_days: Math.max(0, config.final_revision_days),
-    buffer_percentage: Math.min(50, Math.max(0, config.buffer_percentage)),
+    plan_order: normalizedPlanOrder,
+    final_revision_days: Math.max(0, config.final_revision_days ?? 0),
+    buffer_percentage: Math.min(50, Math.max(0, config.buffer_percentage ?? 0)),
     max_active_subjects: Math.max(0, config.max_active_subjects ?? 0),
+    day_of_week_capacity:
+      config.day_of_week_capacity ?? [null, null, null, null, null, null, null],
+    custom_day_capacity: config.custom_day_capacity ?? {},
+    flexibility_minutes: Math.max(0, config.flexibility_minutes ?? 0),
+    max_daily_minutes: Math.min(720, Math.max(30, config.max_daily_minutes ?? 480)),
     updated_at: new Date().toISOString(),
   }
 
-  if (config.day_of_week_capacity !== undefined) {
-    upsertData.day_of_week_capacity = config.day_of_week_capacity
-  }
-  if (config.custom_day_capacity !== undefined) {
-    upsertData.custom_day_capacity = config.custom_day_capacity
-  }
   if (config.plan_order_stack !== undefined) {
     upsertData.plan_order_stack = config.plan_order_stack
-  }
-  if (config.flexibility_minutes != null) {
-    upsertData.flexibility_minutes = Math.max(0, config.flexibility_minutes)
-  }
-  if (config.max_daily_minutes != null) {
-    upsertData.max_daily_minutes = Math.min(
-      720,
-      Math.max(30, config.max_daily_minutes)
-    )
   }
   if (config.max_topics_per_subject_per_day != null) {
     upsertData.max_topics_per_subject_per_day = Math.max(
@@ -788,11 +876,28 @@ export async function getDraftFeasibility(
   const topics = (topicRows ?? []) as Pick<Topic, "id" | "subject_id" | "name">[]
   const subjectIds = [...new Set(topics.map((topic) => topic.subject_id))]
 
-  const { data: subjectRows } = await supabase
-    .from("subjects")
-    .select("id, name")
-    .eq("user_id", user.id)
-    .in("id", subjectIds)
+  let subjectRows: Array<{
+    id: string
+    name: string
+    deadline: string | null
+    start_date: string | null
+    rest_after_days: number | null
+  }> = []
+  if (subjectIds.length > 0) {
+    const { data } = await supabase
+      .from("subjects")
+      .select("id, name, deadline, start_date, rest_after_days")
+      .eq("user_id", user.id)
+      .in("id", subjectIds)
+
+    subjectRows = (data ?? []) as Array<{
+      id: string
+      name: string
+      deadline: string | null
+      start_date: string | null
+      rest_after_days: number | null
+    }>
+  }
 
   const { data: offDayRows } = await supabase
     .from("off_days")
@@ -800,32 +905,31 @@ export async function getDraftFeasibility(
     .eq("user_id", user.id)
 
   const paramMap = new Map(activeParams.map((param) => [param.topic_id, param]))
-  const subjectNameMap = new Map(
-    ((subjectRows ?? []) as Pick<Subject, "id" | "name">[]).map((subject) => [
-      subject.id,
-      subject.name,
-    ])
-  )
+  const subjectMap = new Map(subjectRows.map((subject) => [subject.id, subject]))
 
   const units: PlannableUnit[] = topics.flatMap((topic) => {
     const param = paramMap.get(topic.id)
+    const subject = subjectMap.get(topic.subject_id)
     if (!param || param.estimated_hours <= 0) {
       return []
     }
+
+    const topicDeadline = normalizeOptionalDate(param.deadline)
+    const topicStart = normalizeOptionalDate(param.earliest_start)
 
     return [
       {
         id: topic.id,
         subject_id: topic.subject_id,
-        subject_name: subjectNameMap.get(topic.subject_id) ?? "Unknown",
+        subject_name: subject?.name ?? "Unknown",
         topic_name: topic.name,
         estimated_minutes: Math.round(param.estimated_hours * 60),
         session_length_minutes: param.session_length_minutes,
         priority: 3,
-        deadline: param.deadline || config.exam_date,
-        earliest_start: param.earliest_start || undefined,
+        deadline: topicDeadline || normalizeOptionalDate(subject?.deadline) || config.exam_date,
+        earliest_start: topicStart || normalizeOptionalDate(subject?.start_date) || undefined,
         depends_on: param.depends_on,
-        rest_after_days: param.rest_after_days,
+        rest_after_days: param.rest_after_days ?? subject?.rest_after_days ?? 0,
         max_sessions_per_day: param.max_sessions_per_day,
         study_frequency:
           param.study_frequency === "spaced" ? "spaced" : "daily",

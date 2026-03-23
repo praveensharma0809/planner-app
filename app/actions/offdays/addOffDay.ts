@@ -38,5 +38,6 @@ export async function addOffDay(input: AddOffDayInput) {
   }
 
   revalidatePath("/dashboard/settings")
+  revalidatePath("/planner")
   return { status: "SUCCESS" as const, id: data.id as string }
 }

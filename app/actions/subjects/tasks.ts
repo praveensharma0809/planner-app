@@ -2,6 +2,10 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import {
+  MAX_SESSION_LENGTH_MINUTES,
+  MIN_SESSION_LENGTH_MINUTES,
+} from "@/lib/planner/draft"
 
 type TaskNamingPlacement = "suffix" | "prefix"
 
@@ -38,6 +42,17 @@ type DeleteSubjectTasksInput = {
   taskIds: string[]
 }
 
+type UpdateTaskDurationInput = {
+  taskId: string
+  durationMinutes: number
+}
+
+type BulkUpdateTaskDurationInput = {
+  chapterId: string
+  taskIds: string[]
+  durationMinutes: number
+}
+
 type CreateSubjectTaskResponse =
   | { status: "UNAUTHORIZED" }
   | { status: "ERROR"; message: string }
@@ -58,6 +73,11 @@ type DeleteSubjectTasksResponse =
   | { status: "ERROR"; message: string }
   | { status: "SUCCESS"; deletedCount: number }
 
+type BulkUpdateTaskDurationResponse =
+  | { status: "UNAUTHORIZED" }
+  | { status: "ERROR"; message: string }
+  | { status: "SUCCESS"; updatedCount: number }
+
 const DEFAULT_DURATION_MINUTES = 60
 const DEFAULT_PRIORITY = 3
 
@@ -70,6 +90,12 @@ function revalidateTaskViews() {
   revalidatePath("/dashboard")
   revalidatePath("/dashboard/calendar")
   revalidatePath("/schedule")
+  revalidatePath("/planner")
+}
+
+function normalizeDurationMinutes(rawMinutes: number): number {
+  const parsed = Number.isFinite(rawMinutes) ? Math.trunc(rawMinutes) : MIN_SESSION_LENGTH_MINUTES
+  return clampNumber(parsed, MIN_SESSION_LENGTH_MINUTES, MAX_SESSION_LENGTH_MINUTES)
 }
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -406,6 +432,108 @@ export async function updateSubjectTaskTitle(taskId: string, title: string): Pro
   revalidateTaskViews()
 
   return { status: "SUCCESS" }
+}
+
+export async function updateSubjectTaskDuration(
+  input: UpdateTaskDurationInput
+): Promise<TaskActionResponse> {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { status: "UNAUTHORIZED" }
+  }
+
+  if (!input.taskId || typeof input.taskId !== "string") {
+    return { status: "ERROR", message: "Task ID is required." }
+  }
+
+  const durationMinutes = normalizeDurationMinutes(input.durationMinutes)
+
+  const { data: existing, error: existingError } = await supabase
+    .from("tasks")
+    .select("id")
+    .eq("id", input.taskId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (existingError) {
+    return { status: "ERROR", message: existingError.message }
+  }
+
+  if (!existing) {
+    return { status: "ERROR", message: "Task not found." }
+  }
+
+  const { error: updateError } = await supabase
+    .from("tasks")
+    .update({ duration_minutes: durationMinutes })
+    .eq("id", input.taskId)
+    .eq("user_id", user.id)
+
+  if (updateError) {
+    return { status: "ERROR", message: updateError.message }
+  }
+
+  revalidateTaskViews()
+  return { status: "SUCCESS" }
+}
+
+export async function bulkUpdateSubjectTaskDuration(
+  input: BulkUpdateTaskDurationInput
+): Promise<BulkUpdateTaskDurationResponse> {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { status: "UNAUTHORIZED" }
+  }
+
+  const chapter = await resolveChapter(input.chapterId, user.id)
+  if (!chapter.ok) {
+    return { status: "ERROR", message: chapter.message }
+  }
+
+  const uniqueTaskIds = Array.from(new Set(input.taskIds.filter(Boolean)))
+  if (uniqueTaskIds.length === 0) {
+    return { status: "ERROR", message: "Select at least one task." }
+  }
+
+  const durationMinutes = normalizeDurationMinutes(input.durationMinutes)
+
+  const { data: existingTasks, error: existingTasksError } = await supabase
+    .from("tasks")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("topic_id", input.chapterId)
+    .in("id", uniqueTaskIds)
+
+  if (existingTasksError) {
+    return { status: "ERROR", message: existingTasksError.message }
+  }
+
+  if ((existingTasks?.length ?? 0) !== uniqueTaskIds.length) {
+    return { status: "ERROR", message: "Some selected tasks were not found." }
+  }
+
+  const { data: updatedRows, error: updateError } = await supabase
+    .from("tasks")
+    .update({ duration_minutes: durationMinutes })
+    .eq("user_id", user.id)
+    .eq("topic_id", input.chapterId)
+    .in("id", uniqueTaskIds)
+    .select("id")
+
+  if (updateError) {
+    return { status: "ERROR", message: updateError.message }
+  }
+
+  revalidateTaskViews()
+  return { status: "SUCCESS", updatedCount: updatedRows?.length ?? uniqueTaskIds.length }
 }
 
 export async function deleteSubjectTask(taskId: string): Promise<TaskActionResponse> {

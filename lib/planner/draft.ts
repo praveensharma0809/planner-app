@@ -274,9 +274,9 @@ export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
         },
         {
           id: "jump-phase-3",
-          label: "Go to constraints",
+          label: "Go to intake",
           kind: "jump",
-          jumpPhase: 3,
+          jumpPhase: 1,
         },
       ],
     })
@@ -370,15 +370,15 @@ export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
           },
           {
             id: "unscheduled-jump-2",
-            label: "Go to topic setup",
+            label: "Go to intake",
             kind: "jump",
-            jumpPhase: 2,
+            jumpPhase: 1,
           },
           {
             id: "unscheduled-jump-3",
-            label: "Go to constraints",
+            label: "Go to intake",
             kind: "jump",
-            jumpPhase: 3,
+            jumpPhase: 1,
           },
         ],
       })
@@ -418,15 +418,15 @@ export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
           },
           {
             id: "impossible-jump-2",
-            label: "Go to topic setup",
+            label: "Go to intake",
             kind: "jump",
-            jumpPhase: 2,
+            jumpPhase: 1,
           },
           {
             id: "impossible-jump-3",
-            label: "Go to constraints",
+            label: "Go to intake",
             kind: "jump",
-            jumpPhase: 3,
+            jumpPhase: 1,
           },
         ],
       })
@@ -519,15 +519,15 @@ export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
         options: [
           {
             id: "late-jump-2",
-            label: "Go to topic setup",
+            label: "Go to intake",
             kind: "jump",
-            jumpPhase: 2,
+            jumpPhase: 1,
           },
           {
             id: "late-jump-3",
-            label: "Go to constraints",
+            label: "Go to intake",
             kind: "jump",
-            jumpPhase: 3,
+            jumpPhase: 1,
           },
         ],
       })

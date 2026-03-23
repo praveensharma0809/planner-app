@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState } from "react"
 import type { ScheduledSession, FeasibilityResult } from "@/lib/planner/engine"
@@ -38,7 +38,7 @@ export default function PlanConfirm({
         sessions[0].scheduled_date)
     : null
   const summaryPlaceholder = newPlanStart
-    ? `Plan from ${newPlanStart} · ${sessions.length} session${sessions.length === 1 ? "" : "s"}`
+    ? `Plan from ${newPlanStart} ┬╖ ${sessions.length} session${sessions.length === 1 ? "" : "s"}`
     : `Committed ${sessions.length} session${sessions.length === 1 ? "" : "s"}`
 
   const keepOptions: { value: KeepPreviousMode; label: string; desc: string; color: string }[] = [
@@ -58,7 +58,7 @@ export default function PlanConfirm({
     },
     {
       value: "merge",
-      label: "Merge — keep all, add new",
+      label: "Merge ΓÇö keep all, add new",
       desc: "Keep all existing tasks and add new sessions alongside them. Nothing is deleted.",
       color: "purple",
     },
@@ -78,7 +78,7 @@ export default function PlanConfirm({
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <div className="w-1 h-4 bg-gradient-to-b from-emerald-400 to-teal-500 rounded-full" />
-              <p className="text-[10px] text-emerald-400/80 uppercase tracking-widest font-semibold">Phase 5</p>
+              <p className="text-[10px] text-emerald-400/80 uppercase tracking-widest font-semibold">Phase 3</p>
             </div>
             <h2 className="text-lg font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
               Confirm & Commit
@@ -90,7 +90,7 @@ export default function PlanConfirm({
               {sessions.length} sessions
             </span>
             <span className="px-2 py-0.5 bg-teal-500/10 border border-teal-500/20 rounded-md text-teal-300 font-medium">
-              {uniqueDays} days · {Math.round(totalMinutes / 60)}h
+              {uniqueDays} days ┬╖ {Math.round(totalMinutes / 60)}h
             </span>
           </div>
         </div>
@@ -113,7 +113,7 @@ export default function PlanConfirm({
 
       {!feasibility.feasible && (
         <div className="bg-amber-500/[0.06] border border-amber-500/20 rounded-xl p-3 text-xs text-amber-300">
-          <span className="font-semibold">Warning:</span> The plan may not cover all topics fully. You can still commit or go back to Phase 2/3 to adjust.
+          <span className="font-semibold">Warning:</span> The plan may not cover all topics fully. You can still commit or go back to Phase 1/2 to adjust.
         </div>
       )}
 
@@ -200,15 +200,15 @@ export default function PlanConfirm({
       {/* What happens note */}
       <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 space-y-1 text-[11px] text-white/35">
         <div className="font-medium text-white/50 mb-1.5">After committing:</div>
-        <div>• Manually created tasks are always preserved</div>
-        <div>• A snapshot of this plan is saved for history</div>
-        <div>• You can return here any time and commit a new version</div>
+        <div>ΓÇó Manually created tasks are always preserved</div>
+        <div>ΓÇó A snapshot of this plan is saved for history</div>
+        <div>ΓÇó You can return here any time and commit a new version</div>
       </div>
 
       {/* Commit result messages */}
       {commitResult?.status === "SUCCESS" && (
         <div className="bg-emerald-500/[0.06] border border-emerald-500/15 rounded-xl p-3 text-sm text-emerald-300">
-          ✓ Plan committed — {commitResult.taskCount} tasks created. You can still make changes and recommit.
+          Γ£ô Plan committed ΓÇö {commitResult.taskCount} tasks created. You can still make changes and recommit.
         </div>
       )}
       {commitResult?.status === "ERROR" && (
@@ -230,8 +230,8 @@ export default function PlanConfirm({
             : isCommitting
             ? "Committing..."
             : commitResult?.status === "SUCCESS"
-              ? "Recommit Plan →"
-              : "Commit Plan →"}
+              ? "Recommit Plan ΓåÆ"
+              : "Commit Plan ΓåÆ"}
         </button>
       </div>
     </div>

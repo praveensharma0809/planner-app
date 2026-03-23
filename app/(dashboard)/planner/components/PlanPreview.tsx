@@ -1,9 +1,11 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useMemo, useState } from "react"
-import type { PlannerSubjectOption } from "@/lib/planner/draft"
+import type {
+  PlannerConstraintValues as ConstraintValues,
+  PlannerSubjectOption,
+} from "@/lib/planner/draft"
 import type { ScheduledSession, FeasibilityResult } from "@/lib/planner/engine"
-import type { ConstraintValues } from "./ConstraintsForm"
 
 interface PreviewTopicOption {
   id: string
@@ -95,7 +97,7 @@ function sortPreviewSessions(sessions: ScheduledSession[]) {
 function getFitStatus(feasibility: FeasibilityResult, droppedSessions: number, flexDays: number) {
   if (feasibility.feasible) {
     return {
-      badge: "✅ Relaxed",
+      badge: "Γ£à Relaxed",
       detail: `${minToHuman(Math.max(0, feasibility.totalSlotsAvailable - feasibility.totalSessionsNeeded))} spare`,
       className: "bg-emerald-500/10 border-emerald-500/30 text-emerald-300",
     }
@@ -103,14 +105,14 @@ function getFitStatus(feasibility: FeasibilityResult, droppedSessions: number, f
 
   if (feasibility.flexFeasible) {
     return {
-      badge: "⚡ Snug",
+      badge: "ΓÜí Snug",
       detail: `${flexDays} flex day${flexDays === 1 ? "" : "s"}`,
       className: "bg-amber-500/10 border-amber-500/30 text-amber-300",
     }
   }
 
   return {
-    badge: "🔴 Overloaded",
+    badge: "≡ƒö┤ Overloaded",
     detail: droppedSessions > 0
       ? `${droppedSessions} session${droppedSessions === 1 ? "" : "s"} missing`
       : `${Math.ceil(feasibility.globalGap / 60)}h short`,
@@ -120,9 +122,9 @@ function getFitStatus(feasibility: FeasibilityResult, droppedSessions: number, f
 
 function buildManualTitle(topic: PreviewTopicOption, note: string) {
   if (!note.trim()) {
-    return `${topic.subjectName} – ${topic.topicName} (Manual)`
+    return `${topic.subjectName} ΓÇô ${topic.topicName} (Manual)`
   }
-  return `${topic.subjectName} – ${topic.topicName} · ${note.trim()}`
+  return `${topic.subjectName} ΓÇô ${topic.topicName} ┬╖ ${note.trim()}`
 }
 
 export default function PlanPreview({
@@ -205,7 +207,7 @@ export default function PlanPreview({
   const totalDays = grouped.length
   const totalMinutes = localSessions.reduce((sum, session) => sum + session.duration_minutes, 0)
   const avgPerDay = totalDays > 0 ? Math.round(totalMinutes / totalDays) : 0
-  const lastDay = grouped.length > 0 ? grouped[grouped.length - 1].date : "—"
+  const lastDay = grouped.length > 0 ? grouped[grouped.length - 1].date : "ΓÇö"
   const pinnedCount = localSessions.filter((session) => session.is_pinned && !session.is_manual).length
   const manualCount = localSessions.filter((session) => session.is_manual).length
   const reservedSessions = localSessions.filter((session) => session.is_pinned || session.is_manual)
@@ -378,7 +380,7 @@ export default function PlanPreview({
         level: "critical",
         message: `${droppedSessions} session(s) could not be scheduled (${totalSessions}/${expectedSessionCount} placed).`,
         fix: "Increase daily capacity or extend exam date to fit all sessions.",
-        targetPhase: 3,
+        targetPhase: 1,
       })
     }
 
@@ -391,15 +393,15 @@ export default function PlanPreview({
         level: "critical",
         message: `${impossible.length} topic(s) can't fit in their time window at all.`,
         fix: "Extend deadlines or reduce estimated hours for these topics.",
-        targetPhase: 2,
+        targetPhase: 1,
       })
     }
     if (risky.length > 0) {
       issues.push({
         level: "warning",
-        message: `${risky.length} topic(s) at risk — very tight on deadline.`,
+        message: `${risky.length} topic(s) at risk ΓÇö very tight on deadline.`,
         fix: "Increase daily capacity or push deadlines back slightly.",
-        targetPhase: 3,
+        targetPhase: 1,
       })
     }
     if (tight.length > 0) {
@@ -415,16 +417,16 @@ export default function PlanPreview({
         level: "critical",
         message: `Total work exceeds available capacity by ${gapHours}h.`,
         fix: "Increase daily study hours or reduce topic effort.",
-        targetPhase: 3,
+        targetPhase: 1,
       })
     }
 
     if (busiestDay && busiestDay.totalMinutes >= Math.max(360, avgPerDay + 150)) {
       issues.push({
         level: "warning",
-        message: `Peak day (${busiestDay.date}) has ${minToHuman(busiestDay.totalMinutes)} of study — potentially exhausting.`,
+        message: `Peak day (${busiestDay.date}) has ${minToHuman(busiestDay.totalMinutes)} of study ΓÇö potentially exhausting.`,
         fix: "Reduce session lengths or set focus depth to smooth workload.",
-        targetPhase: 3,
+        targetPhase: 1,
       })
     }
 
@@ -433,7 +435,7 @@ export default function PlanPreview({
         level: "warning",
         message: `Daily load varies by ${minToHuman(loadSpread)} (${minToHuman(lightestDay?.totalMinutes ?? 0)} to ${minToHuman(busiestDay?.totalMinutes ?? 0)}).`,
         fix: "Add buffer % and focus depth to flatten daily spikes.",
-        targetPhase: 3,
+        targetPhase: 1,
       })
     }
 
@@ -441,25 +443,25 @@ export default function PlanPreview({
       if (constraints.flexibility_minutes === 0 && constraints.buffer_percentage === 0) {
         issues.push({
           level: "warning",
-          message: "No flexibility allowance or buffer — no slack for missed sessions or off days.",
-          fix: "Set flexibility allowance (+30–60m) or buffer in constraints.",
-          targetPhase: 3,
+          message: "No flexibility allowance or buffer ΓÇö no slack for missed sessions or off days.",
+          fix: "Set flexibility allowance (+30ΓÇô60m) or buffer in constraints.",
+          targetPhase: 1,
         })
       }
       if (constraints.final_revision_days === 0) {
         issues.push({
           level: "info",
           message: "No revision days reserved before exam.",
-          fix: "Reserve 2–5 revision days in constraints.",
-          targetPhase: 3,
+          fix: "Reserve 2ΓÇô5 revision days in constraints.",
+          targetPhase: 1,
         })
       }
       if (constraints.max_active_subjects === 0 && subjectCount >= 4) {
         issues.push({
           level: "info",
-          message: `All ${subjectCount} subjects active daily — heavy context switching.`,
-          fix: "Set focus depth to 2–3 subjects/day for deeper work.",
-          targetPhase: 3,
+          message: `All ${subjectCount} subjects active daily ΓÇö heavy context switching.`,
+          fix: "Set focus depth to 2ΓÇô3 subjects/day for deeper work.",
+          targetPhase: 1,
         })
       }
     }
@@ -467,7 +469,7 @@ export default function PlanPreview({
     const generationNotes: string[] = []
     if (constraints) {
       if (constraints.plan_order_stack && constraints.plan_order_stack.length > 0) {
-        generationNotes.push(`Order: ${constraints.plan_order_stack.slice(0, 3).join(" → ")}`)
+        generationNotes.push(`Order: ${constraints.plan_order_stack.slice(0, 3).join(" ΓåÆ ")}`)
       } else {
         const planOrderLabel: Record<string, string> = {
           balanced: "Balanced urgency",
@@ -500,7 +502,7 @@ export default function PlanPreview({
     const fixMap = new Map<string, number>()
     for (const issue of issues) {
       if (issue.fix && !fixMap.has(issue.fix)) {
-        fixMap.set(issue.fix, issue.targetPhase ?? 3)
+        fixMap.set(issue.fix, issue.targetPhase ?? 1)
       }
     }
 
@@ -537,7 +539,7 @@ export default function PlanPreview({
     const hyphenPrefix = `${subjectLabel} - `
     if (title.startsWith(hyphenPrefix)) return title.slice(hyphenPrefix.length)
 
-    const enDashPrefix = `${subjectLabel} – `
+    const enDashPrefix = `${subjectLabel} ΓÇô `
     if (title.startsWith(enDashPrefix)) return title.slice(enDashPrefix.length)
 
     return title
@@ -552,7 +554,7 @@ export default function PlanPreview({
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             <p className="text-xs text-white/30 uppercase tracking-widest font-medium">
-              Phase 4
+              Phase 2
             </p>
             <h2 className="text-xl font-semibold">Plan Preview</h2>
           </div>
@@ -570,7 +572,7 @@ export default function PlanPreview({
               {planReview.topicCount} topics
             </span>
             <span className={`text-[11px] px-2 py-0.5 rounded-md border font-medium ${planReview.fitStatus.className}`}>
-              {planReview.fitStatus.badge} · {planReview.fitStatus.detail}
+              {planReview.fitStatus.badge} ┬╖ {planReview.fitStatus.detail}
             </span>
             {planReview.droppedSessions > 0 && (
               <span className="text-[11px] px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/30 text-red-300 font-medium">
@@ -700,7 +702,7 @@ export default function PlanPreview({
             </p>
             <div className="space-y-1.5">
               {planReview.issues.length === 0 && (
-                <p className="text-xs text-emerald-300/80">All clear — looks good to commit.</p>
+                <p className="text-xs text-emerald-300/80">All clear ΓÇö looks good to commit.</p>
               )}
               {planReview.issues.slice(0, 5).map((issue, idx) => (
                 <div key={`${issue.message}-${idx}`} className="flex items-start gap-1.5">
@@ -748,7 +750,7 @@ export default function PlanPreview({
                       onClick={() => onGoToPhase(fix.targetPhase)}
                       className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 text-sky-300 hover:bg-sky-500/25 hover:border-sky-500/50 transition-all"
                     >
-                      Fix in Phase {fix.targetPhase} →
+                      Fix in Phase {fix.targetPhase} ΓåÆ
                     </button>
                   )}
                 </div>
@@ -768,7 +770,7 @@ export default function PlanPreview({
                 <div key={topic.unitId} className="flex items-start justify-between gap-3 text-xs">
                   <span className="text-white/70 leading-relaxed">{topic.name}</span>
                   <span className="shrink-0 text-red-300/90">
-                    {topic.droppedSessions} missing · {topic.placedSessions}/{topic.totalSessions}
+                    {topic.droppedSessions} missing ┬╖ {topic.placedSessions}/{topic.totalSessions}
                   </span>
                 </div>
               ))}
@@ -799,13 +801,13 @@ export default function PlanPreview({
                   <span className="font-semibold text-sm">{bucket.date}</span>
                   {isFlexDay && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold">
-                      ⚡ +{flexExtra}m flex
+                      ΓÜí +{flexExtra}m flex
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <div className="text-xs text-white/40">
-                    {bucket.sessions.length} sessions · {bucket.totalMinutes} min
+                    {bucket.sessions.length} sessions ┬╖ {bucket.totalMinutes} min
                   </div>
                   <button
                     type="button"
@@ -918,7 +920,7 @@ export default function PlanPreview({
                         {subject.subjectLabel}
                       </div>
                       <div className="text-[11px] text-white/45 shrink-0">
-                        {subject.items.length} sessions · {subject.totalMinutes} min
+                        {subject.items.length} sessions ┬╖ {subject.totalMinutes} min
                       </div>
                     </div>
                     <div className="space-y-1 p-2">
@@ -941,7 +943,7 @@ export default function PlanPreview({
                             }`}
                           >
                             <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-[10px] text-white/25">⋮⋮</span>
+                              <span className="text-[10px] text-white/25">Γï«Γï«</span>
                               <span className="text-xs truncate">
                                 {stripSubjectPrefix(session.title, subject.subjectLabel)}
                               </span>
@@ -961,7 +963,7 @@ export default function PlanPreview({
                                 </span>
                               )}
                               {session.is_topic_final_session && (
-                                <span className="text-[9px]" title="Final session for this topic">🎯</span>
+                                <span className="text-[9px]" title="Final session for this topic">≡ƒÄ»</span>
                               )}
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
@@ -983,7 +985,7 @@ export default function PlanPreview({
                                   className={`text-xs ${session.is_pinned ? "text-sky-300" : "text-white/35 hover:text-white/70"}`}
                                   title={session.is_pinned ? "Unpin session" : "Pin session"}
                                 >
-                                  📌
+                                  ≡ƒôî
                                 </button>
                               )}
                               <button
@@ -995,7 +997,7 @@ export default function PlanPreview({
                                 className={`text-xs ${isSwapSource ? "text-fuchsia-300" : "text-white/35 hover:text-white/70"}`}
                                 title="Swap with another session"
                               >
-                                ⇄
+                                Γçä
                               </button>
                               <button
                                 type="button"
@@ -1006,7 +1008,7 @@ export default function PlanPreview({
                                 className="text-red-400/40 hover:text-red-400 text-xs"
                                 title="Remove from preview"
                               >
-                                ×
+                                ├ù
                               </button>
                             </div>
                           </div>

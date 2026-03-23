@@ -49,8 +49,14 @@ describe("saveTopicParams", () => {
     const upsertMock = vi.fn()
     const topicsInMock = vi.fn().mockResolvedValue({
       data: [
-        { id: "topic-1", name: "Algebra" },
-        { id: "topic-2", name: "Geometry" },
+        { id: "topic-1", name: "Algebra", subject_id: "subject-1" },
+        { id: "topic-2", name: "Geometry", subject_id: "subject-1" },
+      ],
+      error: null,
+    })
+    const subjectsInMock = vi.fn().mockResolvedValue({
+      data: [
+        { id: "subject-1", name: "Mathematics", start_date: null, deadline: null },
       ],
       error: null,
     })
@@ -65,6 +71,16 @@ describe("saveTopicParams", () => {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
                 in: topicsInMock,
+              })),
+            })),
+          }
+        }
+
+        if (table === "subjects") {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                in: subjectsInMock,
               })),
             })),
           }

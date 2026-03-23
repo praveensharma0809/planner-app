@@ -221,20 +221,34 @@ function buildSubjectMaps(
       name: string
       sort_order: number
       deadline?: string | null
+      start_date?: string | null
+      rest_after_days?: number | null
     }
   >
 ) {
   const subjectNameMap = new Map<string, string>()
   const subjectOrderMap = new Map<string, number>()
   const subjectDeadlineMap = new Map<string, string>()
+  const subjectStartMap = new Map<string, string>()
+  const subjectRestAfterMap = new Map<string, number>()
 
   for (const subject of subjects) {
     subjectNameMap.set(subject.id, subject.name)
     subjectOrderMap.set(subject.id, subject.sort_order ?? 0)
     if (subject.deadline) subjectDeadlineMap.set(subject.id, subject.deadline)
+    if (subject.start_date) subjectStartMap.set(subject.id, subject.start_date)
+    if (subject.rest_after_days != null) {
+      subjectRestAfterMap.set(subject.id, Math.max(0, subject.rest_after_days))
+    }
   }
 
-  return { subjectNameMap, subjectOrderMap, subjectDeadlineMap }
+  return {
+    subjectNameMap,
+    subjectOrderMap,
+    subjectDeadlineMap,
+    subjectStartMap,
+    subjectRestAfterMap,
+  }
 }
 
 function sortTopicsBySubjectOrder(
@@ -338,12 +352,18 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
 
   const { data: subjects } = await supabase
     .from("subjects")
-    .select("id, name, sort_order, deadline")
+    .select("id, name, sort_order, deadline, start_date, rest_after_days")
     .eq("user_id", user.id)
     .eq("archived", false)
     .order("sort_order", { ascending: true })
 
-  const { subjectNameMap, subjectOrderMap, subjectDeadlineMap } = buildSubjectMaps(
+  const {
+    subjectNameMap,
+    subjectOrderMap,
+    subjectDeadlineMap,
+    subjectStartMap,
+    subjectRestAfterMap,
+  } = buildSubjectMaps(
     subjects ?? []
   )
 
@@ -394,8 +414,12 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
       depends_on: param.depends_on ?? [],
     }
 
-    if (param.earliest_start) unit.earliest_start = param.earliest_start
-    if (param.rest_after_days != null) unit.rest_after_days = param.rest_after_days
+    if (param.earliest_start ?? subjectStartMap.get(topic.subject_id)) {
+      unit.earliest_start = param.earliest_start ?? subjectStartMap.get(topic.subject_id)
+    }
+    if (param.rest_after_days != null || subjectRestAfterMap.has(topic.subject_id)) {
+      unit.rest_after_days = param.rest_after_days ?? subjectRestAfterMap.get(topic.subject_id)
+    }
     if (param.max_sessions_per_day != null) {
       unit.max_sessions_per_day = param.max_sessions_per_day
     }
@@ -583,7 +607,7 @@ export async function reoptimizePreviewPlan(
   const [{ data: subjects }, { data: params }, { data: offDayRows }] = await Promise.all([
     supabase
       .from("subjects")
-      .select("id, name, sort_order")
+      .select("id, name, sort_order, deadline, start_date, rest_after_days")
       .eq("user_id", user.id)
       .eq("archived", false)
       .order("sort_order", { ascending: true }),
@@ -591,7 +615,13 @@ export async function reoptimizePreviewPlan(
     supabase.from("off_days").select("date").eq("user_id", user.id),
   ])
 
-  const { subjectNameMap, subjectOrderMap } = buildSubjectMaps(subjects ?? [])
+  const {
+    subjectNameMap,
+    subjectOrderMap,
+    subjectDeadlineMap,
+    subjectStartMap,
+    subjectRestAfterMap,
+  } = buildSubjectMaps(subjects ?? [])
   const activeSubjectIds = new Set((subjects ?? []).map((subject) => subject.id))
   const activeTopics = sortTopicsBySubjectOrder(
     (topics as Topic[]).filter((topic) => activeSubjectIds.has(topic.subject_id)),
@@ -653,12 +683,19 @@ export async function reoptimizePreviewPlan(
       estimated_minutes: remainingMinutes,
       session_length_minutes: sessionLength,
       priority: 3,
-      deadline: param.deadline ?? planConfig.exam_date,
+      deadline:
+        param.deadline ??
+        subjectDeadlineMap.get(topic.subject_id) ??
+        planConfig.exam_date,
       depends_on: param.depends_on ?? [],
     }
 
-    if (param.earliest_start) unit.earliest_start = param.earliest_start
-    if (param.rest_after_days != null) unit.rest_after_days = param.rest_after_days
+    if (param.earliest_start ?? subjectStartMap.get(topic.subject_id)) {
+      unit.earliest_start = param.earliest_start ?? subjectStartMap.get(topic.subject_id)
+    }
+    if (param.rest_after_days != null || subjectRestAfterMap.has(topic.subject_id)) {
+      unit.rest_after_days = param.rest_after_days ?? subjectRestAfterMap.get(topic.subject_id)
+    }
     if (param.max_sessions_per_day != null) {
       unit.max_sessions_per_day = param.max_sessions_per_day
     }

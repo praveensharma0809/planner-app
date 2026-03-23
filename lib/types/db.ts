@@ -20,6 +20,8 @@ export interface Subject {
   sort_order: number
   archived: boolean
   deadline: string | null
+  start_date?: string | null
+  rest_after_days?: number | null
   created_at: string
 }
 

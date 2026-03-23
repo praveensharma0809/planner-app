@@ -28,5 +28,6 @@ export async function deleteOffDay(offDayId: string) {
   }
 
   revalidatePath("/dashboard/settings")
+  revalidatePath("/planner")
   return { status: "SUCCESS" as const }
 }
