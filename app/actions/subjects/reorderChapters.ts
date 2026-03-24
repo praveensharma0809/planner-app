@@ -39,6 +39,7 @@ export async function reorderChapters(
   }
 
   revalidatePath("/dashboard/subjects")
+  revalidatePath("/dashboard")
   revalidatePath("/planner")
   return { status: "SUCCESS" }
 }

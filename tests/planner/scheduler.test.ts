@@ -115,7 +115,7 @@ describe("schedule", () => {
     }
   })
 
-  it("prioritizes more urgent subjects first", () => {
+  it("keeps subject order from the provided structure", () => {
     const urgent = buildUnit({
       id: "urgent",
       subject_id: "subject-urgent",
@@ -141,7 +141,7 @@ describe("schedule", () => {
       new Set<string>()
     )
 
-    expect(result[0].topic_id).toBe("urgent")
+    expect(result[0].topic_id).toBe("relaxed")
   })
 
   it("returns empty schedule for circular dependencies", () => {
@@ -451,7 +451,7 @@ describe("schedule", () => {
     expect(firstTopic2Date).toBe("2024-01-03")
   })
 
-  it("allows already-started topics to continue during a rest-after block", () => {
+  it("keeps strict sequential order during rest-after block", () => {
     const topic1 = buildUnit({
       id: "topic-1",
       topic_name: "Topic 1",
@@ -479,8 +479,6 @@ describe("schedule", () => {
         exam_date: "2024-01-03",
         weekday_capacity_minutes: 120,
         weekend_capacity_minutes: 120,
-        subject_ordering: { "subject-1": "parallel" },
-        max_topics_per_subject_per_day: 2,
       },
       new Set<string>()
     )
@@ -489,11 +487,10 @@ describe("schedule", () => {
       .filter((session) => session.scheduled_date === "2024-01-02")
       .map((session) => session.topic_id)
 
-    expect(day2Topics).toContain("topic-2")
-    expect(day2Topics).not.toContain("topic-3")
+    expect(day2Topics).toHaveLength(0)
 
-    const firstTopic3Date = result.find((session) => session.topic_id === "topic-3")?.scheduled_date
-    expect(firstTopic3Date).toBe("2024-01-03")
+    const firstTopic2Date = result.find((session) => session.topic_id === "topic-2")?.scheduled_date
+    expect(firstTopic2Date).toBe("2024-01-01")
   })
 
   it("respects max_sessions_per_day for a topic", () => {
@@ -511,7 +508,7 @@ describe("schedule", () => {
     expect(Math.max(...sessionsByDay.values())).toBe(1)
   })
 
-  it("applies spaced frequency by leaving at least one day between sessions", () => {
+  it("treats study frequency as standard daily placement", () => {
     const result = schedule(
       [buildUnit({ estimated_minutes: 180, study_frequency: "spaced", deadline: "2024-01-07" })],
       { ...baseConstraints, weekday_capacity_minutes: 60, weekend_capacity_minutes: 60 },
@@ -520,8 +517,8 @@ describe("schedule", () => {
 
     expect(result.map((session) => session.scheduled_date)).toEqual([
       "2024-01-01",
+      "2024-01-02",
       "2024-01-03",
-      "2024-01-05",
     ])
   })
 
@@ -577,7 +574,7 @@ describe("schedule", () => {
     expect(new Set(firstDayTopics).size).toBe(2)
   })
 
-  it("supports flexible sequential unlocking before the previous topic fully completes", () => {
+  it("keeps strict sequential unlocking regardless of flexible flags", () => {
     const topic1 = buildUnit({
       id: "topic-1",
       topic_name: "Topic 1",
@@ -607,12 +604,11 @@ describe("schedule", () => {
     const firstTopic2Date = result.find((session) => session.topic_id === "topic-2")?.scheduled_date
     const lastTopic1Date = result.filter((session) => session.topic_id === "topic-1").at(-1)?.scheduled_date
 
-    // Custom threshold is intentionally ignored; adaptive threshold decides unlock timing.
-    expect(firstTopic2Date).toBe("2024-01-04")
-    expect(lastTopic1Date).toBe("2024-01-03")
+    expect(firstTopic2Date).toBe("2024-01-03")
+    expect(lastTopic1Date).toBe("2024-01-02")
   })
 
-  it("adapts flexible unlock threshold for high vs medium pressure", () => {
+  it("keeps topic 2 blocked until topic 1 completes (high vs medium pressure)", () => {
     const runScenario = (examDate: string) =>
       schedule(
         [
@@ -645,13 +641,13 @@ describe("schedule", () => {
 
     expect(
       highPressure.find((session) => session.topic_id === "topic-2")?.scheduled_date
-    ).toBe("2024-01-03")
+    ).toBeUndefined()
     expect(
       mediumPressure.find((session) => session.topic_id === "topic-2")?.scheduled_date
-    ).toBe("2024-01-04")
+    ).toBe("2024-01-05")
   })
 
-  it("adapts flexible unlock threshold for medium vs low pressure", () => {
+  it("keeps topic 2 strictly after topic 1 (medium vs low pressure)", () => {
     const runScenario = (examDate: string) =>
       schedule(
         [
@@ -684,7 +680,7 @@ describe("schedule", () => {
 
     expect(
       mediumPressure.find((session) => session.topic_id === "topic-2")?.scheduled_date
-    ).toBe("2024-01-04")
+    ).toBe("2024-01-05")
     expect(
       lowPressure.find((session) => session.topic_id === "topic-2")?.scheduled_date
     ).toBe("2024-01-05")
@@ -869,7 +865,7 @@ describe("schedule", () => {
     expect(totalMinutes).toBe(180)
   })
 
-  it("applies priority criterion when present in the plan order stack", () => {
+  it("ignores plan order stack and keeps input order", () => {
     const highPriority = buildUnit({
       id: "priority-first",
       topic_name: "Priority First",
@@ -910,7 +906,7 @@ describe("schedule", () => {
     )
 
     expect(priorityFirstStack[0].topic_id).toBe("priority-first")
-    expect(deadlineFirstStack[0].topic_id).toBe("deadline-first")
+    expect(deadlineFirstStack[0].topic_id).toBe("priority-first")
   })
 
   it("reserves fixed calendar capacity before scheduling free sessions", () => {

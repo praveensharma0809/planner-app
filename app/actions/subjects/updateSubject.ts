@@ -7,9 +7,7 @@ interface UpdateSubjectInput {
   id: string
   name: string
   sort_order?: number
-  start_date?: string | null
   deadline?: string | null
-  rest_after_days?: number
 }
 
 function normalizeOptionalDate(value: string | null | undefined): string | null {
@@ -32,23 +30,14 @@ export async function updateSubject(input: UpdateSubjectInput) {
     return { status: "ERROR" as const, message: "Subject name is required." }
   }
 
-  const startDate = normalizeOptionalDate(input.start_date)
   const deadline = normalizeOptionalDate(input.deadline)
-  if (startDate && deadline && startDate > deadline) {
-    return {
-      status: "ERROR" as const,
-      message: "Subject start date must be on or before subject deadline.",
-    }
-  }
 
   const { error } = await supabase
     .from("subjects")
     .update({
       name: input.name.trim(),
       sort_order: input.sort_order,
-      start_date: startDate,
       deadline,
-      rest_after_days: Math.max(0, Math.trunc(input.rest_after_days ?? 0)),
     })
     .eq("id", input.id)
     .eq("user_id", user.id)
@@ -58,5 +47,7 @@ export async function updateSubject(input: UpdateSubjectInput) {
   }
 
   revalidatePath("/dashboard/subjects")
+  revalidatePath("/dashboard")
+  revalidatePath("/planner")
   return { status: "SUCCESS" as const }
 }

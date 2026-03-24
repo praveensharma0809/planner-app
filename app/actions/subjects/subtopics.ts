@@ -4,6 +4,12 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import type { Subtopic } from "@/lib/types/db"
 
+function revalidateStructureViews() {
+  revalidatePath("/dashboard/subjects")
+  revalidatePath("/dashboard")
+  revalidatePath("/planner")
+}
+
 // ── GET ──────────────────────────────────────────────────
 
 export type GetSubtopicsResponse =
@@ -85,7 +91,7 @@ export async function addSubtopic(
       return { status: "ERROR", message: error?.message ?? "Failed to create subtopic" }
     }
 
-    revalidatePath("/dashboard/subjects")
+    revalidateStructureViews()
     return { status: "SUCCESS", subtopic: created as Subtopic }
   } catch {
     return { status: "ERROR", message: "Failed to create subtopic." }
@@ -123,7 +129,7 @@ export async function updateSubtopic(
 
     if (error) return { status: "ERROR", message: error.message }
 
-    revalidatePath("/dashboard/subjects")
+    revalidateStructureViews()
     return { status: "SUCCESS" }
   } catch {
     return { status: "ERROR", message: "Failed to update subtopic." }
@@ -144,7 +150,7 @@ export async function deleteSubtopic(subtopicId: string): Promise<DeleteSubtopic
 
     if (error) return { status: "ERROR", message: error.message }
 
-    revalidatePath("/dashboard/subjects")
+    revalidateStructureViews()
     return { status: "SUCCESS" }
   } catch {
     return { status: "ERROR", message: "Failed to delete subtopic." }

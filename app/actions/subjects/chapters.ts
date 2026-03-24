@@ -3,6 +3,12 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 
+function revalidateStructureViews() {
+  revalidatePath("/dashboard/subjects")
+  revalidatePath("/dashboard")
+  revalidatePath("/planner")
+}
+
 export type ChapterActionResponse =
   | { status: "UNAUTHORIZED" }
   | { status: "ERROR"; message: string }
@@ -85,7 +91,7 @@ export async function addChapter(subjectId: string, name: string): Promise<AddCh
     return { status: "ERROR", message: insertError?.message ?? "Could not create chapter." }
   }
 
-  revalidatePath("/dashboard/subjects")
+  revalidateStructureViews()
   return { status: "SUCCESS", chapterId: inserted.id }
 }
 
@@ -134,7 +140,7 @@ export async function updateChapter(
 
   const { data: parentSubject, error: parentSubjectError } = await supabase
     .from("subjects")
-    .select("id, name, start_date, deadline")
+    .select("id, name, deadline")
     .eq("id", existing.subject_id)
     .eq("user_id", user.id)
     .maybeSingle()
@@ -147,14 +153,7 @@ export async function updateChapter(
     return { status: "ERROR", message: "Parent subject not found." }
   }
 
-  const subjectStart = normalizeOptionalDate(parentSubject.start_date)
   const subjectDeadline = normalizeOptionalDate(parentSubject.deadline)
-  if (subjectStart && chapterStart && chapterStart < subjectStart) {
-    return {
-      status: "ERROR",
-      message: `Chapter cannot start before subject "${parentSubject.name}" start date.`,
-    }
-  }
 
   if (subjectDeadline && chapterDeadline && chapterDeadline > subjectDeadline) {
     return {
@@ -223,8 +222,7 @@ export async function updateChapter(
     }
   }
 
-  revalidatePath("/dashboard/subjects")
-  revalidatePath("/planner")
+  revalidateStructureViews()
   return { status: "SUCCESS" }
 }
 
@@ -263,7 +261,7 @@ export async function deleteChapter(chapterId: string): Promise<ChapterActionRes
     return { status: "ERROR", message: error.message }
   }
 
-  revalidatePath("/dashboard/subjects")
+  revalidateStructureViews()
   return { status: "SUCCESS" }
 }
 
@@ -302,7 +300,7 @@ export async function archiveChapter(chapterId: string): Promise<ChapterActionRe
     return { status: "ERROR", message: error.message }
   }
 
-  revalidatePath("/dashboard/subjects")
+  revalidateStructureViews()
   return { status: "SUCCESS" }
 }
 
@@ -341,6 +339,6 @@ export async function unarchiveChapter(chapterId: string): Promise<ChapterAction
     return { status: "ERROR", message: error.message }
   }
 
-  revalidatePath("/dashboard/subjects")
+  revalidateStructureViews()
   return { status: "SUCCESS" }
 }

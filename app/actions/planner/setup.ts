@@ -50,7 +50,6 @@ interface SubjectInput {
   name: string
   sort_order: number
   deadline?: string | null
-  start_date?: string | null
   rest_after_days?: number
   topics: TopicInput[]
 }
@@ -105,6 +104,7 @@ interface PlanConfigInput {
 
 export type GetStructureResponse =
   | { status: "UNAUTHORIZED" }
+  | { status: "ERROR"; message: string }
   | { status: "SUCCESS"; tree: StructureTree }
 
 export type SaveStructureResponse =
@@ -155,11 +155,7 @@ function validateStructure(subjects: SubjectInput[]): string | null {
       return "Subject name is required."
     }
 
-    const subjectStart = normalizeOptionalDate(subject.start_date)
     const subjectDeadline = normalizeOptionalDate(subject.deadline)
-    if (subjectStart && subjectDeadline && subjectStart > subjectDeadline) {
-      return `Subject "${subject.name.trim()}" start date must be on or before its deadline.`
-    }
 
     const topicNames = new Map<string, string>()
     for (const topic of subject.topics) {
@@ -233,25 +229,35 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
   } = await supabase.auth.getUser()
   if (!user) return { status: "UNAUTHORIZED" }
 
-  const { data: subjects } = await supabase
+  const { data: subjectRows, error: subjectError } = await supabase
     .from("subjects")
-    .select("id, user_id, name, sort_order, archived, deadline, start_date, rest_after_days, created_at")
+    .select("id, user_id, name, sort_order, archived, created_at")
     .eq("user_id", user.id)
-    .eq("archived", false)
     .order("sort_order", { ascending: true })
 
-  if (!subjects) return { status: "SUCCESS", tree: { subjects: [] } }
+  if (subjectError) {
+    return { status: "ERROR", message: subjectError.message }
+  }
+
+  const subjects = ((subjectRows ?? []) as Subject[]).filter((subject) => subject.archived !== true)
+  if (subjects.length === 0) {
+    return { status: "SUCCESS", tree: { subjects: [] } }
+  }
 
   const subjectIds = subjects.map((subject) => subject.id)
   let topics: Topic[] = []
   if (subjectIds.length > 0) {
-    const { data: topicRows } = await supabase
+    const { data: topicRows, error: topicError } = await supabase
       .from("topics")
       .select("id, user_id, subject_id, name, sort_order, archived, created_at")
       .eq("user_id", user.id)
       .in("subject_id", subjectIds)
-      .eq("archived", false)
       .order("sort_order", { ascending: true })
+
+    if (topicError) {
+      return { status: "ERROR", message: topicError.message }
+    }
+
     topics = (topicRows ?? []) as Topic[]
   }
 
@@ -259,12 +265,17 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
 
   let subtopics: Subtopic[] = []
   if (topicIds.length > 0) {
-    const { data: subtopicRows } = await supabase
+    const { data: subtopicRows, error: subtopicError } = await supabase
       .from("subtopics")
       .select("id, user_id, topic_id, name, sort_order, created_at")
       .eq("user_id", user.id)
       .in("topic_id", topicIds)
       .order("sort_order", { ascending: true })
+
+    if (subtopicError) {
+      return { status: "ERROR", message: subtopicError.message }
+    }
+
     subtopics = (subtopicRows ?? []) as Subtopic[]
   }
 
@@ -274,15 +285,20 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
       .from("tasks")
       .select("id, topic_id, subtopic_id, title, completed, duration_minutes, sort_order, created_at")
       .eq("user_id", user.id)
+      .eq("is_plan_generated", false)
       .in("topic_id", topicIds)
 
     if (options.onlyUndoneTasks) {
       query = query.eq("completed", false)
     }
 
-    const { data: taskRows } = await query
+    const { data: taskRows, error: taskError } = await query
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true })
+
+    if (taskError) {
+      return { status: "ERROR", message: taskError.message }
+    }
 
     tasks = (taskRows ?? []) as Task[]
   }
@@ -449,8 +465,6 @@ export async function saveStructure(
           name: subject.name.trim(),
           sort_order: subject.sort_order,
           deadline: normalizeOptionalDate(subject.deadline),
-          start_date: normalizeOptionalDate(subject.start_date),
-          rest_after_days: clampNonNegativeInteger(subject.rest_after_days),
         })
         .eq("id", subjectId)
         .eq("user_id", user.id)
@@ -463,8 +477,6 @@ export async function saveStructure(
           name: subject.name.trim(),
           sort_order: subject.sort_order,
           deadline: normalizeOptionalDate(subject.deadline),
-          start_date: normalizeOptionalDate(subject.start_date),
-          rest_after_days: clampNonNegativeInteger(subject.rest_after_days),
           archived: false,
         })
         .select("id")
@@ -616,11 +628,11 @@ export async function saveTopicParams(
   const topicNameMap = new Map(knownTopics.map((topic) => [topic.id, topic.name]))
 
   const subjectIds = [...new Set(knownTopics.map((topic) => topic.subject_id))]
-  let subjectRows: Array<{ id: string; name: string; start_date: string | null; deadline: string | null }> = []
+  let subjectRows: Array<{ id: string; name: string; deadline: string | null }> = []
   if (subjectIds.length > 0) {
     const { data, error: subjectError } = await supabase
       .from("subjects")
-      .select("id, name, start_date, deadline")
+      .select("id, name, deadline")
       .eq("user_id", user.id)
       .in("id", subjectIds)
 
@@ -628,7 +640,6 @@ export async function saveTopicParams(
     subjectRows = (data ?? []) as Array<{
       id: string
       name: string
-      start_date: string | null
       deadline: string | null
     }>
   }
@@ -656,17 +667,9 @@ export async function saveTopicParams(
       }
     }
 
-    const subjectStart = normalizeOptionalDate(subject.start_date)
     const subjectDeadline = normalizeOptionalDate(subject.deadline)
     const topicStart = normalizeOptionalDate(param.earliest_start)
     const topicDeadline = normalizeOptionalDate(param.deadline)
-
-    if (subjectStart && subjectDeadline && subjectStart > subjectDeadline) {
-      return {
-        status: "ERROR",
-        message: `Subject "${subject.name}" start date must be on or before its deadline.`,
-      }
-    }
 
     if (topicStart && topicDeadline && topicStart > topicDeadline) {
       return {
@@ -675,24 +678,10 @@ export async function saveTopicParams(
       }
     }
 
-    if (subjectStart && topicStart && topicStart < subjectStart) {
-      return {
-        status: "ERROR",
-        message: `Chapter "${topic.name}" cannot start before subject "${subject.name}" start date.`,
-      }
-    }
-
     if (subjectDeadline && topicDeadline && topicDeadline > subjectDeadline) {
       return {
         status: "ERROR",
         message: `Chapter "${topic.name}" deadline cannot be after subject "${subject.name}" deadline.`,
-      }
-    }
-
-    if (subjectStart && topicDeadline && topicDeadline < subjectStart) {
-      return {
-        status: "ERROR",
-        message: `Chapter "${topic.name}" deadline cannot be before subject "${subject.name}" start date.`,
       }
     }
   }
@@ -880,13 +869,11 @@ export async function getDraftFeasibility(
     id: string
     name: string
     deadline: string | null
-    start_date: string | null
-    rest_after_days: number | null
   }> = []
   if (subjectIds.length > 0) {
     const { data } = await supabase
       .from("subjects")
-      .select("id, name, deadline, start_date, rest_after_days")
+      .select("id, name, deadline")
       .eq("user_id", user.id)
       .in("id", subjectIds)
 
@@ -894,8 +881,6 @@ export async function getDraftFeasibility(
       id: string
       name: string
       deadline: string | null
-      start_date: string | null
-      rest_after_days: number | null
     }>
   }
 
@@ -927,9 +912,9 @@ export async function getDraftFeasibility(
         session_length_minutes: param.session_length_minutes,
         priority: 3,
         deadline: topicDeadline || normalizeOptionalDate(subject?.deadline) || config.exam_date,
-        earliest_start: topicStart || normalizeOptionalDate(subject?.start_date) || undefined,
+        earliest_start: topicStart || undefined,
         depends_on: param.depends_on,
-        rest_after_days: param.rest_after_days ?? subject?.rest_after_days ?? 0,
+        rest_after_days: param.rest_after_days ?? 0,
         max_sessions_per_day: param.max_sessions_per_day,
         study_frequency:
           param.study_frequency === "spaced" ? "spaced" : "daily",
@@ -1017,3 +1002,4 @@ export async function saveSubjectDeadlines(
 
   return { status: "SUCCESS" }
 }
+

@@ -484,12 +484,11 @@ function computeAdaptiveFlexibleThreshold(loadRatio: number): number {
 }
 
 function computeInternalSubjectGapDays(
-  loadRatio: number,
+  _loadRatio: number,
   configuredGapDays?: number
 ): number {
-  const adaptiveGap = loadRatio <= 0.7 ? 1 : 0
   const explicitGap = Math.max(0, configuredGapDays ?? 0)
-  return Math.max(adaptiveGap, explicitGap)
+  return explicitGap
 }
 
 function slotAvailable(day: DaySlot): number {
@@ -522,9 +521,8 @@ function getActiveTopicsForSubject(
   oversizedIds: Set<string>,
   subjectNewTopicBlockedUntil: Map<string, string>,
   relaxDeadline: boolean,
-  adaptiveThreshold: number
+  _adaptiveThreshold: number
 ): UnitState[] {
-  const ordering = constraints.subject_ordering?.[subjectId] ?? "sequential"
   const topics = subjectTopics.get(subjectId) ?? []
 
   function eligible(state: UnitState): boolean {
@@ -541,50 +539,15 @@ function getActiveTopicsForSubject(
     return true
   }
 
-  switch (ordering) {
-    case "sequential": {
-      for (const state of topics) {
-        if (state.coreRemaining <= 0) continue
-        if (oversizedIds.has(state.unit.id)) continue
-        if (!state.depsComplete) return []
-        if (!eligible(state)) return []
-        return [state]
-      }
-      return []
-    }
-
-    case "flexible_sequential": {
-      const unfinished = topics.filter(
-        (state) => state.coreRemaining > 0 && !oversizedIds.has(state.unit.id)
-      )
-      if (unfinished.length === 0) return []
-
-      const first = unfinished[0]
-      if (!first.depsComplete || !eligible(first)) return []
-
-      const active: UnitState[] = [first]
-      if (unfinished.length > 1) {
-        const completion =
-          first.coreSessions > 0
-            ? (first.coreSessions - first.coreRemaining) / first.coreSessions
-            : 1
-        if (completion >= adaptiveThreshold) {
-          const second = unfinished[1]
-          if (eligible(second)) {
-            active.push(second)
-          }
-        }
-      }
-
-      return active
-    }
-
-    case "parallel":
-      return topics.filter((state) => eligible(state))
-
-    default:
-      return []
+  for (const state of topics) {
+    if (state.coreRemaining <= 0) continue
+    if (oversizedIds.has(state.unit.id)) continue
+    if (!state.depsComplete) return []
+    if (!eligible(state)) return []
+    return [state]
   }
+
+  return []
 }
 
 export function schedule(
@@ -662,11 +625,6 @@ export function schedule(
     subjectTopics.get(subjectId)!.push(state)
   }
 
-  const orderStack: PlanOrderCriterion[] =
-    constraints.plan_order_stack && constraints.plan_order_stack.length > 0
-      ? constraints.plan_order_stack
-      : legacyOrderToStack(constraints.plan_order)
-
   const completedUnits = new Set<string>()
   const sessions: ScheduledSession[] = []
   const subjectNewTopicBlockedUntil = new Map<string, string>()
@@ -677,26 +635,10 @@ export function schedule(
 
   function rankTopicsForPlacement(
     topics: UnitState[],
-    placed: Set<string>,
-    date: string
+    _placed: Set<string>,
+    _date: string
   ): UnitState[] {
-    const canOpenMoreTopics = placed.size < maxTopicsPerSubjectPerDay
-    return [...topics].sort((aState, bState) => {
-      if (canOpenMoreTopics) {
-        const aAlreadyPlaced = placed.has(aState.unit.id)
-        const bAlreadyPlaced = placed.has(bState.unit.id)
-        if (aAlreadyPlaced !== bAlreadyPlaced) {
-          return aAlreadyPlaced ? 1 : -1
-        }
-      }
-      return compareByStack(
-        aState,
-        bState,
-        date,
-        orderStack,
-        subjectOrderIdx
-      )
-    })
+    return topics
   }
 
   const maxDayCapacity = daySlots.reduce(
@@ -753,12 +695,8 @@ export function schedule(
   }
 
   function isTopicSpacingOK(state: UnitState, date: string): boolean {
-    const frequency = state.unit.study_frequency === "spaced" ? "spaced" : "daily"
-    if (frequency === "daily") return true
-
-    const last = topicLastScheduledDate.get(state.unit.id)
-    if (!last) return true
-    if (frequency === "spaced") return daysBetween(last, date) >= 2
+    void state
+    void date
     return true
   }
 
@@ -807,10 +745,7 @@ export function schedule(
         : 1
     const isFinal = state.coreRemaining <= 0
 
-    const title =
-      totalSessions > 1
-        ? `${state.unit.subject_name} – ${state.unit.topic_name} (${sessionNumber}/${totalSessions})`
-        : `${state.unit.subject_name} – ${state.unit.topic_name}`
+    const title = state.unit.topic_name
 
     sessions.push({
       subject_id: state.unit.subject_id,
@@ -881,33 +816,10 @@ export function schedule(
     if (activeBySubject.size === 0) continue
 
     let orderedSubjectIds = [...activeBySubject.keys()]
-    orderedSubjectIds.sort((aSubjectId, bSubjectId) => {
-      const aBest = activeBySubject.get(aSubjectId)![0]
-      const bBest = activeBySubject.get(bSubjectId)![0]
-      return compareByStack(
-        aBest,
-        bBest,
-        day.date,
-        orderStack,
-        subjectOrderIdx
-      )
-    })
 
     const limit = constraints.max_active_subjects
     if (limit > 0 && orderedSubjectIds.length > limit) {
-      const urgentIds = orderedSubjectIds.filter((subjectId) => {
-        const topics = activeBySubject.get(subjectId)!
-        return topics.some((topic) => daysBetween(day.date, topic.unit.deadline) <= 7)
-      })
-      const urgentSet = new Set(urgentIds)
-      const regularIds = orderedSubjectIds.filter(
-        (subjectId) => !urgentSet.has(subjectId)
-      )
-      const slotsForRegular = Math.max(0, limit - urgentIds.length)
-      orderedSubjectIds = [
-        ...urgentIds,
-        ...regularIds.slice(0, slotsForRegular),
-      ]
+      orderedSubjectIds = orderedSubjectIds.slice(0, limit)
     }
 
     const topicsPlacedPerSubject = new Map<string, Set<string>>()
@@ -918,24 +830,7 @@ export function schedule(
       : Infinity
 
     if (inProgressTopics.size > 0) {
-      const inProgressOrder = [...subjectOrder].sort((aSubjectId, bSubjectId) => {
-        const aState = (subjectTopics.get(aSubjectId) ?? []).find((state) =>
-          inProgressTopics.has(state.unit.id)
-        )
-        const bState = (subjectTopics.get(bSubjectId) ?? []).find((state) =>
-          inProgressTopics.has(state.unit.id)
-        )
-        if (!aState && !bState) return 0
-        if (!aState) return 1
-        if (!bState) return -1
-        return compareByStack(
-          aState,
-          bState,
-          day.date,
-          orderStack,
-          subjectOrderIdx
-        )
-      })
+      const inProgressOrder = [...subjectOrder]
 
       for (const subjectId of inProgressOrder) {
         if (slotAvailable(day) <= 0) break
@@ -1063,15 +958,13 @@ export function schedule(
     }
     if (candidates.length === 0) break
 
-    candidates.sort((aState, bState) =>
-      compareByStack(
-        aState,
-        bState,
-        daySlots[0]?.date ?? "",
-        orderStack,
-        subjectOrderIdx
-      )
-    )
+    candidates.sort((aState, bState) => {
+      const subjectCompare =
+        (subjectOrderIdx.get(aState.unit.subject_id) ?? Number.MAX_SAFE_INTEGER) -
+        (subjectOrderIdx.get(bState.unit.subject_id) ?? Number.MAX_SAFE_INTEGER)
+      if (subjectCompare !== 0) return subjectCompare
+      return aState.unit.id.localeCompare(bState.unit.id)
+    })
 
     for (const state of candidates) {
       for (const day of daySlots) {
@@ -1083,7 +976,11 @@ export function schedule(
         const start = state.unit.earliest_start ?? constraints.study_start_date
         if (day.date < start) continue
         if (day.date > state.unit.deadline) continue
+        const blockDate = subjectNewTopicBlockedUntil.get(state.unit.subject_id)
+        if (blockDate && day.date < blockDate && state.scheduled === 0) continue
         if (!canPlaceTopicOnDay(state, day.date)) continue
+        if (!isTopicSpacingOK(state, day.date)) continue
+        if (!isSubjectGapOK(state.unit.subject_id, day.date)) continue
 
         placeSession(state, day)
         overflowPlaced = true

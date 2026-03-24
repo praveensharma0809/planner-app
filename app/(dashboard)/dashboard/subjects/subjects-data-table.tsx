@@ -29,6 +29,7 @@ import {
   reorderTasks,
   updateSubjectTaskTitle,
 } from "@/app/actions/subjects/tasks"
+import { deleteSubject } from "@/app/actions/subjects/deleteSubject"
 import { toggleArchiveSubject } from "@/app/actions/subjects/toggleArchiveSubject"
 import { useSidebar } from "@/app/components/layout/AppShell"
 import { PageHeader } from "@/app/components/layout/PageHeader"
@@ -354,6 +355,12 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     label: subject.name,
     hint: `${subject.chapters.length} chapter${subject.chapters.length === 1 ? "" : "s"}`,
     onEdit: showArchived ? undefined : () => openEditSubject(subject.id),
+    onDelete:
+      showArchived
+        ? undefined
+        : () => {
+            void handleDeleteSubject(subject.id, subject.name)
+          },
   }))
 
   const chapterColumnItems: ColumnItem[] = (selectedSubject?.chapters ?? []).map((chapter) => ({
@@ -828,6 +835,26 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     const result = await deleteChapter(chapterId)
     if (result.status === "SUCCESS") {
       addToast("Chapter deleted.", "success")
+      router.refresh()
+      return
+    }
+
+    if (result.status === "UNAUTHORIZED") {
+      addToast("Unauthorized", "error")
+      return
+    }
+
+    addToast(result.message, "error")
+  }
+
+  async function handleDeleteSubject(subjectId: string, subjectName: string) {
+    if (!window.confirm(`Delete subject "${subjectName}"? This cannot be undone.`)) {
+      return
+    }
+
+    const result = await deleteSubject(subjectId)
+    if (result.status === "SUCCESS") {
+      addToast("Subject deleted.", "success")
       router.refresh()
       return
     }

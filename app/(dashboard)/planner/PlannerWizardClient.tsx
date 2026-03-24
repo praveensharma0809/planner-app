@@ -30,7 +30,6 @@ import type {
   ScheduledSession,
   TopicOrderingMode,
 } from "@/lib/planner/engine"
-import { PageHeader } from "@/app/components/layout/PageHeader"
 import { Button } from "@/app/components/ui"
 import PlanConfirm from "./components/PlanConfirm"
 import PlanIssueModal from "./components/PlanIssueModal"
@@ -47,6 +46,8 @@ import {
   clearWizardProgress,
   createDefaultWizardProgress,
   loadWizardProgress,
+  PLANNER_WIZARD_PROGRESS_EVENT,
+  PLANNER_WIZARD_RESET_EVENT,
   saveWizardProgress,
 } from "./wizard-state"
 
@@ -246,15 +247,19 @@ function buildDeadlineMap(subjects: StructureSubject[]): Map<string, string> {
       const subjectDeadline = subject.deadline ?? ""
 
       for (const topic of subject.topics) {
+        if (topic.archived) continue
+
         const current = existingMap.get(topic.id)
         const taskMinutes = topic.tasks.reduce(
           (sum, task) => sum + Math.max(0, task.duration_minutes ?? 0),
           0
         )
+        const derivedHours = roundedHoursFromMinutes(taskMinutes)
+        const currentEstimatedHours = current?.estimated_hours ?? 0
 
         values.push({
           topic_id: topic.id,
-          estimated_hours: current?.estimated_hours ?? roundedHoursFromMinutes(taskMinutes),
+          estimated_hours: currentEstimatedHours > 0 ? currentEstimatedHours : (derivedHours > 0 ? derivedHours : 1),
           priority: 3,
           deadline: current?.deadline || subjectDeadline || fallbackExamDate,
           earliest_start: current?.earliest_start ?? "",
@@ -328,6 +333,10 @@ export default function PlannerWizardClient({
 
     if (structureRes.status === "SUCCESS") {
       setSubjectDeadlineState(buildDeadlineMap(structureRes.tree.subjects))
+    } else if (structureRes.status === "ERROR") {
+      if (showErrors) {
+        addToast(structureRes.message, "error")
+      }
     } else if (showErrors) {
       addToast("Please sign in to load planner setup.", "error")
     }
@@ -358,16 +367,7 @@ export default function PlannerWizardClient({
     setMaxPhase((current) => Math.max(current, normalized))
   }, [])
 
-  function selectPhase(nextPhase: number) {
-    const normalized = clampWizardPhase(nextPhase)
-    if (normalized > maxPhase) {
-      addToast("Complete earlier phases to unlock this step.", "info")
-      return
-    }
-    setPhase(normalized)
-  }
-
-  function resetWizard() {
+  const resetWizard = useCallback(() => {
     const baseline = createDefaultWizardProgress()
     setPhase(baseline.phase)
     setMaxPhase(baseline.maxPhase)
@@ -378,7 +378,28 @@ export default function PlannerWizardClient({
     setLastPlanStatus(null)
     clearWizardProgress()
     addToast("Planner wizard reset to Phase 1.", "success")
-  }
+  }, [addToast])
+
+  useEffect(() => {
+    const handleTopbarProgress = (event: Event) => {
+      const detail = (event as CustomEvent<{ phase: number; maxPhase: number }>).detail
+      if (!detail) return
+      setPhase(detail.phase)
+      setMaxPhase(detail.maxPhase)
+    }
+
+    const handleTopbarReset = () => {
+      resetWizard()
+    }
+
+    window.addEventListener(PLANNER_WIZARD_PROGRESS_EVENT, handleTopbarProgress)
+    window.addEventListener(PLANNER_WIZARD_RESET_EVENT, handleTopbarReset)
+
+    return () => {
+      window.removeEventListener(PLANNER_WIZARD_PROGRESS_EVENT, handleTopbarProgress)
+      window.removeEventListener(PLANNER_WIZARD_RESET_EVENT, handleTopbarReset)
+    }
+  }, [resetWizard])
 
   const recomputeIssues = useCallback((overrides?: IssueComputationOverrides) => {
     return buildPlanIssues({
@@ -503,13 +524,17 @@ export default function PlannerWizardClient({
       const structure = await getStructure()
 
       if (structure.status !== "SUCCESS") {
+        if (structure.status === "ERROR") {
+          addToast(structure.message, "error")
+          return
+        }
         addToast("Please sign in to continue.", "error")
         return
       }
 
       const subjectCount = structure.tree.subjects.length
       const chapterCount = structure.tree.subjects.reduce(
-        (sum, subject) => sum + subject.topics.length,
+        (sum, subject) => sum + subject.topics.filter((topic) => topic.archived !== true).length,
         0
       )
 
@@ -616,7 +641,10 @@ export default function PlannerWizardClient({
       addToast("Could not save intake constraints.", "error")
       return false
     } else if (plan.status === "NO_TOPICS") {
-      addToast("Add at least one topic with estimated hours.", "error")
+      addToast("Add at least one pending task in your chapters before generating the plan.", "error")
+      return false
+    } else if (plan.status === "ERROR") {
+      addToast(`Engine Error: ${plan.message}`, "error")
       return false
     } else if (plan.status === "UNAUTHORIZED") {
       addToast("Please sign in.", "error")
@@ -702,7 +730,7 @@ export default function PlannerWizardClient({
     }
 
     if (result.status === "NO_TOPICS") {
-      addToast("No saved planner topics were found to regenerate.", "error")
+      addToast("No pending chapter tasks were found to regenerate.", "error")
       return
     }
 
@@ -734,31 +762,9 @@ export default function PlannerWizardClient({
 
   return (
     <div className="page-root fade-in">
-      <PageHeader
-        eyebrow="3-phase wizard"
-        title="Planner"
-        subtitle="Complete Phase 1 intake, review Phase 2 preview, then confirm in Phase 3."
-        actions={(
-          <Button variant="ghost" size="sm" onClick={resetWizard}>
-            Reset Wizard
-          </Button>
-        )}
-      />
-
-      <div className="mt-6">
-        <PlannerPhaseStepper
-          currentPhase={phase}
-          maxPhase={maxPhase}
-          onSelectPhase={selectPhase}
-        />
-      </div>
-
-      <div className="ui-card mt-6 p-4 sm:p-5">
-        <div className="space-y-1.5 border-b border-white/[0.08] pb-4">
-          <p className="text-[10px] uppercase tracking-widest font-semibold text-sky-400/80">
-            {activePhase.shortLabel}
-          </p>
-          <h2 className="text-lg font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+      <div className="ui-card mt-3 p-4 sm:p-5">
+        <div className="mb-3 flex items-center gap-2 flex-wrap">
+          <h2 className="text-[11px] uppercase tracking-[0.14em] font-semibold text-sky-400/85">
             {activePhase.title}
           </h2>
           <p className="text-sm" style={{ color: "var(--sh-text-secondary)" }}>
@@ -894,73 +900,5 @@ export default function PlannerWizardClient({
         onRecheck={handleIssueRecheck}
       />
     </div>
-  )
-}
-
-interface PlannerPhaseStepperProps {
-  currentPhase: number
-  maxPhase: number
-  onSelectPhase: (phase: number) => void
-}
-
-function PlannerPhaseStepper({
-  currentPhase,
-  maxPhase,
-  onSelectPhase,
-}: PlannerPhaseStepperProps) {
-  return (
-    <nav className="flex items-center gap-1 sm:gap-2 overflow-x-auto pb-2" aria-label="Planner phases">
-      {PLANNER_PHASES.map((phase) => {
-        const isActive = phase.id === currentPhase
-        const isComplete = phase.id < currentPhase
-        const isReachable = phase.id <= maxPhase
-
-        return (
-          <button
-            key={phase.id}
-            type="button"
-            onClick={() => isReachable && onSelectPhase(phase.id)}
-            disabled={!isReachable}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap"
-            style={{
-              border: "1px solid",
-              borderColor: isActive
-                ? "var(--sh-primary-border, rgba(124,108,255,0.4))"
-                : isComplete
-                  ? "var(--sh-success-border, rgba(52,211,153,0.3))"
-                  : "var(--sh-border)",
-              background: isActive
-                ? "rgba(124,108,255,0.12)"
-                : isComplete
-                  ? "rgba(52,211,153,0.08)"
-                  : "var(--sh-card)",
-              color: isActive
-                ? "var(--nav-item-active-color, rgb(167,139,250))"
-                : isComplete
-                  ? "rgb(52,211,153)"
-                  : "var(--sh-text-muted)",
-              opacity: !isReachable ? 0.45 : 1,
-              cursor: !isReachable ? "not-allowed" : "pointer",
-            }}
-            aria-current={isActive ? "step" : undefined}
-          >
-            <span
-              className="flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold"
-              style={{
-                background: isActive
-                  ? "var(--sh-primary, #7c6cff)"
-                  : isComplete
-                    ? "rgb(52,211,153)"
-                    : "rgba(255,255,255,0.08)",
-                color: isActive || isComplete ? "#fff" : "var(--sh-text-muted)",
-              }}
-            >
-              {isComplete ? "✓" : phase.id}
-            </span>
-            <span className="hidden sm:inline">{phase.shortLabel}</span>
-          </button>
-        )
-      })}
-    </nav>
   )
 }

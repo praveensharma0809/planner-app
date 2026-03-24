@@ -47,6 +47,7 @@ export async function toggleArchiveSubject(subjectId: string): Promise<ToggleArc
 
     revalidatePath("/dashboard/subjects")
     revalidatePath("/dashboard")
+    revalidatePath("/planner")
     return { status: "SUCCESS", archived: newArchived }
   } catch {
     return { status: "ERROR", message: "Failed to toggle archive status." }

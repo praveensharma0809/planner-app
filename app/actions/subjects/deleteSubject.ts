@@ -28,5 +28,8 @@ export async function deleteSubject(subjectId: string) {
   }
 
   revalidatePath("/dashboard/subjects")
+  revalidatePath("/dashboard")
+  revalidatePath("/dashboard/planner")
+  revalidatePath("/planner")
   return { status: "SUCCESS" as const }
 }

@@ -11,11 +11,17 @@ interface Props {
   open: boolean
   mode: "create" | "edit"
   subjectId: string | null
+  initialSubject?: {
+    name: string
+    startDate: string
+    deadline: string
+    restAfterDays: string
+  } | null
   onClose: () => void
   onSaved: () => void
 }
 
-export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props) {
+export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, onClose, onSaved }: Props) {
   const { addToast } = useToast()
 
   const [name, setName] = useState("")
@@ -65,6 +71,14 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
     }
 
     if (mode === "edit" && subjectId) {
+      if (initialSubject) {
+        setName(initialSubject.name)
+        setStartDate(initialSubject.startDate)
+        setDeadline(initialSubject.deadline)
+        setRestAfterDays(initialSubject.restAfterDays)
+        return
+      }
+
       let cancelled = false
       void (async () => {
         const res = await getSubjectById(subjectId)
@@ -72,9 +86,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
 
         if (res.status === "SUCCESS") {
           setName(res.subject.name)
-          setStartDate(res.subject.start_date ?? "")
           setDeadline(res.subject.deadline ?? "")
-          setRestAfterDays(String(Math.max(0, res.subject.rest_after_days ?? 0)))
         } else if (res.status === "UNAUTHORIZED") {
           addToast("Unauthorized", "error")
         } else {
@@ -86,7 +98,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
         cancelled = true
       }
     }
-  }, [open, mode, subjectId, addToast])
+  }, [open, mode, subjectId, initialSubject, addToast])
 
   if (!shouldRender) return null
 
@@ -109,9 +121,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
       if (mode === "create") {
         const res = await addSubject({
           name,
-          start_date: startDate || null,
           deadline: deadline || null,
-          rest_after_days: normalizedRestAfterDays,
         })
         if (res.status === "SUCCESS") {
           addToast("Subject created", "success")
@@ -125,9 +135,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
         const res = await updateSubject({
           id: subjectId,
           name,
-          start_date: startDate || null,
           deadline: deadline || null,
-          rest_after_days: normalizedRestAfterDays,
         })
 
         if (res.status === "SUCCESS") {
@@ -221,22 +229,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label
-                  className="block text-xs font-semibold uppercase tracking-wide mb-2"
-                  style={{ color: "var(--sh-text-muted)" }}
-                >
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(event) => setStartDate(event.target.value)}
-                  className="ui-input"
-                />
-              </div>
-
+            <div className="grid gap-4 sm:grid-cols-1">
               <div>
                 <label
                   className="block text-xs font-semibold uppercase tracking-wide mb-2"
@@ -251,22 +244,6 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
                   className="ui-input"
                 />
               </div>
-            </div>
-
-            <div>
-              <label
-                className="block text-xs font-semibold uppercase tracking-wide mb-2"
-                style={{ color: "var(--sh-text-muted)" }}
-              >
-                Rest After Days
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={restAfterDays}
-                onChange={(event) => setRestAfterDays(event.target.value)}
-                className="ui-input"
-              />
             </div>
 
             <p className="text-xs leading-relaxed" style={{ color: "var(--sh-text-muted)" }}>

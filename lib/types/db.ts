@@ -20,8 +20,6 @@ export interface Subject {
   sort_order: number
   archived: boolean
   deadline: string | null
-  start_date?: string | null
-  rest_after_days?: number | null
   created_at: string
 }
 
@@ -138,38 +136,4 @@ export interface PlanSnapshot {
   config_snapshot: unknown
   summary: string | null
   created_at: string
-}
-
-export interface ExecutionCategory {
-  id: string
-  user_id: string
-  month_start: string
-  name: string
-  sort_order: number
-  deleted_at: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface ExecutionItem {
-  id: string
-  user_id: string
-  category_id: string
-  series_id: string
-  month_start: string
-  title: string
-  sort_order: number
-  deleted_at: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface ExecutionEntry {
-  id: string
-  user_id: string
-  item_id: string
-  entry_date: string
-  completed: boolean
-  created_at: string
-  updated_at: string
 }

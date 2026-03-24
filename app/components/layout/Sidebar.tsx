@@ -67,36 +67,6 @@ const SubjectsIcon = () => (
   </Icon>
 )
 
-const ExecutionIcon = () => (
-  <Icon>
-    <polygon points="5 3 19 12 5 21 5 3" />
-  </Icon>
-)
-
-const HabitsIcon = () => (
-  <Icon>
-    <path d="M17 2l4 4-4 4" />
-    <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-    <path d="M7 22l-4-4 4-4" />
-    <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-  </Icon>
-)
-
-const NotesIcon = () => (
-  <Icon>
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <polyline points="14 2 14 8 20 8" />
-    <line x1="16" y1="13" x2="8" y2="13" />
-    <line x1="16" y1="17" x2="8" y2="17" />
-  </Icon>
-)
-
-const ResourcesIcon = () => (
-  <Icon>
-    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-  </Icon>
-)
-
 const SettingsIcon = () => (
   <Icon>
     <circle cx="12" cy="12" r="3" />
@@ -150,16 +120,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/schedule",           label: "Schedule",  icon: <ScheduleIcon /> },
       { href: "/planner",            label: "Planner",   icon: <PlannerIcon /> },
       { href: "/dashboard/subjects", label: "Subjects",  icon: <SubjectsIcon /> },
-      { href: "/execution",          label: "Execution", icon: <ExecutionIcon /> },
-    ],
-  },
-  {
-    id: "tools",
-    label: "Tools",
-    items: [
-      { href: "/dashboard/habits",    label: "Habits",    icon: <HabitsIcon />,    comingSoon: true },
-      { href: "/dashboard/notes",     label: "Notes",     icon: <NotesIcon />,     comingSoon: true },
-      { href: "/dashboard/resources", label: "Resources", icon: <ResourcesIcon />, comingSoon: true },
     ],
   },
   {

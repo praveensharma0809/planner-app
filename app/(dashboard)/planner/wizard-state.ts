@@ -13,6 +13,8 @@ export interface PlannerPhaseDefinition {
 export const MIN_PLANNER_PHASE = 1
 export const MAX_PLANNER_PHASE = 3
 export const PLANNER_WIZARD_STORAGE_KEY = "planner-wizard-progress-v2"
+export const PLANNER_WIZARD_PROGRESS_EVENT = "planner-wizard-progress-changed"
+export const PLANNER_WIZARD_RESET_EVENT = "planner-wizard-reset-request"
 
 export const PLANNER_PHASES: PlannerPhaseDefinition[] = [
   {
@@ -74,10 +76,12 @@ export function saveWizardProgress(progress: PlannerWizardProgress) {
   const phase = Math.min(clampWizardPhase(progress.phase), maxPhase)
 
   try {
+    const next = { phase, maxPhase }
     window.sessionStorage.setItem(
       PLANNER_WIZARD_STORAGE_KEY,
-      JSON.stringify({ phase, maxPhase })
+      JSON.stringify(next)
     )
+    window.dispatchEvent(new CustomEvent(PLANNER_WIZARD_PROGRESS_EVENT, { detail: next }))
   } catch {
     // Ignore storage write failures.
   }

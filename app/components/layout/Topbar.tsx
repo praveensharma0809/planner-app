@@ -1,8 +1,17 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import { usePathname } from "next/navigation"
 import { useTheme } from "@/app/components/ThemeProvider"
 import { useSidebar } from "./AppShell"
+import {
+  loadWizardProgress,
+  PLANNER_PHASES,
+  PLANNER_WIZARD_PROGRESS_EVENT,
+  PLANNER_WIZARD_RESET_EVENT,
+  saveWizardProgress,
+  type PlannerWizardProgress,
+} from "@/app/(dashboard)/planner/wizard-state"
 
 // ─── Icons ────────────────────────────────────────────────────
 
@@ -78,12 +87,8 @@ const ROUTE_TITLES: Array<{ pattern: RegExp; title: string }> = [
   { pattern: /^\/dashboard\/subjects/,      title: "Subjects"   },
   { pattern: /^\/dashboard\/timetable/,     title: "Timetable"  },
   { pattern: /^\/dashboard\/settings/,      title: "Settings"   },
-  { pattern: /^\/dashboard\/habits/,        title: "Habits"     },
-  { pattern: /^\/dashboard\/notes/,         title: "Notes"      },
-  { pattern: /^\/dashboard\/resources/,     title: "Resources"  },
   { pattern: /^\/schedule/,                 title: "Schedule"   },
   { pattern: /^\/planner/,                  title: "Planner"    },
-  { pattern: /^\/execution/,                title: "Execution"  },
   { pattern: /^\/onboarding/,               title: "Onboarding" },
 ]
 
@@ -106,20 +111,101 @@ export function Topbar() {
   const { theme, toggle } = useTheme()
   const pathname = usePathname()
   const pageTitle = resolvePageTitle(pathname)
+  const isPlannerRoute = pathname.startsWith("/planner")
+
+  const [plannerProgress, setPlannerProgress] = useState<PlannerWizardProgress>({
+    phase: 1,
+    maxPhase: 1,
+  })
+
+  useEffect(() => {
+    if (!isPlannerRoute) return
+
+    // Load initial state on client
+    const saved = loadWizardProgress()
+    if (saved) {
+      setPlannerProgress(saved)
+    }
+
+    const handleProgressChanged = (event: Event) => {
+      const detail = (event as CustomEvent<PlannerWizardProgress>).detail
+      if (!detail) return
+      setPlannerProgress(detail)
+    }
+
+    window.addEventListener(PLANNER_WIZARD_PROGRESS_EVENT, handleProgressChanged)
+    return () => {
+      window.removeEventListener(PLANNER_WIZARD_PROGRESS_EVENT, handleProgressChanged)
+    }
+  }, [isPlannerRoute])
+
+  const plannerTitleClass = useMemo(
+    () => (isPlannerRoute ? "topbar-page-title topbar-page-title-planner" : "topbar-page-title"),
+    [isPlannerRoute]
+  )
+
+  function handlePlannerPhaseSelect(phaseId: number) {
+    if (phaseId > plannerProgress.maxPhase) return
+    saveWizardProgress({
+      phase: phaseId,
+      maxPhase: plannerProgress.maxPhase,
+    })
+  }
+
+  function handlePlannerResetRequest() {
+    window.dispatchEvent(new CustomEvent(PLANNER_WIZARD_RESET_EVENT))
+  }
 
   return (
     <header className="topbar-root" role="banner">
       {/* Mobile hamburger */}
-      <button
-        onClick={toggleMobile}
-        className="topbar-icon-btn lg:hidden"
-        aria-label="Open navigation menu"
-      >
-        <MenuIcon />
-      </button>
+      {!isPlannerRoute && (
+        <button
+          onClick={toggleMobile}
+          className="topbar-icon-btn lg:hidden"
+          aria-label="Open navigation menu"
+        >
+          <MenuIcon />
+        </button>
+      )}
 
       {/* Page title */}
-      <h1 className="topbar-page-title flex-1 truncate">{pageTitle}</h1>
+      <h1 className={`${plannerTitleClass} ${isPlannerRoute ? "truncate" : "flex-1 truncate"}`}>
+        {pageTitle}
+      </h1>
+
+      {isPlannerRoute && (
+        <>
+          <nav className="planner-topbar-phase-nav" aria-label="Planner phases">
+            {PLANNER_PHASES.map((phase) => {
+              const isActive = phase.id === plannerProgress.phase
+              const isReachable = phase.id <= plannerProgress.maxPhase
+
+              return (
+                <button
+                  key={phase.id}
+                  type="button"
+                  onClick={() => isReachable && handlePlannerPhaseSelect(phase.id)}
+                  disabled={!isReachable}
+                  className={`planner-topbar-phase-btn ${isActive ? "planner-topbar-phase-btn-active" : ""}`}
+                  aria-current={isActive ? "step" : undefined}
+                  title={phase.title}
+                >
+                  {phase.shortLabel}
+                </button>
+              )
+            })}
+          </nav>
+
+          <button
+            onClick={handlePlannerResetRequest}
+            className="planner-topbar-reset-btn"
+            type="button"
+          >
+            Reset
+          </button>
+        </>
+      )}
 
       {/* Theme toggle */}
       <button

@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StudyHard — Strategic Execution Engine",
+  title: "StudyHard",
   description: "Plan, schedule, and execute your high-stakes goals with capacity-aware task management.",
 };
 

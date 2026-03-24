@@ -2,7 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core"
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
+} from "@dnd-kit/core"
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
@@ -42,6 +52,7 @@ import { addOffDay } from "@/app/actions/offdays/addOffDay"
 import { deleteOffDay } from "@/app/actions/offdays/deleteOffDay"
 import { getOffDays } from "@/app/actions/offdays/getOffDays"
 import { toggleArchiveSubject } from "@/app/actions/subjects/toggleArchiveSubject"
+import { deleteSubject } from "@/app/actions/subjects/deleteSubject"
 import { reorderSubjects as reorderSubjectsAction } from "@/app/actions/subjects/reorderSubjects"
 import { reorderChapters as reorderChaptersAction } from "@/app/actions/subjects/reorderChapters"
 import { useSidebar } from "@/app/components/layout/AppShell"
@@ -207,6 +218,61 @@ function normalizeDayOfWeekCapacity(values: (number | null)[] | null | undefined
   })
 
   return next
+}
+
+function toMonthCursor(input: Date): string {
+  const year = input.getFullYear()
+  const month = String(input.getMonth() + 1).padStart(2, "0")
+  return `${year}-${month}`
+}
+
+function parseMonthCursor(cursor: string): Date {
+  const [yearRaw, monthRaw] = cursor.split("-")
+  const year = Number.parseInt(yearRaw, 10)
+  const month = Number.parseInt(monthRaw, 10)
+
+  if (!Number.isFinite(year) || !Number.isFinite(month)) {
+    const today = new Date()
+    return new Date(today.getFullYear(), today.getMonth(), 1)
+  }
+
+  return new Date(year, month - 1, 1)
+}
+
+function shiftMonthCursor(cursor: string, delta: number): string {
+  const base = parseMonthCursor(cursor)
+  base.setMonth(base.getMonth() + delta)
+  return toMonthCursor(base)
+}
+
+function formatMonthLabel(cursor: string): string {
+  const base = parseMonthCursor(cursor)
+  return base.toLocaleString("en-US", { month: "long", year: "numeric" })
+}
+
+function buildMonthGrid(cursor: string): Array<Array<string | null>> {
+  const base = parseMonthCursor(cursor)
+  const year = base.getFullYear()
+  const month = base.getMonth()
+  const first = new Date(year, month, 1)
+  const totalDays = new Date(year, month + 1, 0).getDate()
+
+  const cells: Array<string | null> = Array(first.getDay()).fill(null)
+  for (let day = 1; day <= totalDays; day += 1) {
+    const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+    cells.push(iso)
+  }
+
+  while (cells.length % 7 !== 0) {
+    cells.push(null)
+  }
+
+  const weeks: Array<Array<string | null>> = []
+  for (let index = 0; index < cells.length; index += 7) {
+    weeks.push(cells.slice(index, index + 7))
+  }
+
+  return weeks
 }
 
 function composeSeriesName(
@@ -379,6 +445,12 @@ export function SubjectsDataTable({
   const [dependencyLoading, setDependencyLoading] = useState(false)
   const [dependencySaving, setDependencySaving] = useState(false)
   const [topicParamsByTopic, setTopicParamsByTopic] = useState<Map<string, TopicParamDraft>>(new Map())
+  const [subjectSnapshotForDrawer, setSubjectSnapshotForDrawer] = useState<{
+    name: string
+    startDate: string
+    deadline: string
+    restAfterDays: string
+  } | null>(null)
 
   const [constraintsDraft, setConstraintsDraft] = useState<IntakeConstraintsDraft>(
     defaultIntakeConstraints()
@@ -394,6 +466,10 @@ export function SubjectsDataTable({
 
   const [customCapacityDateInput, setCustomCapacityDateInput] = useState("")
   const [customCapacityMinutesInput, setCustomCapacityMinutesInput] = useState("")
+  const [calendarMonthCursor, setCalendarMonthCursor] = useState(() => toMonthCursor(new Date()))
+  const [step2CalendarSelectionMode, setStep2CalendarSelectionMode] = useState<"custom" | "offday">("custom")
+  const [selectedCustomDates, setSelectedCustomDates] = useState<Set<string>>(new Set())
+  const [selectedOffDayDates, setSelectedOffDayDates] = useState<Set<string>>(new Set())
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -627,6 +703,9 @@ export function SubjectsDataTable({
     label: subject.name,
     hint: `${subject.chapters.length} chapter${subject.chapters.length === 1 ? "" : "s"}`,
     onEdit: showArchived ? undefined : () => openEditSubject(subject.id),
+    onDelete: () => {
+      void handleDeleteSubject(subject.id, subject.name)
+    },
   }))
 
   const chapterColumnItems: ColumnItem[] = (selectedSubject?.chapters ?? []).map((chapter) => ({
@@ -655,8 +734,6 @@ export function SubjectsDataTable({
     clusterFilterValue === ALL_CLUSTER_FILTER_VALUE ? completedCount : visibleCompletedCount
   const progressTotal =
     clusterFilterValue === ALL_CLUSTER_FILTER_VALUE ? chapterTasks.length : visibleTasks.length
-  const progressScopeLabel =
-    clusterFilterValue === ALL_CLUSTER_FILTER_VALUE ? "Chapter progress" : "Filtered progress"
 
   const bulkPreview = useMemo(() => {
     const baseName = bulkBaseName.trim()
@@ -694,12 +771,24 @@ export function SubjectsDataTable({
     if (showArchived) return
     setDrawerMode("create")
     setSelectedSubjectIdForDrawer(null)
+    setSubjectSnapshotForDrawer(null)
     setDrawerOpen(true)
   }
 
   function openEditSubject(subjectId: string) {
+    const target = subjects.find((subject) => subject.id === subjectId)
     setDrawerMode("edit")
     setSelectedSubjectIdForDrawer(subjectId)
+    setSubjectSnapshotForDrawer(
+      target
+        ? {
+          name: target.name,
+          startDate: "",
+          deadline: "",
+          restAfterDays: "0",
+        }
+        : null
+    )
     setDrawerOpen(true)
   }
 
@@ -1122,6 +1211,26 @@ export function SubjectsDataTable({
     const result = await deleteChapter(chapterId)
     if (result.status === "SUCCESS") {
       addToast("Chapter deleted.", "success")
+      router.refresh()
+      return
+    }
+
+    if (result.status === "UNAUTHORIZED") {
+      addToast("Unauthorized", "error")
+      return
+    }
+
+    addToast(result.message, "error")
+  }
+
+  async function handleDeleteSubject(subjectId: string, subjectName: string) {
+    if (!window.confirm(`Delete subject "${subjectName}"? This cannot be undone.`)) {
+      return
+    }
+
+    const result = await deleteSubject(subjectId)
+    if (result.status === "SUCCESS") {
+      addToast("Subject deleted.", "success")
       router.refresh()
       return
     }
@@ -1619,11 +1728,17 @@ export function SubjectsDataTable({
   }
 
   function handleAddCustomCapacityDate() {
-    const date = customCapacityDateInput.trim()
     const parsed = Number.parseInt(customCapacityMinutesInput, 10)
+    const selectedDates = Array.from(selectedCustomDates)
+    const singleDate = customCapacityDateInput.trim()
+    const targetDates = selectedDates.length > 0
+      ? selectedDates
+      : singleDate
+        ? [singleDate]
+        : []
 
-    if (!date) {
-      addToast("Choose a date for custom capacity.", "error")
+    if (targetDates.length === 0) {
+      addToast("Select one or more dates for custom capacity.", "error")
       return
     }
 
@@ -1636,12 +1751,13 @@ export function SubjectsDataTable({
       ...previous,
       custom_day_capacity: {
         ...previous.custom_day_capacity,
-        [date]: parsed,
+        ...Object.fromEntries(targetDates.map((date) => [date, parsed])),
       },
     }))
 
     setCustomCapacityDateInput("")
     setCustomCapacityMinutesInput("")
+    setSelectedCustomDates(new Set())
   }
 
   function handleRemoveCustomCapacityDate(date: string) {
@@ -1658,36 +1774,56 @@ export function SubjectsDataTable({
   async function handleAddOffDay() {
     const date = offDayDateInput.trim()
     const reason = offDayReasonInput.trim()
+    const selectedDates = Array.from(selectedOffDayDates)
+    const targetDates = selectedDates.length > 0
+      ? selectedDates
+      : date
+        ? [date]
+        : []
 
-    if (!date) {
-      addToast("Select a date to mark off-day.", "error")
-      return
-    }
-
-    if (offDays.some((offDay) => offDay.date === date)) {
-      addToast("This date is already marked as off-day.", "info")
+    if (targetDates.length === 0) {
+      addToast("Select one or more dates to mark off-day.", "error")
       return
     }
 
     setOffDaySaving(true)
-    const result = await addOffDay({
-      date,
-      reason,
-    })
+    const existingDates = new Set(offDays.map((offDay) => offDay.date))
+    const datesToAdd = targetDates.filter((item) => !existingDates.has(item))
 
-    if (result.status === "SUCCESS") {
-      setOffDays((previous) => [...previous, {
-        id: result.id,
-        date,
-        reason: reason || null,
-      }].sort((a, b) => a.date.localeCompare(b.date)))
-      setOffDayDateInput("")
-      setOffDayReasonInput("")
-      addToast("Off-day added.", "success")
-      router.refresh()
-    } else {
-      addToast(result.status === "ERROR" ? result.message : "Failed to add off-day.", "error")
+    if (datesToAdd.length === 0) {
+      addToast("Selected dates are already marked as off-days.", "info")
+      setOffDaySaving(false)
+      return
     }
+
+    const results = await Promise.all(
+      datesToAdd.map((targetDate) => addOffDay({ date: targetDate, reason }))
+    )
+
+    const failed = results.find((result) => result.status !== "SUCCESS")
+    if (failed) {
+      addToast(
+        failed.status === "ERROR" ? failed.message : "Failed to add off-days.",
+        "error"
+      )
+      setOffDaySaving(false)
+      return
+    }
+
+    setOffDays((previous) => [
+      ...previous,
+      ...results.map((result, index) => ({
+        id: (result as { id: string }).id,
+        date: datesToAdd[index],
+        reason: reason || null,
+      })),
+    ].sort((left, right) => left.date.localeCompare(right.date)))
+
+    setOffDayDateInput("")
+    setOffDayReasonInput("")
+    setSelectedOffDayDates(new Set())
+    addToast(`Added ${datesToAdd.length} off-day${datesToAdd.length === 1 ? "" : "s"}.`, "success")
+    router.refresh()
 
     setOffDaySaving(false)
   }
@@ -1706,12 +1842,12 @@ export function SubjectsDataTable({
 
   async function handleSaveConstraints() {
     if (!constraintsDraft.study_start_date || !constraintsDraft.exam_date) {
-      addToast("Study start and exam date are required.", "error")
+      addToast("Study start and final deadline are required.", "error")
       return
     }
 
     if (constraintsDraft.study_start_date >= constraintsDraft.exam_date) {
-      addToast("Exam date must be after study start date.", "error")
+      addToast("Final deadline must be after study start date.", "error")
       return
     }
 
@@ -1878,7 +2014,12 @@ export function SubjectsDataTable({
     ])
 
     if (structureRes.status !== "SUCCESS") {
-      addToast("Please sign in to import from subjects.", "error")
+      addToast(
+        structureRes.status === "ERROR"
+          ? structureRes.message
+          : "Please sign in to import from subjects.",
+        "error"
+      )
       setImportingAll(false)
       setImportingUndone(false)
       return
@@ -2000,8 +2141,10 @@ export function SubjectsDataTable({
       (sum, task) => sum + Math.max(0, task.durationMinutes),
       0
     )
-    const estimatedHours = existing?.estimated_hours
-      ?? Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10)
+const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10)
+      const estimatedHours = existing?.estimated_hours
+        ? existing.estimated_hours
+        : derivedHours > 0 ? derivedHours : 1
 
     const dependsOn = Array.from(dependencySelectedIds)
       .filter((id) => id !== dependencyTargetChapterId)
@@ -2052,6 +2195,21 @@ export function SubjectsDataTable({
   const customCapacityEntries = useMemo(
     () => Object.entries(constraintsDraft.custom_day_capacity).sort(([left], [right]) => left.localeCompare(right)),
     [constraintsDraft.custom_day_capacity]
+  )
+
+  const offDayDateSet = useMemo(
+    () => new Set(offDays.map((item) => item.date)),
+    [offDays]
+  )
+
+  const step2CalendarWeeks = useMemo(
+    () => buildMonthGrid(calendarMonthCursor),
+    [calendarMonthCursor]
+  )
+
+  const step2CalendarLabel = useMemo(
+    () => formatMonthLabel(calendarMonthCursor),
+    [calendarMonthCursor]
   )
 
   const hasStep2DateError =
@@ -2180,26 +2338,11 @@ export function SubjectsDataTable({
               }}
               disabled={resettingIntake || importingAll || importingUndone}
             >
-              {resettingIntake ? "Resetting..." : "Reset Intake View"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                void openDependencyManager("subject")
-              }}
-              disabled={showArchived || !selectedSubject || selectedSubject.chapters.length === 0}
-            >
-              Set Dependencies (Subject)
+              {resettingIntake ? "Resetting..." : "Reload Saved Intake Data"}
             </Button>
           </div>
 
-          <div
-            className="flex min-h-[520px] items-stretch gap-3 overflow-x-auto pb-1 snap-x snap-mandatory"
-            style={{
-              height: "clamp(520px, calc(100dvh - var(--topbar-height) - 170px), 760px)",
-            }}
-          >
+          <div className="flex h-[520px] min-h-[520px] items-stretch gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
             <NavigationColumn
               title="Subjects"
               items={subjectColumnItems}
@@ -2220,6 +2363,17 @@ export function SubjectsDataTable({
                     disabled={showArchived}
                   >
                     Add Subject
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-center"
+                    onClick={() => {
+                      void openDependencyManager("subject")
+                    }}
+                    disabled={showArchived || !selectedSubject || selectedSubject.chapters.length === 0}
+                  >
+                    Set Dependencies
                   </Button>
                   <Button
                     variant="ghost"
@@ -2246,20 +2400,33 @@ export function SubjectsDataTable({
                 void handleReorderChapters(orderedIds)
               }}
               footer={
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="w-full justify-center"
-                  onClick={openCreateChapter}
-                  disabled={!selectedSubject || showArchived}
-                >
-                  Add Chapter
-                </Button>
+                <>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="w-full justify-center"
+                    onClick={openCreateChapter}
+                    disabled={!selectedSubject || showArchived}
+                  >
+                    Add Chapter
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-center"
+                    onClick={() => {
+                      void openDependencyManager("chapter")
+                    }}
+                    disabled={showArchived || !selectedChapter}
+                  >
+                    Set Dependencies
+                  </Button>
+                </>
               }
             />
 
             <section
-              className="min-w-[340px] h-full flex-1 rounded-xl border px-4 py-4 sm:px-5 sm:py-5 snap-start"
+              className="min-w-[340px] h-full flex-1 rounded-xl border px-4 py-4 sm:px-5 sm:py-5 snap-start flex flex-col overflow-hidden"
               style={{
                 borderColor: "var(--sh-border)",
                 background: "var(--sh-card)",
@@ -2290,28 +2457,6 @@ export function SubjectsDataTable({
                       >
                         {selectedDetailTitle}
                       </h2>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span
-                          className="rounded-md border px-2 py-0.5 text-[11px] font-semibold"
-                          style={{
-                            borderColor: "var(--sh-border)",
-                            color: "var(--sh-text-secondary)",
-                            background: "rgba(255,255,255,0.03)",
-                          }}
-                        >
-                          {progressScopeLabel}
-                        </span>
-                        <span
-                          className="rounded-md border px-2 py-0.5 text-[11px] font-semibold"
-                          style={{
-                            borderColor: "var(--sh-border)",
-                            color: "var(--sh-primary-light)",
-                            background: "var(--sh-primary-muted)",
-                          }}
-                        >
-                          {progressCompleted}/{progressTotal} completed
-                        </span>
-                      </div>
                     </div>
 
                     <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
@@ -2334,16 +2479,6 @@ export function SubjectsDataTable({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          void openDependencyManager("chapter")
-                        }}
-                        disabled={showArchived || !selectedChapter}
-                      >
-                        Set Dependencies (Chapter)
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
                         onClick={selectedChapter.archived ? handleUnarchiveChapter : handleArchiveChapter}
                         disabled={pendingChapterId === selectedChapter.id}
                       >
@@ -2360,102 +2495,22 @@ export function SubjectsDataTable({
                     </div>
                   </div>
 
-                  <section
-                    className={`mt-3 rounded-lg border p-2.5 ${sidebarExpanded ? "overflow-visible" : "overflow-hidden"}`}
-                    style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                        Clusters
-                      </p>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={openCreateCluster}
-                          disabled={showArchived}
-                        >
-                          New Cluster
-                        </Button>
-
-                        {chapterClusters.length > 0 && !showArchived && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setClusterManagerExpanded((value) => !value)}
-                          >
-                            {clusterManagerExpanded ? "Hide Manager" : "Manage Clusters"}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
-                      <FilterChip
-                        label={`All (${chapterTasks.length})`}
-                        active={clusterFilterValue === ALL_CLUSTER_FILTER_VALUE}
-                        compact={sidebarExpanded}
-                        onClick={() => setClusterFilterValue(ALL_CLUSTER_FILTER_VALUE)}
-                      />
-                      <FilterChip
-                        label={`Unclustered (${unclusteredTaskCount})`}
-                        active={clusterFilterValue === UNCLUSTERED_FILTER_VALUE}
-                        compact={sidebarExpanded}
-                        onClick={() => setClusterFilterValue(UNCLUSTERED_FILTER_VALUE)}
-                      />
-                      {chapterClusters.map((cluster) => (
-                        <FilterChip
-                          key={cluster.id}
-                          label={`${cluster.name} (${clusterTaskCounts.get(cluster.id) ?? 0})`}
-                          active={clusterFilterValue === cluster.id}
-                          compact={sidebarExpanded}
-                          onClick={() => setClusterFilterValue(cluster.id)}
-                        />
-                      ))}
-                    </div>
-
-                    {clusterManagerExpanded && chapterClusters.length > 0 && !showArchived && (
-                      <div className="mt-2 grid max-h-28 gap-1.5 overflow-y-auto pr-1">
-                        {chapterClusters.map((cluster) => (
-                          <div
-                            key={`cluster-manage-${cluster.id}`}
-                            className="flex items-center justify-between gap-2 rounded-md border px-2 py-1"
-                            style={{ borderColor: "var(--sh-border)" }}
-                          >
-                            <p className="min-w-0 truncate text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                              {cluster.name} · {clusterTaskCounts.get(cluster.id) ?? 0} task
-                              {(clusterTaskCounts.get(cluster.id) ?? 0) === 1 ? "" : "s"}
-                            </p>
-                            <div className="flex items-center gap-1">
-                              <RowActionButton
-                                label={`Edit cluster ${cluster.name}`}
-                                onClick={() => openEditCluster(cluster.id, cluster.name)}
-                              />
-                              <RowActionButton
-                                label={`Delete cluster ${cluster.name}`}
-                                onClick={() => {
-                                  void handleDeleteCluster(cluster.id, cluster.name)
-                                }}
-                                danger
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-
-                  {manageMode && (
+                  {manageMode ? (
                     <section
-                      className="mt-2 rounded-lg border p-2.5"
-                      style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.015)" }}
+                      className="mt-2 h-[126px] rounded-lg border p-2 flex flex-col overflow-hidden"
+                      style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                          {selectedTaskIds.size} selected in current view
+                        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
+                          Manage Tasks
                         </span>
+                        <span className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
+                          {selectedTaskIds.size} selected
+                        </span>
+                      </div>
 
-                        <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="mt-2 grid min-h-0 flex-1 gap-1.5 overflow-y-auto pr-1">
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -2485,14 +2540,12 @@ export function SubjectsDataTable({
                             {deletingSelectedTasks ? "Deleting..." : "Delete Selected"}
                           </Button>
                         </div>
-                      </div>
 
-                      <div className="mt-2 grid gap-2 lg:grid-cols-2">
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
                           <select
                             value={assignClusterValue}
                             onChange={(event) => setAssignClusterValue(event.target.value)}
-                            className="ui-input h-9 min-w-[180px]"
+                            className="ui-input h-8 min-w-[132px]"
                           >
                             <option value={NONE_CLUSTER_VALUE}>Unclustered</option>
                             {chapterClusters.map((cluster) => (
@@ -2512,11 +2565,9 @@ export function SubjectsDataTable({
                           >
                             {assigningCluster ? "Applying..." : "Apply Cluster"}
                           </Button>
-                        </div>
 
-                        <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
                           <span className="text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
-                            Duration (min)
+                            Time
                           </span>
                           <input
                             type="number"
@@ -2524,8 +2575,8 @@ export function SubjectsDataTable({
                             max={MAX_SESSION_LENGTH_MINUTES}
                             value={bulkDurationInput}
                             onChange={(event) => setBulkDurationInput(event.target.value)}
-                            className="ui-input h-9 w-[110px]"
-                            placeholder="Duration"
+                            className="ui-input h-8 w-[82px]"
+                            placeholder="Min"
                           />
 
                           <Button
@@ -2536,15 +2587,100 @@ export function SubjectsDataTable({
                             }}
                             disabled={selectedTaskIds.size === 0 || bulkDurationSaving}
                           >
-                            {bulkDurationSaving ? "Applying..." : "Apply Duration"}
+                            {bulkDurationSaving ? "Applying..." : "Apply"}
                           </Button>
                         </div>
                       </div>
                     </section>
+                  ) : (
+                    <section
+                      className="mt-2 h-[126px] rounded-lg border p-2 flex flex-col overflow-hidden"
+                      style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
+                          Clusters
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={openCreateCluster}
+                            disabled={showArchived}
+                          >
+                            New Cluster
+                          </Button>
+
+                          {chapterClusters.length > 0 && !showArchived && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setClusterManagerExpanded((value) => !value)}
+                            >
+                              {clusterManagerExpanded ? "Hide Manager" : "Manage Clusters"}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+                        <FilterChip
+                          label={`All (${chapterTasks.length})`}
+                          active={clusterFilterValue === ALL_CLUSTER_FILTER_VALUE}
+                          compact={sidebarExpanded}
+                          onClick={() => setClusterFilterValue(ALL_CLUSTER_FILTER_VALUE)}
+                        />
+                        <FilterChip
+                          label={`Unclustered (${unclusteredTaskCount})`}
+                          active={clusterFilterValue === UNCLUSTERED_FILTER_VALUE}
+                          compact={sidebarExpanded}
+                          onClick={() => setClusterFilterValue(UNCLUSTERED_FILTER_VALUE)}
+                        />
+                        {chapterClusters.map((cluster) => (
+                          <FilterChip
+                            key={cluster.id}
+                            label={`${cluster.name} (${clusterTaskCounts.get(cluster.id) ?? 0})`}
+                            active={clusterFilterValue === cluster.id}
+                            compact={sidebarExpanded}
+                            onClick={() => setClusterFilterValue(cluster.id)}
+                          />
+                        ))}
+                      </div>
+
+                      {clusterManagerExpanded && chapterClusters.length > 0 && !showArchived && (
+                        <div className="mt-1.5 grid min-h-0 flex-1 gap-1.5 overflow-y-auto pr-1">
+                          {chapterClusters.map((cluster) => (
+                            <div
+                              key={`cluster-manage-${cluster.id}`}
+                              className="flex items-center justify-between gap-2 rounded-md border px-2 py-1"
+                              style={{ borderColor: "var(--sh-border)" }}
+                            >
+                              <p className="min-w-0 truncate text-xs" style={{ color: "var(--sh-text-secondary)" }}>
+                                {cluster.name} · {clusterTaskCounts.get(cluster.id) ?? 0} task
+                                {(clusterTaskCounts.get(cluster.id) ?? 0) === 1 ? "" : "s"}
+                              </p>
+                              <div className="flex items-center gap-1">
+                                <RowActionButton
+                                  label={`Edit cluster ${cluster.name}`}
+                                  onClick={() => openEditCluster(cluster.id, cluster.name)}
+                                />
+                                <RowActionButton
+                                  label={`Delete cluster ${cluster.name}`}
+                                  onClick={() => {
+                                    void handleDeleteCluster(cluster.id, cluster.name)
+                                  }}
+                                  danger
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </section>
                   )}
 
                   <section
-                    className="mt-3 min-h-0 flex-1 rounded-lg border p-2"
+                    className="mt-3 min-h-0 flex-1 rounded-lg border p-2 flex flex-col"
                     style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.01)" }}
                   >
                     <div className="mb-2 flex items-center justify-between gap-2 px-1">
@@ -2561,7 +2697,7 @@ export function SubjectsDataTable({
                       </div>
                     </div>
 
-                    <div className="h-full min-h-0 overflow-y-auto pr-1">
+                    <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                       <div className="space-y-2">
                       {visibleTasks.length === 0 && (
                         <div
@@ -2582,6 +2718,24 @@ export function SubjectsDataTable({
                             items={visibleTasks.map((task) => task.id)}
                             strategy={rectSortingStrategy}
                           >
+                            <div className="mb-1 grid grid-cols-1 gap-2 xl:grid-cols-2">
+                              <div className="flex justify-end pr-[76px]">
+                                <span
+                                  className="text-[10px] font-semibold uppercase tracking-wide"
+                                  style={{ color: "var(--sh-text-muted)" }}
+                                >
+                                  Duration
+                                </span>
+                              </div>
+                              <div className="hidden xl:flex justify-end pr-[76px]">
+                                <span
+                                  className="text-[10px] font-semibold uppercase tracking-wide"
+                                  style={{ color: "var(--sh-text-muted)" }}
+                                >
+                                  Duration
+                                </span>
+                              </div>
+                            </div>
                             <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
                               {visibleTasks.map((task) => (
                                 <DraggableTaskRow
@@ -2592,7 +2746,6 @@ export function SubjectsDataTable({
                                   isReordering={reorderingTaskIds.includes(task.id)}
                                   clusterName={task.clusterId ? clusterNameById.get(task.clusterId) ?? null : null}
                                   showClusterBadge={clusterFilterValue === ALL_CLUSTER_FILTER_VALUE}
-                                  showFullTitle={sidebarExpanded}
                                   canEdit={!showArchived}
                                   durationDraft={taskDurationDrafts[task.id] ?? String(task.durationMinutes)}
                                   onToggle={(nextCompleted) => handleToggleTask(task.id, nextCompleted)}
@@ -2610,7 +2763,26 @@ export function SubjectsDataTable({
                       )}
 
                       {visibleTasks.length > 0 && manageMode && (
-                        <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+                        <>
+                          <div className="mb-1 grid grid-cols-1 gap-2 xl:grid-cols-2">
+                            <div className="flex justify-end pr-[76px]">
+                              <span
+                                className="text-[10px] font-semibold uppercase tracking-wide"
+                                style={{ color: "var(--sh-text-muted)" }}
+                              >
+                                Duration
+                              </span>
+                            </div>
+                            <div className="hidden xl:flex justify-end pr-[76px]">
+                              <span
+                                className="text-[10px] font-semibold uppercase tracking-wide"
+                                style={{ color: "var(--sh-text-muted)" }}
+                              >
+                                Duration
+                              </span>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
                           {visibleTasks.map((task) => {
                             const isPending = pendingTaskIds.has(task.id)
                             const isDurationSaving = taskDurationSavingIds.has(task.id)
@@ -2619,7 +2791,7 @@ export function SubjectsDataTable({
                             return (
                               <div
                                 key={task.id}
-                                className="group rounded-lg border px-2.5 py-1.5 transition-colors"
+                                className="group rounded-lg border px-2 py-1.5 transition-colors"
                                 style={{
                                   borderColor: "var(--sh-border)",
                                   background: task.completed
@@ -2627,7 +2799,7 @@ export function SubjectsDataTable({
                                     : "rgba(255, 255, 255, 0.02)",
                                 }}
                               >
-                                <div className="flex items-start gap-1.5">
+                                <div className="flex items-center gap-1.5">
                                   <input
                                     type="checkbox"
                                     checked={selectedTaskIds.has(task.id)}
@@ -2662,56 +2834,51 @@ export function SubjectsDataTable({
                                     )}
                                   </button>
 
-                                  <div className="min-w-0 flex-1">
+                                  <div className="min-w-0 flex-1 flex items-center gap-2">
                                     <p
-                                      className={`text-[13px] font-medium ${task.completed ? "line-through opacity-60" : ""} ${sidebarExpanded ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}
+                                      className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through opacity-60" : ""} ${sidebarExpanded ? "truncate" : "truncate"}`}
                                       style={{ color: "var(--sh-text-primary)" }}
                                       title={task.title}
                                     >
                                       {task.title}
                                     </p>
 
-                                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                                      {clusterFilterValue === ALL_CLUSTER_FILTER_VALUE && (
-                                        <span
-                                          className="max-w-[120px] truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                                          style={{
-                                            color: "var(--sh-text-secondary)",
-                                            background: "rgba(255,255,255,0.06)",
-                                          }}
-                                          title={clusterName ?? "Unclustered"}
-                                        >
-                                          {clusterName ?? "Unclustered"}
-                                        </span>
-                                      )}
-
-                                      <span className="text-[10px]" style={{ color: "var(--sh-text-muted)" }}>
-                                        Duration
+                                    {clusterFilterValue === ALL_CLUSTER_FILTER_VALUE && (
+                                      <span
+                                        className="max-w-[120px] truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                                        style={{
+                                          color: "var(--sh-text-secondary)",
+                                          background: "rgba(255,255,255,0.06)",
+                                        }}
+                                        title={clusterName ?? "Unclustered"}
+                                      >
+                                        {clusterName ?? "Unclustered"}
                                       </span>
+                                    )}
 
-                                      <input
-                                        type="number"
-                                        min={MIN_SESSION_LENGTH_MINUTES}
-                                        max={MAX_SESSION_LENGTH_MINUTES}
-                                        value={taskDurationDrafts[task.id] ?? String(task.durationMinutes)}
-                                        onChange={(event) => setTaskDurationDraft(task.id, event.target.value)}
-                                        onBlur={() => {
+                                    <input
+                                      type="number"
+                                      min={MIN_SESSION_LENGTH_MINUTES}
+                                      max={MAX_SESSION_LENGTH_MINUTES}
+                                      value={taskDurationDrafts[task.id] ?? String(task.durationMinutes)}
+                                      onChange={(event) => setTaskDurationDraft(task.id, event.target.value)}
+                                      onBlur={() => {
+                                        void handleSaveTaskDuration(task.id)
+                                      }}
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter") {
+                                          event.preventDefault()
                                           void handleSaveTaskDuration(task.id)
-                                        }}
-                                        onKeyDown={(event) => {
-                                          if (event.key === "Enter") {
-                                            event.preventDefault()
-                                            void handleSaveTaskDuration(task.id)
-                                          }
-                                        }}
-                                        disabled={isDurationSaving || showArchived}
-                                        className="ui-input h-7 w-[80px] text-xs"
-                                        title="Task duration (minutes)"
-                                      />
-                                    </div>
+                                        }
+                                      }}
+                                      disabled={isDurationSaving || showArchived}
+                                      className="ui-input h-7 text-xs text-center"
+                                      style={{ width: "3.8rem" }}
+                                      title="Task duration (minutes)"
+                                    />
                                   </div>
 
-                                  <div className="flex shrink-0 items-center gap-1 pt-0.5">
+                                  <div className="flex shrink-0 items-center gap-1">
                                     <RowActionButton
                                       label="Edit task title"
                                       onClick={() => openEditTask(task.id, task.title)}
@@ -2730,7 +2897,8 @@ export function SubjectsDataTable({
                               </div>
                             )
                           })}
-                        </div>
+                          </div>
+                        </>
                       )}
                       </div>
                     </div>
@@ -2738,7 +2906,7 @@ export function SubjectsDataTable({
                 </div>
               ) : (
                 <div
-                  className="flex min-h-[180px] items-center justify-center rounded-lg border border-dashed text-sm"
+                  className="flex h-full min-h-[180px] items-center justify-center rounded-lg border border-dashed text-sm"
                   style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
                 >
                   Select a subject and chapter to view details.
@@ -2754,14 +2922,9 @@ export function SubjectsDataTable({
             Step-2
           </p>
 
-          <div
-            className="flex min-h-[520px] items-stretch gap-3 overflow-x-auto pb-1 snap-x snap-mandatory"
-            style={{
-              height: "clamp(520px, calc(100dvh - var(--topbar-height) - 170px), 760px)",
-            }}
-          >
+          <div className="flex min-h-[520px] items-stretch gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
             <section
-              className="min-w-[320px] h-full flex-1 rounded-xl border px-4 py-4 sm:px-5 sm:py-5 snap-start flex flex-col"
+              className="min-w-[320px] flex-1 rounded-xl border px-4 py-4 sm:px-5 sm:py-5 snap-start flex flex-col"
               style={{
                 borderColor: "var(--sh-border)",
                 background: "var(--sh-card)",
@@ -2783,7 +2946,7 @@ export function SubjectsDataTable({
                   Loading constraints...
                 </div>
               ) : (
-                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
+                <div className="flex flex-col gap-3 pr-1">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Input
                       type="date"
@@ -2798,7 +2961,7 @@ export function SubjectsDataTable({
                     />
                     <Input
                       type="date"
-                      label="Exam Date"
+                      label="Final Deadline"
                       value={constraintsDraft.exam_date}
                       onChange={(event) =>
                         setConstraintsDraft((previous) => ({
@@ -2807,7 +2970,9 @@ export function SubjectsDataTable({
                         }))
                       }
                     />
+                  </div>
 
+                  <div className="grid gap-3 md:grid-cols-3">
                     <Input
                       type="number"
                       min={0}
@@ -2832,11 +2997,25 @@ export function SubjectsDataTable({
                         }))
                       }
                     />
+
+                    <Input
+                      type="number"
+                      min={30}
+                      max={720}
+                      label="Max Daily Minutes"
+                      value={String(constraintsDraft.max_daily_minutes)}
+                      onChange={(event) =>
+                        setConstraintsDraft((previous) => ({
+                          ...previous,
+                          max_daily_minutes: clampInteger(Number.parseInt(event.target.value || "480", 10) || 480, 30, 720),
+                        }))
+                      }
+                    />
                   </div>
 
                   {hasStep2DateError && (
                     <p className="text-xs text-red-400/90">
-                      Exam date must be after study start date.
+                      Final deadline must be after study start date.
                     </p>
                   )}
 
@@ -2867,131 +3046,290 @@ export function SubjectsDataTable({
                   </div>
 
                   <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                      Custom Date Capacity
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-end gap-2">
-                      <Input
-                        type="date"
-                        label="Date"
-                        value={customCapacityDateInput}
-                        onChange={(event) => setCustomCapacityDateInput(event.target.value)}
-                        className="w-[170px]"
-                      />
-                      <Input
-                        type="number"
-                        min={0}
-                        label="Minutes"
-                        value={customCapacityMinutesInput}
-                        onChange={(event) => setCustomCapacityMinutesInput(event.target.value)}
-                        className="w-[120px]"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleAddCustomCapacityDate}
-                      >
-                        Add Override
-                      </Button>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
+                        Calendar (Custom Capacity + Off Days)
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant={step2CalendarSelectionMode === "custom" ? "primary" : "ghost"}
+                          size="sm"
+                          onClick={() => setStep2CalendarSelectionMode("custom")}
+                        >
+                          Select for Capacity
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={step2CalendarSelectionMode === "offday" ? "primary" : "ghost"}
+                          size="sm"
+                          onClick={() => setStep2CalendarSelectionMode("offday")}
+                        >
+                          Select for Off Days
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setCalendarMonthCursor((previous) => shiftMonthCursor(previous, -1))}
+                        >
+                          Prev
+                        </Button>
+                        <span className="text-[11px] font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
+                          {step2CalendarLabel}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setCalendarMonthCursor((previous) => shiftMonthCursor(previous, 1))}
+                        >
+                          Next
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="mt-2 space-y-1.5">
-                      {customCapacityEntries.length === 0 && (
-                        <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                          No custom date overrides yet.
-                        </p>
-                      )}
+                      <p className="text-[11px]" style={{ color: "var(--sh-text-secondary)" }}>
+                        Active mode: {step2CalendarSelectionMode === "custom" ? "Custom Capacity" : "Off Days"}. Click days to select for that mode.
+                      </p>
 
-                      {customCapacityEntries.map(([date, minutes]) => (
-                        <div
-                          key={date}
-                          className="flex items-center justify-between gap-2 rounded border px-2 py-1"
-                          style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.01)" }}
-                        >
-                          <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                            {date} - {minutes} min
-                          </p>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveCustomCapacityDate(date)}
-                          >
-                            Remove
-                          </Button>
+                      <div className="grid grid-cols-7 gap-1">
+                        {WEEKDAY_LABELS.map((label) => (
+                          <div key={`custom-cal-head-${label}`} className="text-center text-[10px]" style={{ color: "var(--sh-text-muted)" }}>
+                            {label}
+                          </div>
+                        ))}
+                      </div>
+
+                      {step2CalendarWeeks.map((week, weekIndex) => (
+                        <div key={`custom-week-${weekIndex}`} className="grid grid-cols-7 gap-1">
+                          {week.map((isoDate, dayIndex) => {
+                            if (!isoDate) {
+                              return <div key={`custom-empty-${weekIndex}-${dayIndex}`} className="h-8 rounded-md" />
+                            }
+
+                            const selectedCustom = selectedCustomDates.has(isoDate)
+                            const selectedOffDay = selectedOffDayDates.has(isoDate)
+                            const selected = step2CalendarSelectionMode === "custom" ? selectedCustom : selectedOffDay
+                            const hasCustom = isoDate in constraintsDraft.custom_day_capacity
+                            const hasOffDay = offDayDateSet.has(isoDate)
+
+                            return (
+                              <button
+                                key={`custom-day-${isoDate}`}
+                                type="button"
+                                onClick={() => {
+                                  if (step2CalendarSelectionMode === "custom") {
+                                    setSelectedCustomDates((previous) => {
+                                      const next = new Set(previous)
+                                      if (next.has(isoDate)) next.delete(isoDate)
+                                      else next.add(isoDate)
+                                      return next
+                                    })
+                                  } else {
+                                    setSelectedOffDayDates((previous) => {
+                                      const next = new Set(previous)
+                                      if (next.has(isoDate)) next.delete(isoDate)
+                                      else next.add(isoDate)
+                                      return next
+                                    })
+                                  }
+                                }}
+                                className="h-8 rounded-md border text-[11px] font-medium transition-colors"
+                                style={{
+                                  borderColor: selected
+                                    ? step2CalendarSelectionMode === "custom"
+                                      ? "rgba(56, 189, 248, 0.6)"
+                                      : "rgba(251, 191, 36, 0.65)"
+                                    : hasCustom
+                                      ? "rgba(56, 189, 248, 0.35)"
+                                      : hasOffDay
+                                        ? "rgba(251, 191, 36, 0.35)"
+                                      : "var(--sh-border)",
+                                  background: selected
+                                    ? step2CalendarSelectionMode === "custom"
+                                      ? "rgba(56, 189, 248, 0.18)"
+                                      : "rgba(251, 191, 36, 0.18)"
+                                    : hasCustom
+                                      ? "rgba(56, 189, 248, 0.1)"
+                                      : hasOffDay
+                                        ? "rgba(251, 191, 36, 0.1)"
+                                      : "rgba(255,255,255,0.01)",
+                                  color: selected
+                                    ? step2CalendarSelectionMode === "custom"
+                                      ? "#bae6fd"
+                                      : "#fde68a"
+                                    : "var(--sh-text-secondary)",
+                                }}
+                                title={[
+                                  hasCustom ? `${constraintsDraft.custom_day_capacity[isoDate]} min capacity` : "No custom capacity",
+                                  hasOffDay ? "Marked off-day" : "Not off-day",
+                                ].join(" • ")}
+                              >
+                                {isoDate.slice(-2)}
+                              </button>
+                            )
+                          })}
                         </div>
                       ))}
-                    </div>
-                  </div>
 
-                  <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                      Off Days
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-end gap-2">
-                      <Input
-                        type="date"
-                        label="Date"
-                        value={offDayDateInput}
-                        onChange={(event) => setOffDayDateInput(event.target.value)}
-                        className="w-[170px]"
-                      />
-                      <Input
-                        label="Reason"
-                        value={offDayReasonInput}
-                        onChange={(event) => setOffDayReasonInput(event.target.value)}
-                        placeholder="Optional"
-                        className="w-[180px]"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          void handleAddOffDay()
-                        }}
-                        disabled={offDaySaving}
-                      >
-                        {offDaySaving ? "Adding..." : "Add Off Day"}
-                      </Button>
-                    </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border px-2 py-1 text-[10px]" style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-secondary)" }}>
+                          Capacity selected: {selectedCustomDates.size}
+                        </span>
+                        <span className="rounded-full border px-2 py-1 text-[10px]" style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-secondary)" }}>
+                          Off-day selected: {selectedOffDayDates.size}
+                        </span>
+                        <span className="rounded-full border px-2 py-1 text-[10px]" style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-secondary)" }}>
+                          Saved off-days: {offDays.length}
+                        </span>
+                      </div>
 
-                    <div className="mt-2 space-y-1.5">
-                      {offDaysLoading && (
-                        <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                          Loading off-days...
-                        </p>
-                      )}
-
-                      {!offDaysLoading && offDays.length === 0 && (
-                        <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                          No off-days added.
-                        </p>
-                      )}
-
-                      {offDays.map((offDay) => (
-                        <div
-                          key={offDay.id}
-                          className="flex items-center justify-between gap-2 rounded border px-2 py-1"
-                          style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.01)" }}
-                        >
-                          <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                            {offDay.date}
-                            {offDay.reason ? ` - ${offDay.reason}` : ""}
+                      {step2CalendarSelectionMode === "custom" ? (
+                        <div className="mt-2 space-y-2 rounded-md border p-2" style={{ borderColor: "rgba(56, 189, 248, 0.35)", background: "rgba(56, 189, 248, 0.06)" }}>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#bae6fd" }}>
+                            Custom Capacity Actions
                           </p>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              void handleDeleteOffDay(offDay)
-                            }}
-                          >
-                            Remove
-                          </Button>
+
+                          <div className="grid gap-2 md:grid-cols-[1fr_auto_auto] items-end">
+                            <Input
+                              type="number"
+                              min={0}
+                              label="Minutes for selected dates"
+                              value={customCapacityMinutesInput}
+                              onChange={(event) => setCustomCapacityMinutesInput(event.target.value)}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleAddCustomCapacityDate}
+                            >
+                              Apply to Selected
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedCustomDates(new Set())}
+                              disabled={selectedCustomDates.size === 0}
+                            >
+                              Clear Selection
+                            </Button>
+                          </div>
+
+                          <Input
+                            type="date"
+                            label="Or pick a single date"
+                            value={customCapacityDateInput}
+                            onChange={(event) => setCustomCapacityDateInput(event.target.value)}
+                          />
+
+                          {customCapacityEntries.length === 0 ? (
+                            <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
+                              No custom date overrides yet.
+                            </p>
+                          ) : (
+                            customCapacityEntries.map(([date, minutes]) => (
+                              <div
+                                key={date}
+                                className="flex items-center justify-between gap-2 rounded border px-2 py-1"
+                                style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.01)" }}
+                              >
+                                <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
+                                  {date} - {minutes} min
+                                </p>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveCustomCapacityDate(date)}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+                            ))
+                          )}
                         </div>
-                      ))}
+                      ) : (
+                        <div className="mt-2 space-y-2 rounded-md border p-2" style={{ borderColor: "rgba(251, 191, 36, 0.35)", background: "rgba(251, 191, 36, 0.06)" }}>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#fde68a" }}>
+                            Off-Day Actions
+                          </p>
+
+                          <div className="grid gap-2 md:grid-cols-[1fr_auto_auto] items-end">
+                            <Input
+                              label="Reason for selected dates"
+                              value={offDayReasonInput}
+                              onChange={(event) => setOffDayReasonInput(event.target.value)}
+                              placeholder="Optional"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                void handleAddOffDay()
+                              }}
+                              disabled={offDaySaving}
+                            >
+                              {offDaySaving ? "Applying..." : "Apply Off Days"}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedOffDayDates(new Set())}
+                              disabled={selectedOffDayDates.size === 0}
+                            >
+                              Clear Selection
+                            </Button>
+                          </div>
+
+                          <Input
+                            type="date"
+                            label="Or pick a single date"
+                            value={offDayDateInput}
+                            onChange={(event) => setOffDayDateInput(event.target.value)}
+                          />
+
+                          {offDaysLoading && (
+                            <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
+                              Loading off-days...
+                            </p>
+                          )}
+
+                          {!offDaysLoading && offDays.length === 0 && (
+                            <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
+                              No off-days added.
+                            </p>
+                          )}
+
+                          {offDays.map((offDay) => (
+                            <div
+                              key={offDay.id}
+                              className="flex items-center justify-between gap-2 rounded border px-2 py-1"
+                              style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.01)" }}
+                            >
+                              <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
+                                {offDay.date}
+                                {offDay.reason ? ` - ${offDay.reason}` : ""}
+                              </p>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  void handleDeleteOffDay(offDay)
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3043,20 +3381,6 @@ export function SubjectsDataTable({
 
                     <Input
                       type="number"
-                      min={30}
-                      max={720}
-                      label="Max Daily Minutes"
-                      value={String(constraintsDraft.max_daily_minutes)}
-                      onChange={(event) =>
-                        setConstraintsDraft((previous) => ({
-                          ...previous,
-                          max_daily_minutes: clampInteger(Number.parseInt(event.target.value || "480", 10) || 480, 30, 720),
-                        }))
-                      }
-                    />
-
-                    <Input
-                      type="number"
                       min={0}
                       max={12}
                       label="Max Active Subjects / Day"
@@ -3100,6 +3424,7 @@ export function SubjectsDataTable({
         open={drawerOpen}
         mode={drawerMode}
         subjectId={selectedSubjectIdForDrawer}
+        initialSubject={subjectSnapshotForDrawer}
         onClose={() => setDrawerOpen(false)}
         onSaved={() => {
           setDrawerOpen(false)
@@ -3569,7 +3894,6 @@ interface DraggableTaskRowProps {
   isReordering: boolean
   clusterName: string | null
   showClusterBadge: boolean
-  showFullTitle: boolean
   canEdit: boolean
   durationDraft: string
   onToggle: (completed: boolean) => void
@@ -3586,7 +3910,6 @@ function DraggableTaskRow({
   isReordering,
   clusterName,
   showClusterBadge,
-  showFullTitle,
   canEdit,
   durationDraft,
   onToggle,
@@ -3614,9 +3937,9 @@ function DraggableTaskRow({
             : "rgba(255, 255, 255, 0.02)",
         cursor: isDragging ? "grabbing" : "default",
       }}
-      className="group rounded-lg border px-2.5 py-2 transition-colors"
+      className="group rounded-lg border px-2 py-1.5 transition-colors"
     >
-      <div className="flex items-start gap-1.5">
+      <div className="flex items-center gap-1.5">
         <button
           type="button"
           {...attributes}
@@ -3662,60 +3985,55 @@ function DraggableTaskRow({
           )}
         </button>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 flex items-center gap-2">
           <p
-            className={`text-[13px] font-medium ${task.completed ? "line-through opacity-60" : ""} ${showFullTitle ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}
+            className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through opacity-60" : ""} truncate`}
             style={{ color: "var(--sh-text-primary)" }}
             title={task.title}
           >
             {task.title}
           </p>
 
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            {showClusterBadge && (
-              <span
-                className="max-w-[120px] truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                style={{
-                  color: "var(--sh-text-secondary)",
-                  background: "rgba(255,255,255,0.06)",
-                }}
-                title={clusterName ?? "Unclustered"}
-              >
-                {clusterName ?? "Unclustered"}
-              </span>
-            )}
-
-            <span className="text-[10px]" style={{ color: "var(--sh-text-muted)" }}>
-              Duration
-            </span>
-
-            <input
-              type="number"
-              min={MIN_SESSION_LENGTH_MINUTES}
-              max={MAX_SESSION_LENGTH_MINUTES}
-              value={durationDraft}
-              onChange={(event) => onDurationDraftChange(event.target.value)}
-              onBlur={onDurationSave}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault()
-                  onDurationSave()
-                }
+          {showClusterBadge && (
+            <span
+              className="max-w-[120px] truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
+              style={{
+                color: "var(--sh-text-secondary)",
+                background: "rgba(255,255,255,0.06)",
               }}
-              disabled={isDurationSaving || !canEdit}
-              className="ui-input h-7 w-[80px] text-xs"
-              title="Task duration (minutes)"
-            />
+              title={clusterName ?? "Unclustered"}
+            >
+              {clusterName ?? "Unclustered"}
+            </span>
+          )}
 
-            {isDurationSaving && (
-              <span className="text-[10px]" style={{ color: "var(--sh-text-muted)" }}>
-                Saving...
-              </span>
-            )}
-          </div>
+          <input
+            type="number"
+            min={MIN_SESSION_LENGTH_MINUTES}
+            max={MAX_SESSION_LENGTH_MINUTES}
+            value={durationDraft}
+            onChange={(event) => onDurationDraftChange(event.target.value)}
+            onBlur={onDurationSave}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                onDurationSave()
+              }
+            }}
+            disabled={isDurationSaving || !canEdit}
+            className="ui-input h-7 text-xs text-center"
+            style={{ width: "3.8rem" }}
+            title="Task duration (minutes)"
+          />
+
+          {isDurationSaving && (
+            <span className="text-[10px] shrink-0" style={{ color: "var(--sh-text-muted)" }}>
+              Saving...
+            </span>
+          )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 pt-0.5">
+        <div className="flex shrink-0 items-center gap-1">
           <RowActionButton
             label="Edit task title"
             onClick={onEdit}
@@ -3758,7 +4076,9 @@ function NavigationColumn({
   const itemIds = useMemo(() => items.map((item) => item.id), [items])
 
   const localSensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
@@ -3781,13 +4101,13 @@ function NavigationColumn({
 
   return (
     <section
-      className="w-[220px] min-w-[208px] h-full shrink-0 rounded-xl border px-2 py-2 snap-start flex flex-col"
+      className="w-[208px] min-w-[196px] h-full shrink-0 rounded-xl border px-2 py-2 snap-start flex flex-col overflow-hidden"
       style={{
         borderColor: "var(--sh-border)",
         background: "color-mix(in srgb, var(--sh-card) 94%, var(--foreground) 6%)",
       }}
     >
-      <div className="px-1.5 pb-2">
+      <div className="px-1.5 pb-2 shrink-0">
         <p
           className="text-[11px] font-semibold uppercase tracking-[0.14em]"
           style={{ color: "var(--sh-text-muted)" }}
@@ -3837,7 +4157,7 @@ function NavigationColumn({
 
       {footer && (
         <div
-          className="mt-2 space-y-1.5 border-t px-1 pt-2"
+          className="mt-2 space-y-1.5 border-t px-1 pt-2 shrink-0"
           style={{ borderColor: "var(--sh-border)" }}
         >
           {footer}
@@ -3851,7 +4171,9 @@ interface NavigationItemCardProps {
   item: ColumnItem
   isActive: boolean
   onSelect: (id: string) => void
-  dragHandle?: ReactNode
+  dragAttributes?: DraggableAttributes
+  dragListeners?: DraggableSyntheticListeners
+  dragEnabled?: boolean
   isDragging?: boolean
 }
 
@@ -3859,7 +4181,9 @@ function NavigationItemCard({
   item,
   isActive,
   onSelect,
-  dragHandle,
+  dragAttributes,
+  dragListeners,
+  dragEnabled = false,
   isDragging = false,
 }: NavigationItemCardProps) {
   return (
@@ -3883,7 +4207,11 @@ function NavigationItemCard({
         <button
           type="button"
           onClick={() => onSelect(item.id)}
+          {...(dragEnabled ? (dragAttributes as object) : {})}
+          {...(dragEnabled ? (dragListeners as object) : {})}
           className="min-w-0 flex-1 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-[rgba(124,108,255,0.08)]"
+          style={dragEnabled ? { touchAction: "none", cursor: isDragging ? "grabbing" : "grab" } : undefined}
+          title={dragEnabled ? `Drag to reorder ${item.label}` : undefined}
         >
           <p
             className="truncate text-sm font-semibold"
@@ -3901,7 +4229,6 @@ function NavigationItemCard({
         </button>
 
         <div className="flex shrink-0 items-center gap-1 pt-1">
-          {dragHandle}
           {item.onEdit && (
             <RowActionButton
               label={`Edit ${item.label}`}
@@ -3952,26 +4279,9 @@ function DraggableNavigationItem({
         isActive={isActive}
         onSelect={onSelect}
         isDragging={isDragging}
-        dragHandle={
-          <button
-            type="button"
-            {...attributes}
-            {...listeners}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded border p-0.5 transition-colors hover:bg-white/5 disabled:opacity-50"
-            style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)", touchAction: "none" }}
-            aria-label={`Reorder ${item.label}`}
-            title={`Reorder ${item.label}`}
-            disabled={!reorderEnabled}
-          >
-            <svg
-              className="h-3.5 w-3.5"
-              fill="currentColor"
-              viewBox="0 0 16 16"
-            >
-              <path d="M2 5h12v1H2V5zm0 3h12v1H2V8zm0 3h12v1H2v-1z" />
-            </svg>
-          </button>
-        }
+        dragEnabled={reorderEnabled}
+        dragAttributes={attributes}
+        dragListeners={listeners}
       />
     </div>
   )

@@ -65,6 +65,21 @@ interface InsertTaskRow {
   plan_version: string | null
 }
 
+interface PlannerTaskSourceRow {
+  topic_id: string | null
+  title: string
+  duration_minutes: number
+  sort_order?: number | null
+  created_at?: string
+}
+
+interface PlannerTaskSourceItem {
+  title: string
+  durationMinutes: number
+  sortOrder: number
+  createdAt: string
+}
+
 interface PendingUnitMeta {
   unitId: string
   topicId: string | null
@@ -91,6 +106,7 @@ export type GeneratePlanResponse =
   | { status: "UNAUTHORIZED" }
   | { status: "NO_CONFIG" }
   | { status: "NO_TOPICS" }
+  | { status: "ERROR"; message: string }
   | PlanResult
 
 export type KeepPreviousMode = "future" | "until" | "none" | "merge"
@@ -140,7 +156,11 @@ function sortPreviewSessions(sessions: ScheduledSession[]) {
     if (Boolean(bSession.is_manual) !== Boolean(aSession.is_manual)) {
       return Number(Boolean(bSession.is_manual)) - Number(Boolean(aSession.is_manual))
     }
-    return aSession.title.localeCompare(bSession.title)
+    const subjectCompare = aSession.subject_id.localeCompare(bSession.subject_id)
+    if (subjectCompare !== 0) return subjectCompare
+    const topicCompare = aSession.topic_id.localeCompare(bSession.topic_id)
+    if (topicCompare !== 0) return topicCompare
+    return (aSession.session_number ?? 0) - (bSession.session_number ?? 0)
   })
 }
 
@@ -221,33 +241,24 @@ function buildSubjectMaps(
       name: string
       sort_order: number
       deadline?: string | null
-      start_date?: string | null
-      rest_after_days?: number | null
     }
   >
 ) {
   const subjectNameMap = new Map<string, string>()
   const subjectOrderMap = new Map<string, number>()
   const subjectDeadlineMap = new Map<string, string>()
-  const subjectStartMap = new Map<string, string>()
-  const subjectRestAfterMap = new Map<string, number>()
+
 
   for (const subject of subjects) {
     subjectNameMap.set(subject.id, subject.name)
     subjectOrderMap.set(subject.id, subject.sort_order ?? 0)
-    if (subject.deadline) subjectDeadlineMap.set(subject.id, subject.deadline)
-    if (subject.start_date) subjectStartMap.set(subject.id, subject.start_date)
-    if (subject.rest_after_days != null) {
-      subjectRestAfterMap.set(subject.id, Math.max(0, subject.rest_after_days))
-    }
+    if (subject.deadline) subjectDeadlineMap.set(subject.id, subject.deadline)  
   }
 
   return {
     subjectNameMap,
     subjectOrderMap,
     subjectDeadlineMap,
-    subjectStartMap,
-    subjectRestAfterMap,
   }
 }
 
@@ -265,6 +276,85 @@ function sortTopicsBySubjectOrder(
     }
     return aTopic.id.localeCompare(bTopic.id)
   })
+}
+
+function buildTaskSourceByTopic(
+  tasks: PlannerTaskSourceRow[]
+): Map<string, PlannerTaskSourceItem[]> {
+  const byTopic = new Map<string, PlannerTaskSourceItem[]>()
+
+  for (const task of tasks) {
+    if (!task.topic_id) continue
+    const title = task.title?.trim() ?? ""
+    if (!title) continue
+
+    const durationMinutes = Math.max(0, task.duration_minutes ?? 0)
+    if (durationMinutes <= 0) continue
+
+    const list = byTopic.get(task.topic_id) ?? []
+    list.push({
+      title,
+      durationMinutes,
+      sortOrder: task.sort_order ?? Number.MAX_SAFE_INTEGER,
+      createdAt: task.created_at ?? "",
+    })
+    byTopic.set(task.topic_id, list)
+  }
+
+  for (const [topicId, list] of byTopic.entries()) {
+    list.sort((left, right) => {
+      if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
+      if (left.createdAt !== right.createdAt) {
+        return left.createdAt.localeCompare(right.createdAt)
+      }
+      return left.title.localeCompare(right.title)
+    })
+    byTopic.set(topicId, list)
+  }
+
+  return byTopic
+}
+
+function formatPlannedSessionTitle(topicName: string, taskTitle: string): string {
+  const cleanTopic = topicName.trim()
+  const cleanTask = taskTitle.trim()
+  if (!cleanTask) return cleanTopic
+  return `${cleanTopic} - ${cleanTask}`
+}
+
+function resolveSessionTaskTitle(
+  topicName: string,
+  sourceTasks: PlannerTaskSourceItem[],
+  sessionNumber: number,
+  totalSessions: number
+): string {
+  if (sourceTasks.length === 0) return topicName
+
+  const normalizedTotal = Math.max(1, totalSessions)
+  const normalizedNumber = Math.min(
+    normalizedTotal,
+    Math.max(1, sessionNumber)
+  )
+  const totalMinutes = sourceTasks.reduce(
+    (sum, task) => sum + Math.max(1, task.durationMinutes),
+    0
+  )
+
+  if (totalMinutes <= 0) {
+    const fallbackTask = sourceTasks[(normalizedNumber - 1) % sourceTasks.length]
+    return formatPlannedSessionTitle(topicName, fallbackTask.title)
+  }
+
+  const target = ((normalizedNumber - 0.5) / normalizedTotal) * totalMinutes
+  let cursor = 0
+  for (const task of sourceTasks) {
+    cursor += Math.max(1, task.durationMinutes)
+    if (target <= cursor) {
+      return formatPlannedSessionTitle(topicName, task.title)
+    }
+  }
+
+  return formatPlannedSessionTitle(topicName, sourceTasks[sourceTasks.length - 1].title)
 }
 
 function todayISO() {
@@ -340,36 +430,53 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
   }
   const planConfig = config as PlanConfig
 
-  const { data: topics } = await supabase
+  const { data: topics, error: topicsError } = await supabase
     .from("topics")
     .select(TOPIC_SELECT)
     .eq("user_id", user.id)
+
+  if (topicsError) {
+    return { status: "ERROR", message: `topics query failed: ${topicsError.message}` }
+  }
 
   if (!topics || topics.length === 0) {
     await track("warning", { reason: "no_topics_raw" })
     return { status: "NO_TOPICS" }
   }
 
-  const { data: subjects } = await supabase
+  const { data: subjects, error: subjectsError } = await supabase
     .from("subjects")
-    .select("id, name, sort_order, deadline, start_date, rest_after_days")
+    .select("id, name, sort_order, deadline, archived")
     .eq("user_id", user.id)
-    .eq("archived", false)
     .order("sort_order", { ascending: true })
+
+  if (subjectsError) {
+    await track("error", { reason: "subjects_query_failed", message: subjectsError.message })
+    return { status: "ERROR", message: `subjects query failed: ${subjectsError.message}` }
+  }
+
+  const activeSubjects = ((subjects ?? []) as Array<{
+    id: string
+    name: string
+    sort_order: number
+    deadline?: string | null
+    archived?: boolean | null
+  }>).filter((subject) => subject.archived !== true)
 
   const {
     subjectNameMap,
     subjectOrderMap,
     subjectDeadlineMap,
-    subjectStartMap,
-    subjectRestAfterMap,
+    
   } = buildSubjectMaps(
-    subjects ?? []
+    activeSubjects
   )
 
-  const activeSubjectIds = new Set((subjects ?? []).map((subject) => subject.id))
+  const activeSubjectIds = new Set(activeSubjects.map((subject) => subject.id))
   const activeTopics = sortTopicsBySubjectOrder(
-    (topics as Topic[]).filter((topic) => activeSubjectIds.has(topic.subject_id)),
+    (topics as Topic[]).filter(
+      (topic) => activeSubjectIds.has(topic.subject_id) && topic.archived !== true
+    ),
     subjectOrderMap
   )
 
@@ -379,16 +486,30 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
   }
 
   const topicIds = activeTopics.map((topic) => topic.id)
-  const { data: params } = await supabase
+  const topicNameMap = new Map(activeTopics.map((topic) => [topic.id, topic.name]))
+  const [{ data: params }, { data: topicTasks }] = await Promise.all([
+    supabase
     .from("topic_params")
     .select("*")
     .eq("user_id", user.id)
-    .in("topic_id", topicIds)
+    .in("topic_id", topicIds),
+    supabase
+      .from("tasks")
+      .select("topic_id, title, duration_minutes, sort_order, created_at")
+      .eq("user_id", user.id)
+      .eq("is_plan_generated", false)
+      .eq("completed", false)
+      .in("topic_id", topicIds),
+  ])
 
   const paramMap = new Map<string, TopicParams>()
   for (const param of (params ?? []) as TopicParams[]) {
     paramMap.set(param.topic_id, param)
   }
+
+  const topicTaskSourceMap = buildTaskSourceByTopic(
+    (topicTasks ?? []) as PlannerTaskSourceRow[]
+  )
 
   const { data: offDayRows } = await supabase
     .from("off_days")
@@ -397,33 +518,37 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
 
   const units: PlannableUnit[] = activeTopics.flatMap((topic) => {
     const param = paramMap.get(topic.id)
-    if (!param || param.estimated_hours <= 0) return []
+    const sourceTasks = topicTaskSourceMap.get(topic.id) ?? []
+    const estimatedMinutes = sourceTasks.reduce(
+      (sum, task) => sum + task.durationMinutes,
+      0
+    )
+
+    if (estimatedMinutes <= 0) return []
 
     const unit: PlannableUnit = {
       id: topic.id,
       subject_id: topic.subject_id,
       subject_name: subjectNameMap.get(topic.subject_id) ?? "Unknown",
       topic_name: topic.name,
-      estimated_minutes: Math.round(param.estimated_hours * 60),
-      session_length_minutes: param.session_length_minutes ?? 60,
+      estimated_minutes: estimatedMinutes,
+      session_length_minutes: param?.session_length_minutes ?? 60,
       priority: 3,
       deadline:
-        param.deadline ??
+        param?.deadline ??
         subjectDeadlineMap.get(topic.subject_id) ??
         planConfig.exam_date,
-      depends_on: param.depends_on ?? [],
+      depends_on: param?.depends_on ?? [],
     }
 
-    if (param.earliest_start ?? subjectStartMap.get(topic.subject_id)) {
-      unit.earliest_start = param.earliest_start ?? subjectStartMap.get(topic.subject_id)
+    if (param?.earliest_start) { unit.earliest_start = param.earliest_start }
+    if (param?.rest_after_days != null) {
+      unit.rest_after_days = param?.rest_after_days
     }
-    if (param.rest_after_days != null || subjectRestAfterMap.has(topic.subject_id)) {
-      unit.rest_after_days = param.rest_after_days ?? subjectRestAfterMap.get(topic.subject_id)
-    }
-    if (param.max_sessions_per_day != null) {
+    if (param?.max_sessions_per_day != null) {
       unit.max_sessions_per_day = param.max_sessions_per_day
     }
-    if (param.study_frequency) {
+    if (param?.study_frequency) {
       unit.study_frequency = mapStudyFrequency(param.study_frequency)
     }
 
@@ -432,7 +557,7 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
 
   if (units.length === 0) {
     await track("warning", {
-      reason: "no_topics_with_effort",
+      reason: "no_tasks_to_schedule",
       activeTopics: activeTopics.length,
     })
     return { status: "NO_TOPICS" }
@@ -457,6 +582,29 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
     feasible: hasFeasibility ? result.feasibility.feasible : null,
     droppedSessions: result.status === "PARTIAL" ? result.droppedSessions : 0,
   })
+
+  if (result.status === "READY" || result.status === "PARTIAL") {
+    const titledSchedule = result.schedule.map((session) => {
+      const topicName = topicNameMap.get(session.topic_id) ?? session.title
+      const sourceTasks = topicTaskSourceMap.get(session.topic_id) ?? []
+
+      return {
+        ...session,
+        title: resolveSessionTaskTitle(
+          topicName,
+          sourceTasks,
+          session.session_number,
+          session.total_sessions
+        ),
+      }
+    })
+
+    if (result.status === "READY") {
+      return { ...result, schedule: titledSchedule }
+    }
+
+    return { ...result, schedule: titledSchedule }
+  }
 
   return result
 }
@@ -604,27 +752,45 @@ export async function reoptimizePreviewPlan(
     return { status: "NO_TOPICS" }
   }
 
-  const [{ data: subjects }, { data: params }, { data: offDayRows }] = await Promise.all([
+  const [{ data: subjects, error: subjectsError }, { data: params }, { data: offDayRows }, { data: topicTasks }] = await Promise.all([
     supabase
       .from("subjects")
-      .select("id, name, sort_order, deadline, start_date, rest_after_days")
+      .select("id, name, sort_order, deadline, archived")
       .eq("user_id", user.id)
-      .eq("archived", false)
       .order("sort_order", { ascending: true }),
     supabase.from("topic_params").select("*").eq("user_id", user.id),
     supabase.from("off_days").select("date").eq("user_id", user.id),
+    supabase
+      .from("tasks")
+      .select("topic_id, title, duration_minutes, sort_order, created_at")
+      .eq("user_id", user.id)
+      .eq("is_plan_generated", false)
+      .eq("completed", false),
   ])
+
+  if (subjectsError) {
+    return { status: "NO_TOPICS" }
+  }
+
+  const activeSubjects = ((subjects ?? []) as Array<{
+    id: string
+    name: string
+    sort_order: number
+    deadline?: string | null
+    archived?: boolean | null
+  }>).filter((subject) => subject.archived !== true)
 
   const {
     subjectNameMap,
     subjectOrderMap,
     subjectDeadlineMap,
-    subjectStartMap,
-    subjectRestAfterMap,
-  } = buildSubjectMaps(subjects ?? [])
-  const activeSubjectIds = new Set((subjects ?? []).map((subject) => subject.id))
+    
+  } = buildSubjectMaps(activeSubjects)
+  const activeSubjectIds = new Set(activeSubjects.map((subject) => subject.id))
   const activeTopics = sortTopicsBySubjectOrder(
-    (topics as Topic[]).filter((topic) => activeSubjectIds.has(topic.subject_id)),
+    (topics as Topic[]).filter(
+      (topic) => activeSubjectIds.has(topic.subject_id) && topic.archived !== true
+    ),
     subjectOrderMap
   )
 
@@ -637,6 +803,10 @@ export async function reoptimizePreviewPlan(
   for (const param of (params ?? []) as TopicParams[]) {
     paramMap.set(param.topic_id, param)
   }
+
+  const topicTaskSourceMap = buildTaskSourceByTopic(
+    (topicTasks ?? []) as PlannerTaskSourceRow[]
+  )
 
   const reservedByDate = new Map<string, number>()
   const reservedGeneratedMinutesByTopic = new Map<string, number>()
@@ -663,13 +833,18 @@ export async function reoptimizePreviewPlan(
   const totalSessionsByTopic = new Map<string, number>()
   const units: PlannableUnit[] = activeTopics.flatMap((topic) => {
     const param = paramMap.get(topic.id)
-    if (!param || param.estimated_hours <= 0) return []
+    const sourceTasks = topicTaskSourceMap.get(topic.id) ?? []
+    const totalMinutes = sourceTasks.reduce(
+      (sum, task) => sum + task.durationMinutes,
+      0
+    )
 
-    const totalMinutes = Math.round(param.estimated_hours * 60)
+    if (totalMinutes <= 0) return []
+
     const reservedGeneratedMinutes =
       reservedGeneratedMinutesByTopic.get(topic.id) ?? 0
     const remainingMinutes = Math.max(0, totalMinutes - reservedGeneratedMinutes)
-    const sessionLength = param.session_length_minutes ?? 60
+    const sessionLength = param?.session_length_minutes ?? 60
 
     totalSessionsByTopic.set(topic.id, Math.ceil(totalMinutes / sessionLength))
 
@@ -684,22 +859,20 @@ export async function reoptimizePreviewPlan(
       session_length_minutes: sessionLength,
       priority: 3,
       deadline:
-        param.deadline ??
+        param?.deadline ??
         subjectDeadlineMap.get(topic.subject_id) ??
         planConfig.exam_date,
-      depends_on: param.depends_on ?? [],
+      depends_on: param?.depends_on ?? [],
     }
 
-    if (param.earliest_start ?? subjectStartMap.get(topic.subject_id)) {
-      unit.earliest_start = param.earliest_start ?? subjectStartMap.get(topic.subject_id)
+    if (param?.earliest_start) { unit.earliest_start = param.earliest_start }
+    if (param?.rest_after_days != null) {
+      unit.rest_after_days = param?.rest_after_days
     }
-    if (param.rest_after_days != null || subjectRestAfterMap.has(topic.subject_id)) {
-      unit.rest_after_days = param.rest_after_days ?? subjectRestAfterMap.get(topic.subject_id)
-    }
-    if (param.max_sessions_per_day != null) {
+    if (param?.max_sessions_per_day != null) {
       unit.max_sessions_per_day = param.max_sessions_per_day
     }
-    if (param.study_frequency) {
+    if (param?.study_frequency) {
       unit.study_frequency = mapStudyFrequency(param.study_frequency)
     }
 
@@ -722,15 +895,17 @@ export async function reoptimizePreviewPlan(
       totalSessionsByTopic.get(session.topic_id) ??
       session.total_sessions + offset
     const nextSessionNumber = session.session_number + offset
-    const subjectName = subjectNameMap.get(session.subject_id) ?? session.subject_id
     const topicName = topicNameMap.get(session.topic_id) ?? session.title
+    const sourceTasks = topicTaskSourceMap.get(session.topic_id) ?? []
 
     return {
       ...session,
-      title:
-        totalSessions > 1
-          ? `${subjectName} – ${topicName} (${nextSessionNumber}/${totalSessions})`
-          : `${subjectName} – ${topicName}`,
+      title: resolveSessionTaskTitle(
+        topicName,
+        sourceTasks,
+        nextSessionNumber,
+        totalSessions
+      ),
       session_number: nextSessionNumber,
       total_sessions: totalSessions,
       topic_completion_after:
@@ -1127,10 +1302,7 @@ export async function rescheduleMissedPlan(): Promise<RescheduleMissedPlanRespon
       meta.originalTotalSessions > 0
         ? meta.originalTotalSessions
         : session.total_sessions
-    const title =
-      meta.topicId && totalSessions > 1
-        ? `${meta.subjectName} – ${meta.topicName} (${sessionNumber}/${totalSessions})`
-        : meta.titleFallback
+    const title = meta.titleFallback
 
     return {
       subject_id: meta.subjectId,
@@ -1256,3 +1428,4 @@ export async function rescheduleMissedPlan(): Promise<RescheduleMissedPlanRespon
     droppedReasons,
   }
 }
+
