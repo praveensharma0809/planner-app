@@ -33,12 +33,10 @@ describe("saveStructure", () => {
           {
             name: " Algebra ",
             sort_order: 0,
-            subtopics: [],
           },
           {
             name: "algebra",
             sort_order: 1,
-            subtopics: [],
           },
         ],
       },

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { schedule } from "@/lib/planner/engine"
+import { buildDaySlots, schedule } from "@/lib/planner/engine"
 import type { GlobalConstraints, PlannableUnit } from "@/lib/planner/engine"
 
 function buildUnit(overrides: Partial<PlannableUnit> = {}): PlannableUnit {
@@ -29,6 +29,24 @@ const baseConstraints: GlobalConstraints = {
 }
 
 describe("schedule", () => {
+  it("keeps contiguous day slots across DST boundary dates", () => {
+    const slots = buildDaySlots(
+      {
+        ...baseConstraints,
+        study_start_date: "2026-03-07",
+        exam_date: "2026-03-10",
+      },
+      new Set<string>()
+    )
+
+    expect(slots.map((slot) => slot.date)).toEqual([
+      "2026-03-07",
+      "2026-03-08",
+      "2026-03-09",
+      "2026-03-10",
+    ])
+  })
+
   it("returns empty schedule for empty units", () => {
     const result = schedule([], baseConstraints, new Set<string>())
     expect(result).toEqual([])
@@ -686,20 +704,18 @@ describe("schedule", () => {
     ).toBe("2024-01-05")
   })
 
-  it("ignores legacy tier ordering and keeps sequential topic flow", () => {
+  it("keeps sequential topic flow for ordered topics", () => {
     const firstInOrder = buildUnit({
       id: "topic-1",
       topic_name: "First",
       estimated_minutes: 180,
       deadline: "2024-01-02",
-      tier: 5,
     })
     const secondInOrder = buildUnit({
       id: "topic-2",
       topic_name: "Second",
       estimated_minutes: 60,
       deadline: "2024-01-02",
-      tier: 0,
     })
 
     const result = schedule(

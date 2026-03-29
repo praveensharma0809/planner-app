@@ -1,6 +1,7 @@
 "use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { isCanonicalIntakeManualTask } from "@/lib/planner/contracts"
 
 export interface DayTaskCount {
   date: string
@@ -39,7 +40,7 @@ export async function getMonthTaskCounts(
 
   const { data } = await supabase
     .from("tasks")
-    .select("scheduled_date, completed")
+    .select("scheduled_date, completed, task_source, plan_snapshot_id, session_number, total_sessions")
     .eq("user_id", user.id)
     .gte("scheduled_date", firstDay)
     .lte("scheduled_date", lastDayStr)
@@ -51,6 +52,9 @@ export async function getMonthTaskCounts(
   // Aggregate by date
   const map = new Map<string, { count: number; completed: number }>()
   for (const task of data) {
+    if (isCanonicalIntakeManualTask(task)) {
+      continue
+    }
     const entry = map.get(task.scheduled_date) ?? { count: 0, completed: 0 }
     entry.count++
     if (task.completed) entry.completed++

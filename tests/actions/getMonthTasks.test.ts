@@ -10,9 +10,11 @@ vi.mock("@/lib/supabase/server", () => ({
       from: () => ({
         select: () => ({
           eq: () => ({
-            lt: () => ({
-              eq: () => ({
-                order: () => mockResult(),
+            gte: () => ({
+              lte: () => ({
+                order: () => ({
+                  order: () => mockResult(),
+                }),
               }),
             }),
           }),
@@ -21,48 +23,24 @@ vi.mock("@/lib/supabase/server", () => ({
     }),
 }))
 
-const { getBacklog } = await import("@/app/actions/dashboard/getBacklog")
+const { getMonthTasks } = await import("@/app/actions/dashboard/getMonthTasks")
 
-describe("getBacklog", () => {
+describe("getMonthTasks", () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   it("returns UNAUTHORIZED when not signed in", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } })
-    const result = await getBacklog()
+    const result = await getMonthTasks("2026-03")
     expect(result.status).toBe("UNAUTHORIZED")
   })
 
-  it("returns empty array when no overdue tasks", async () => {
+  it("returns empty tasks when no rows exist", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } })
     mockResult.mockReturnValue({ data: [] })
 
-    const result = await getBacklog()
-    expect(result).toEqual({ status: "SUCCESS", tasks: [] })
-  })
-
-  it("returns overdue tasks", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } })
-    mockResult.mockReturnValue({
-      data: [
-        { id: "t1", title: "Old task", scheduled_date: "2025-12-20", completed: false },
-        { id: "t2", title: "Older task", scheduled_date: "2025-12-15", completed: false },
-      ],
-    })
-
-    const result = await getBacklog()
-    expect(result.status).toBe("SUCCESS")
-    if (result.status === "SUCCESS") {
-      expect(result.tasks).toHaveLength(2)
-    }
-  })
-
-  it("handles null data gracefully", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } })
-    mockResult.mockReturnValue({ data: null })
-
-    const result = await getBacklog()
+    const result = await getMonthTasks("2026-03")
     expect(result).toEqual({ status: "SUCCESS", tasks: [] })
   })
 
@@ -72,30 +50,49 @@ describe("getBacklog", () => {
       data: [
         {
           id: "intake",
+          user_id: "u1",
+          subject_id: "s1",
+          topic_id: "t1",
           title: "Chapter - Task",
-          scheduled_date: "2025-12-15",
+          scheduled_date: "2026-03-09",
+          duration_minutes: 60,
+          priority: 3,
           completed: false,
           task_source: "manual",
+          session_type: "core",
           plan_snapshot_id: null,
           session_number: 0,
           total_sessions: 1,
+          sort_order: 0,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-01T00:00:00.000Z",
         },
         {
           id: "plan-1",
-          title: "Planned session",
-          scheduled_date: "2025-12-16",
+          user_id: "u1",
+          subject_id: "s1",
+          topic_id: "t1",
+          title: "Session 1",
+          scheduled_date: "2026-03-10",
+          duration_minutes: 90,
+          priority: 2,
           completed: false,
           task_source: "plan",
+          session_type: "core",
           plan_snapshot_id: "snap-1",
           session_number: 1,
-          total_sessions: 2,
+          total_sessions: 4,
+          sort_order: 0,
+          created_at: "2026-03-01T00:00:00.000Z",
+          updated_at: "2026-03-01T00:00:00.000Z",
         },
       ],
     })
 
-    const result = await getBacklog()
+    const result = await getMonthTasks("2026-03")
     expect(result.status).toBe("SUCCESS")
     if (result.status !== "SUCCESS") return
+
     expect(result.tasks).toHaveLength(1)
     expect(result.tasks[0].id).toBe("plan-1")
   })

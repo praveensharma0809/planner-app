@@ -1,6 +1,7 @@
 "use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { isCanonicalIntakeManualTask } from "@/lib/planner/contracts"
 import type { Task } from "@/lib/types/db"
 
 export type GetWeeklySnapshotResponse =
@@ -45,14 +46,16 @@ export async function getWeeklySnapshot(weekOf?: string): Promise<GetWeeklySnaps
 
   const { data } = await supabase
     .from("tasks")
-    .select("id, user_id, subject_id, topic_id, subtopic_id, title, scheduled_date, duration_minutes, priority, completed, is_plan_generated, session_type, plan_version, session_number, total_sessions, sort_order, created_at")
+    .select("id, user_id, subject_id, topic_id, title, scheduled_date, duration_minutes, priority, completed, task_source, session_type, plan_snapshot_id, session_number, total_sessions, sort_order, created_at, updated_at")
     .eq("user_id", user.id)
     .gte("scheduled_date", startISO)
     .lte("scheduled_date", endISO)
     .order("scheduled_date", { ascending: true })
 
+  const tasks = (data ?? []).filter((task) => !isCanonicalIntakeManualTask(task))
+
   return {
     status: "SUCCESS",
-    tasks: data ?? []
+    tasks
   }
 }

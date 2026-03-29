@@ -12,6 +12,7 @@ import {
 import {
   buildPlanIssues,
   hasCriticalIssues,
+  inferSessionLengthMinutes,
   type PlanIssue,
   type PlanIssueAction,
   type PlanIssueConstraintField,
@@ -97,20 +98,18 @@ function mapDbToParamValues(param: {
   rest_after_days?: number
   max_sessions_per_day?: number
   study_frequency?: string
-  tier?: number
 }): ParamValues {
   return {
     topic_id: param.topic_id,
     estimated_hours: param.estimated_hours,
-    priority: 3,
+    priority: Number.isFinite(param.priority) ? Math.min(5, Math.max(1, Math.round(param.priority))) : 3,
     deadline: param.deadline ?? "",
     earliest_start: param.earliest_start ?? "",
     depends_on: param.depends_on ?? [],
-    session_length_minutes: param.session_length_minutes ?? 60,
+    session_length_minutes: inferSessionLengthMinutes([], param.session_length_minutes),
     rest_after_days: param.rest_after_days ?? 0,
     max_sessions_per_day: param.max_sessions_per_day ?? 0,
     study_frequency: param.study_frequency === "spaced" ? "spaced" : "daily",
-    tier: 0,
   }
 }
 
@@ -125,7 +124,6 @@ function mapDbParamsToMap(rows: Array<{
   rest_after_days?: number
   max_sessions_per_day?: number
   study_frequency?: string
-  tier?: number
 }>): Map<string, ParamValues> {
   const map = new Map<string, ParamValues>()
   for (const row of rows) {
@@ -177,7 +175,11 @@ function mapDbToConstraintValues(config: {
 }
 
 function todayISODate(): string {
-  return new Date().toISOString().split("T")[0]
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
 }
 
 function roundedHoursFromMinutes(totalMinutes: number): number {
@@ -239,21 +241,29 @@ function buildDeadlineMap(subjects: StructureSubject[]): Map<string, string> {
   function buildParamsFromStructure(
     subjects: StructureSubject[],
     existingMap: Map<string, ParamValues>,
-    fallbackExamDate: string
+    globalExamDate: string
   ): ParamValues[] {
     const values: ParamValues[] = []
 
     for (const subject of subjects) {
-      const subjectDeadline = subject.deadline ?? ""
+      const subjectDeadline = (subject.deadline ?? "").trim()
 
       for (const topic of subject.topics) {
         if (topic.archived) continue
 
         const current = existingMap.get(topic.id)
+        const currentDeadline = (current?.deadline ?? "").trim()
+        const resolvedDeadline =
+          currentDeadline &&
+          currentDeadline !== globalExamDate &&
+          currentDeadline !== subjectDeadline
+            ? currentDeadline
+            : ""
         const taskMinutes = topic.tasks.reduce(
           (sum, task) => sum + Math.max(0, task.duration_minutes ?? 0),
           0
         )
+        const taskDurations = topic.tasks.map((task) => Math.max(0, task.duration_minutes ?? 0))
         const derivedHours = roundedHoursFromMinutes(taskMinutes)
         const currentEstimatedHours = current?.estimated_hours ?? 0
 
@@ -261,14 +271,16 @@ function buildDeadlineMap(subjects: StructureSubject[]): Map<string, string> {
           topic_id: topic.id,
           estimated_hours: currentEstimatedHours > 0 ? currentEstimatedHours : (derivedHours > 0 ? derivedHours : 1),
           priority: 3,
-          deadline: current?.deadline || subjectDeadline || fallbackExamDate,
+          deadline: resolvedDeadline,
           earliest_start: current?.earliest_start ?? "",
           depends_on: current?.depends_on ?? [],
-          session_length_minutes: current?.session_length_minutes ?? 60,
+          session_length_minutes: inferSessionLengthMinutes(
+            taskDurations,
+            current?.session_length_minutes
+          ),
           rest_after_days: current?.rest_after_days ?? 0,
           max_sessions_per_day: current?.max_sessions_per_day ?? 0,
           study_frequency: current?.study_frequency === "spaced" ? "spaced" : "daily",
-          tier: 0,
         })
       }
     }
@@ -279,7 +291,10 @@ function buildDeadlineMap(subjects: StructureSubject[]): Map<string, string> {
 function addDaysISO(isoDate: string, days: number): string {
   const date = new Date(`${isoDate}T12:00:00`)
   date.setDate(date.getDate() + days)
-  return date.toISOString().split("T")[0]
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
 }
 
 export default function PlannerWizardClient({
@@ -302,7 +317,12 @@ export default function PlannerWizardClient({
   const [isReoptimizing, setIsReoptimizing] = useState(false)
 
   const [isCommitting, setIsCommitting] = useState(false)
-  const [commitResult, setCommitResult] = useState<{ status: string; taskCount?: number } | null>(null)
+  const [commitResult, setCommitResult] = useState<{
+    status: string
+    taskCount?: number
+    message?: string
+  } | null>(null)
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0)
   const [planIssues, setPlanIssues] = useState<PlanIssue[]>([])
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false)
   const [lastPlanStatus, setLastPlanStatus] = useState<string | null>(null)
@@ -581,7 +601,6 @@ export default function PlannerWizardClient({
           rest_after_days: param.rest_after_days,
           max_sessions_per_day: param.max_sessions_per_day,
           study_frequency: param.study_frequency,
-          tier: 0,
         }))
       )
 
@@ -606,6 +625,7 @@ export default function PlannerWizardClient({
   }
 
   const runPlanGeneration = useCallback(async (nextConstraints: ConstraintValues) => {
+    setCommitResult(null)
     const saveRes = await savePlanConfig(nextConstraints)
     if (saveRes.status !== "SUCCESS") {
       addToast(saveRes.status === "ERROR" ? saveRes.message : "Please sign in.", "error")
@@ -688,6 +708,7 @@ export default function PlannerWizardClient({
   }
 
   function handleEditSessions(editedSessions: ScheduledSession[]) {
+    setCommitResult(null)
     setSessions(editedSessions)
     refreshIssues({ sessions: editedSessions })
   }
@@ -709,6 +730,7 @@ export default function PlannerWizardClient({
     setIsReoptimizing(false)
 
     if (result.status === "SUCCESS") {
+      setCommitResult(null)
       setSessions(result.schedule)
       setLastPlanStatus("READY")
       const issues = refreshIssues({ sessions: result.schedule, planStatus: "READY" })
@@ -752,12 +774,16 @@ export default function PlannerWizardClient({
 
     if (result.status === "SUCCESS") {
       setCommitResult({ status: "SUCCESS", taskCount: result.taskCount })
-      addToast(`Plan committed - ${result.taskCount} tasks created!`, "success")
+      setHistoryRefreshKey((current) => current + 1)
+      addToast(`Plan committed: ${result.taskCount} tasks created.`, "success")
       return
     }
 
-    setCommitResult({ status: "ERROR" })
-    addToast("Failed to commit plan.", "error")
+    const errorMessage = result.status === "ERROR"
+      ? result.message
+      : "Failed to commit plan."
+    setCommitResult({ status: "ERROR", message: errorMessage })
+    addToast(errorMessage, "error")
   }
 
   return (
@@ -850,6 +876,7 @@ export default function PlannerWizardClient({
                   showPlannerLinks={false}
                   emptyMessage="No plans committed yet."
                   emptyHint="Commit a schedule to start building history."
+                  refreshKey={historyRefreshKey}
                 />
               </div>
             ) : (

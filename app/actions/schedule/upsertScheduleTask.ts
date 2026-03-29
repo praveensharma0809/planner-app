@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { isISODate } from "@/lib/planner/contracts"
 
 type UpsertTaskInput = {
   taskId?: string
@@ -17,10 +18,6 @@ export type UpsertScheduleTaskResponse =
   | { status: "INVALID_INPUT"; message: string }
   | { status: "ERROR"; message: string }
   | { status: "SUCCESS"; taskId: string }
-
-function isISODate(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value)
-}
 
 async function resolveSubjectId(
   userId: string,
@@ -166,17 +163,13 @@ export async function upsertScheduleTask(
       user_id: user.id,
       title,
       subject_id: resolvedSubject.subjectId,
-      topic_id: null,
       scheduled_date: input.scheduledDate,
       duration_minutes: Math.round(input.durationMinutes),
       session_type: "core",
       priority: 3,
       completed: false,
-      is_plan_generated: false,
-      session_number: 0,
-      total_sessions: 1,
-      sort_order: 0,
-      plan_version: null,
+      task_source: "manual",
+      plan_snapshot_id: null,
     })
     .select("id")
     .single()

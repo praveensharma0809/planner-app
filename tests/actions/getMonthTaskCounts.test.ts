@@ -89,4 +89,40 @@ describe("getMonthTaskCounts", () => {
     const result = await getMonthTaskCounts("2026-03")
     expect(result).toEqual({ status: "SUCCESS", days: [] })
   })
+
+  it("ignores canonical intake manual rows", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } })
+    mockResult.mockReturnValue({
+      data: [
+        {
+          scheduled_date: "2026-03-09",
+          completed: false,
+          task_source: "manual",
+          plan_snapshot_id: null,
+          session_number: 0,
+          total_sessions: 1,
+        },
+        {
+          scheduled_date: "2026-03-10",
+          completed: false,
+          task_source: "plan",
+          plan_snapshot_id: "snap-1",
+          session_number: 1,
+          total_sessions: 4,
+        },
+      ],
+    })
+
+    const result = await getMonthTaskCounts("2026-03")
+    expect(result.status).toBe("SUCCESS")
+    if (result.status !== "SUCCESS") return
+
+    expect(result.days).toEqual([
+      {
+        date: "2026-03-10",
+        count: 1,
+        completed: 0,
+      },
+    ])
+  })
 })

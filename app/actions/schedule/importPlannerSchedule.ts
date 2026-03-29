@@ -83,7 +83,7 @@ export async function importPlannerSchedule(
       "id, subject_id, title, scheduled_date, duration_minutes, session_type, priority, completed, created_at"
     )
     .eq("user_id", user.id)
-    .eq("is_plan_generated", true)
+    .eq("task_source", "plan")
     .gte("scheduled_date", weekStartISO)
     .lte("scheduled_date", weekEndISO)
     .order("scheduled_date", { ascending: true })

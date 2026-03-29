@@ -1282,26 +1282,26 @@ body {
   line-height: 1.6;
   color: var(--sh-text-secondary);
 }
-.overview-task-cluster {
+.overview-task-group {
   border: 1px solid var(--sh-border);
   border-radius: 20px;
   padding: 16px;
   background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
   box-shadow: var(--sh-shadow-sm);
 }
-.overview-task-cluster-header {
+.overview-task-group-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
 }
-.overview-task-cluster-title {
+.overview-task-group-title {
   font-size: 15px;
   font-weight: 700;
   color: var(--sh-text-primary);
 }
-.overview-task-cluster-sub {
+.overview-task-group-sub {
   margin-top: 4px;
   font-size: 12px;
   color: var(--sh-text-secondary);

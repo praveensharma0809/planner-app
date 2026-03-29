@@ -401,7 +401,7 @@ export default async function DashboardPage() {
                             <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
                               <span>{subjectNameById.get(task.subject_id) ?? "Others"}</span>
                               <span>{task.duration_minutes}m</span>
-                              {task.session_number !== null && task.total_sessions !== null && task.total_sessions > 1 && (
+                              {task.session_number != null && task.total_sessions != null && task.total_sessions > 1 && (
                                 <span>{task.session_number}/{task.total_sessions}</span>
                               )}
                               {task.session_type !== "core" && <span>{task.session_type}</span>}

@@ -33,7 +33,7 @@ type PendingTaskRow = {
 type ExistingTaskRow = {
   scheduled_date: string
   duration_minutes: number
-  is_plan_generated: boolean
+  task_source: "manual" | "plan"
   completed: boolean
 }
 
@@ -117,6 +117,11 @@ function buildRescheduleSupabaseMock(options: {
     snapshotId = "snapshot-1",
   } = options
 
+  const normalizedTopicParams = topicParams.map((row) => ({
+    ...row,
+    id: (row as { topic_id?: string; id?: string }).topic_id ?? (row as { id?: string }).id,
+  }))
+
   const deleteFilters = {
     eq: [] as Array<[string, unknown]>,
     gte: [] as Array<[string, unknown]>,
@@ -135,7 +140,7 @@ function buildRescheduleSupabaseMock(options: {
   const offDaysQuery = createThenableQuery({ data: offDays, error: null })
   const subjectsQuery = createThenableQuery({ data: subjects, error: null })
   const topicsQuery = createThenableQuery({ data: topics, error: null })
-  const topicParamsQuery = createThenableQuery({ data: topicParams, error: null })
+  const topicParamsQuery = createThenableQuery({ data: normalizedTopicParams, error: null })
   const snapshotMaybeSingle = vi.fn().mockResolvedValue({
     data: snapshotId ? { id: snapshotId } : null,
     error: null,
@@ -154,7 +159,7 @@ function buildRescheduleSupabaseMock(options: {
             if (columns.includes("subject_id, topic_id, title")) {
               return pendingTasksQuery
             }
-            if (columns.includes("scheduled_date, duration_minutes, is_plan_generated, completed")) {
+            if (columns.includes("scheduled_date, duration_minutes, task_source, completed")) {
               return existingTasksQuery
             }
             throw new Error(`Unexpected tasks select: ${columns}`)
@@ -173,7 +178,7 @@ function buildRescheduleSupabaseMock(options: {
         }
       }
 
-      if (table === "plan_config") {
+      if (table === "planner_settings") {
         return {
           select: vi.fn(() => configQuery),
         }
@@ -193,13 +198,12 @@ function buildRescheduleSupabaseMock(options: {
 
       if (table === "topics") {
         return {
-          select: vi.fn(() => topicsQuery),
-        }
-      }
-
-      if (table === "topic_params") {
-        return {
-          select: vi.fn(() => topicParamsQuery),
+          select: vi.fn((columns: string) => {
+            if (columns.includes("estimated_hours")) {
+              return topicParamsQuery
+            }
+            return topicsQuery
+          }),
         }
       }
 
@@ -353,7 +357,6 @@ describe("rescheduleMissedPlan", () => {
           rest_after_days: 0,
           max_sessions_per_day: 1,
           study_frequency: "daily",
-          tier: 0,
           created_at: "2026-02-01T00:00:00Z",
           updated_at: "2026-02-01T00:00:00Z",
         },
@@ -383,8 +386,8 @@ describe("rescheduleMissedPlan", () => {
         duration_minutes: 60,
         session_number: 1,
         total_sessions: 1,
-        is_plan_generated: true,
-        plan_version: "snapshot-1",
+        task_source: "plan",
+        plan_snapshot_id: "snapshot-1",
       }),
     ])
 
@@ -435,7 +438,7 @@ describe("rescheduleMissedPlan", () => {
         {
           scheduled_date: "2026-03-02",
           duration_minutes: 60,
-          is_plan_generated: true,
+          task_source: "plan",
           completed: true,
         },
       ],
@@ -466,7 +469,6 @@ describe("rescheduleMissedPlan", () => {
           rest_after_days: 0,
           max_sessions_per_day: 1,
           study_frequency: "daily",
-          tier: 0,
           created_at: "2026-02-01T00:00:00Z",
           updated_at: "2026-02-01T00:00:00Z",
         },
@@ -502,14 +504,74 @@ describe("rescheduleMissedPlan", () => {
         scheduled_date: "2026-03-01",
         session_number: 1,
         total_sessions: 2,
+        task_source: "plan",
+        plan_snapshot_id: "snapshot-1",
       }),
     ])
 
     expect(deleteFilters.eq).toEqual([
       ["user_id", "user-1"],
-      ["is_plan_generated", true],
+      ["task_source", "plan"],
       ["completed", false],
     ])
+  })
+
+  it("returns NO_PLAN_TASKS when all pending tasks belong to archived subjects", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-01T12:00:00Z"))
+
+    const { supabase, taskInsertPayloads, snapshotInsertPayloads } = buildRescheduleSupabaseMock({
+      pendingTasks: [
+        {
+          subject_id: "subject-archived",
+          topic_id: "topic-archived",
+          title: "Archived subject task",
+          duration_minutes: 60,
+          session_type: "core",
+          priority: 1,
+          session_number: 1,
+          total_sessions: 1,
+          scheduled_date: "2026-02-28",
+        },
+      ],
+      subjects: [{ id: "subject-archived", name: "Archived", sort_order: 0, archived: true }],
+      topics: [
+        {
+          id: "topic-archived",
+          user_id: "user-1",
+          subject_id: "subject-archived",
+          name: "Old Topic",
+          sort_order: 0,
+          created_at: "2026-02-01T00:00:00Z",
+          archived: true,
+        },
+      ],
+      topicParams: [
+        {
+          id: "param-archived",
+          user_id: "user-1",
+          topic_id: "topic-archived",
+          estimated_hours: 1,
+          priority: 1,
+          deadline: "2026-03-03",
+          earliest_start: null,
+          depends_on: [],
+          session_length_minutes: 60,
+          rest_after_days: 0,
+          max_sessions_per_day: 1,
+          study_frequency: "daily",
+        },
+      ],
+    })
+    createServerSupabaseClientMock.mockResolvedValue(supabase as never)
+
+    const { rescheduleMissedPlan } = await import("@/app/actions/planner/plan")
+
+    const result = await rescheduleMissedPlan()
+
+    expect(result).toEqual({ status: "NO_PLAN_TASKS" })
+    expect(taskInsertPayloads).toHaveLength(0)
+    expect(snapshotInsertPayloads).toHaveLength(0)
   })
 
   it("preserves dependency ordering when rebuilding pending tasks", async () => {
@@ -595,7 +657,6 @@ describe("rescheduleMissedPlan", () => {
           rest_after_days: 0,
           max_sessions_per_day: 1,
           study_frequency: "daily",
-          tier: 0,
           created_at: "2026-02-01T00:00:00Z",
           updated_at: "2026-02-01T00:00:00Z",
         },
@@ -614,7 +675,6 @@ describe("rescheduleMissedPlan", () => {
           rest_after_days: 0,
           max_sessions_per_day: 1,
           study_frequency: "daily",
-          tier: 0,
           created_at: "2026-02-01T00:00:00Z",
           updated_at: "2026-02-01T00:00:00Z",
         },

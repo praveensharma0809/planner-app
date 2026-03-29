@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import type { Task } from "@/lib/types/db"
 import { completeTask } from "@/app/actions/plan/completeTask"
 import { uncompleteTask } from "@/app/actions/plan/uncompleteTask"
 import { rescheduleTask } from "@/app/actions/plan/rescheduleTask"
+import { useToast } from "@/app/components/Toast"
 import { Badge, Modal } from "@/app/components/ui"
 import { PageHeader } from "@/app/components/layout/PageHeader"
 
@@ -47,16 +49,20 @@ const SESSION_LABEL: Record<string, string> = {
 const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 function formatFullDate(iso: string) {
-  return new Date(iso + "T12:00:00").toLocaleDateString("en-US", {
+  return new Date(iso + "T00:00:00Z").toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
   })
 }
 
 function formatDayName(iso: string) {
-  return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })
+  return new Date(iso + "T00:00:00Z").toLocaleDateString("en-US", {
+    weekday: "long",
+    timeZone: "UTC",
+  })
 }
 
 export function MonthView({
@@ -68,6 +74,8 @@ export function MonthView({
   prevMonth,
   nextMonth,
 }: Props) {
+  const router = useRouter()
+  const { addToast } = useToast()
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [completingId, setCompletingId] = useState<string | null>(null)
   const [completedLocal, setCompletedLocal] = useState<Set<string>>(new Set())
@@ -115,7 +123,18 @@ export function MonthView({
   const handleComplete = async (taskId: string) => {
     setCompletingId(taskId)
     try {
-      await completeTask(taskId)
+      const result = await completeTask(taskId)
+      if (result.status !== "SUCCESS") {
+        if (result.status === "UNAUTHORIZED") {
+          addToast("Please sign in again.", "error")
+        } else if (result.status === "NOT_FOUND") {
+          addToast("Task not found.", "error")
+        } else {
+          addToast(result.message || "Could not mark task complete.", "error")
+        }
+        return
+      }
+
       setCompletedLocal((prev) => new Set(prev).add(taskId))
       setUncompletedLocal((prev) => {
         const n = new Set(prev)
@@ -123,7 +142,7 @@ export function MonthView({
         return n
       })
     } catch {
-      /* silent */
+      addToast("Could not mark task complete. Please try again.", "error")
     } finally {
       setCompletingId(null)
     }
@@ -132,7 +151,18 @@ export function MonthView({
   const handleUncomplete = async (taskId: string) => {
     setUncompletingId(taskId)
     try {
-      await uncompleteTask(taskId)
+      const result = await uncompleteTask(taskId)
+      if (result.status !== "SUCCESS") {
+        if (result.status === "UNAUTHORIZED") {
+          addToast("Please sign in again.", "error")
+        } else if (result.status === "NOT_FOUND") {
+          addToast("Task not found.", "error")
+        } else {
+          addToast(result.message || "Could not undo completion.", "error")
+        }
+        return
+      }
+
       setUncompletedLocal((prev) => new Set(prev).add(taskId))
       setCompletedLocal((prev) => {
         const n = new Set(prev)
@@ -140,18 +170,34 @@ export function MonthView({
         return n
       })
     } catch {
-      /* silent */
+      addToast("Could not undo completion. Please try again.", "error")
     } finally {
       setUncompletingId(null)
     }
   }
 
   const handleReschedule = async (taskId: string, newDate: string) => {
-    if (!newDate || newDate < today) return
+    if (!newDate || newDate < today) {
+      addToast("Cannot move tasks to a past date.", "error")
+      return
+    }
     setMovingId(taskId)
     try {
       const result = await rescheduleTask(taskId, newDate)
-      if (result.status === "SUCCESS") window.location.reload()
+      if (result.status === "SUCCESS") {
+        router.refresh()
+        addToast("Task rescheduled.", "success")
+      } else if (result.status === "UNAUTHORIZED") {
+        addToast("Please sign in again to reschedule tasks.", "error")
+      } else if (result.status === "INVALID_DATE") {
+        addToast("Selected date is invalid.", "error")
+      } else if (result.status === "NOT_FOUND") {
+        addToast("Task not found.", "error")
+      } else {
+        addToast(result.message || "Could not reschedule task.", "error")
+      }
+    } catch {
+      addToast("Could not reschedule task. Please try again.", "error")
     } finally {
       setMovingId(null)
     }
@@ -241,7 +287,7 @@ export function MonthView({
             const isSunday = col === 6
 
             const studyMin = dayTasks
-              .filter((t) => t.is_plan_generated)
+              .filter((t) => t.task_source === "plan")
               .reduce((s, t) => s + t.duration_minutes, 0)
             const studyHrs      = studyMin / 60
             const previewTasks  = dayTasks.slice(0, 3)

@@ -94,25 +94,36 @@ type EventDraft = {
 }
 
 function toISODateLocal(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
+  const year = date.getUTCFullYear()
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0")
+  const day = String(date.getUTCDate()).padStart(2, "0")
   return `${year}-${month}-${day}`
 }
 
 function parseISODate(iso: string) {
-  return new Date(`${iso}T12:00:00`)
+  const parts = iso.split("-")
+  if (parts.length !== 3) return new Date(Number.NaN)
+
+  const year = Number(parts[0])
+  const month = Number(parts[1])
+  const day = Number(parts[2])
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return new Date(Number.NaN)
+  }
+
+  return new Date(Date.UTC(year, month - 1, day))
 }
 
 function addDaysISO(iso: string, days: number) {
   const date = parseISODate(iso)
-  date.setDate(date.getDate() + days)
+  date.setUTCDate(date.getUTCDate() + days)
   return toISODateLocal(date)
 }
 
 function addMonthsISO(iso: string, months: number) {
   const date = parseISODate(iso)
-  date.setMonth(date.getMonth() + months)
+  date.setUTCMonth(date.getUTCMonth() + months)
   return toISODateLocal(date)
 }
 
@@ -120,13 +131,13 @@ function formatWeekRangeTitle(startISO: string, endISO: string) {
   const start = parseISODate(startISO)
   const end = parseISODate(endISO)
 
-  const startDay = String(start.getDate()).padStart(2, "0")
-  const endDay = String(end.getDate()).padStart(2, "0")
-  const startMonth = start.toLocaleString("en-US", { month: "long" })
-  const endMonth = end.toLocaleString("en-US", { month: "long" })
+  const startDay = String(start.getUTCDate()).padStart(2, "0")
+  const endDay = String(end.getUTCDate()).padStart(2, "0")
+  const startMonth = start.toLocaleString("en-US", { month: "long", timeZone: "UTC" })
+  const endMonth = end.toLocaleString("en-US", { month: "long", timeZone: "UTC" })
 
-  const startYear = start.getFullYear()
-  const endYear = end.getFullYear()
+  const startYear = start.getUTCFullYear()
+  const endYear = end.getUTCFullYear()
 
   if (startMonth === endMonth && startYear === endYear) {
     return `${startDay}-${endDay} ${startMonth} ${startYear}`
@@ -143,19 +154,20 @@ function formatDayDateLabel(iso: string) {
   return parseISODate(iso).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
+    timeZone: "UTC",
   })
 }
 
 function getWeekRangeMeta(baseDate: Date): WeekRangeMeta {
   const start = new Date(baseDate)
-  start.setHours(12, 0, 0, 0)
+  start.setUTCHours(12, 0, 0, 0)
 
-  const weekday = start.getDay()
+  const weekday = start.getUTCDay()
   const diffToMonday = (weekday + 6) % 7
-  start.setDate(start.getDate() - diffToMonday)
+  start.setUTCDate(start.getUTCDate() - diffToMonday)
 
   const end = new Date(start)
-  end.setDate(end.getDate() + 6)
+  end.setUTCDate(end.getUTCDate() + 6)
 
   const weekStartISO = toISODateLocal(start)
   const weekEndISO = toISODateLocal(end)
@@ -272,7 +284,7 @@ function mapTasksToEvents(
       durationSlots,
       completed: task.completed,
       priority: task.priority,
-      isPlanGenerated: task.is_plan_generated,
+      isPlanGenerated: task.is_planner_task,
     })
   }
 
@@ -457,9 +469,39 @@ export default function SchedulePage() {
 
     try {
       if (nextCompleted) {
-        await completeTask(taskId)
+        const result = await completeTask(taskId)
+        if (result.status !== "SUCCESS") {
+          setTasks((previous) =>
+            previous.map((task) =>
+              task.id === taskId ? { ...task, completed: targetTask.completed } : task
+            )
+          )
+          if (result.status === "UNAUTHORIZED") {
+            addToast("Please sign in again.", "error")
+          } else if (result.status === "NOT_FOUND") {
+            addToast("Task not found.", "error")
+          } else {
+            addToast(result.message || "Could not update task status.", "error")
+          }
+          return
+        }
       } else {
-        await uncompleteTask(taskId)
+        const result = await uncompleteTask(taskId)
+        if (result.status !== "SUCCESS") {
+          setTasks((previous) =>
+            previous.map((task) =>
+              task.id === taskId ? { ...task, completed: targetTask.completed } : task
+            )
+          )
+          if (result.status === "UNAUTHORIZED") {
+            addToast("Please sign in again.", "error")
+          } else if (result.status === "NOT_FOUND") {
+            addToast("Task not found.", "error")
+          } else {
+            addToast(result.message || "Could not update task status.", "error")
+          }
+          return
+        }
       }
     } catch {
       setTasks((previous) =>

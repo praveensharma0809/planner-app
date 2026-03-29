@@ -23,7 +23,6 @@ export interface PlannerParamValues {
   rest_after_days: number
   max_sessions_per_day: number
   study_frequency: StudyFrequency
-  tier: number
 }
 
 export interface PlannerConstraintValues {
@@ -56,8 +55,59 @@ export interface PlannerSubjectOption {
 
 export const MIN_SESSION_LENGTH_MINUTES = 15
 export const MAX_SESSION_LENGTH_MINUTES = 240
+export const LEGACY_DEFAULT_SESSION_LENGTH_MINUTES = 60
 
 export const CUSTOM_DAY_CAPACITY_PRESETS = [0, 30, 60, 90, 120, 180, 240] as const
+
+function clampInteger(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+export function inferSessionLengthMinutes(
+  taskDurations: number[],
+  configuredMinutes?: number | null
+): number {
+  const normalizedDurations = taskDurations
+    .map((value) => Math.trunc(value))
+    .filter((value) => Number.isFinite(value) && value > 0)
+
+  const derivedFromTasks =
+    normalizedDurations.length > 0
+      ? clampInteger(
+          Math.max(...normalizedDurations),
+          MIN_SESSION_LENGTH_MINUTES,
+          MAX_SESSION_LENGTH_MINUTES
+        )
+      : null
+
+  const hasConfigured =
+    configuredMinutes != null &&
+    Number.isFinite(configuredMinutes) &&
+    configuredMinutes > 0
+
+  const normalizedConfigured = hasConfigured
+    ? clampInteger(
+        Math.trunc(configuredMinutes),
+        MIN_SESSION_LENGTH_MINUTES,
+        MAX_SESSION_LENGTH_MINUTES
+      )
+    : null
+
+  if (normalizedConfigured != null) {
+    // Legacy rows often carry a default 60 even for longer task durations.
+    if (
+      normalizedConfigured === LEGACY_DEFAULT_SESSION_LENGTH_MINUTES &&
+      derivedFromTasks != null &&
+      derivedFromTasks > normalizedConfigured
+    ) {
+      return derivedFromTasks
+    }
+    return normalizedConfigured
+  }
+
+  if (derivedFromTasks != null) return derivedFromTasks
+  return LEGACY_DEFAULT_SESSION_LENGTH_MINUTES
+}
 
 export function normalizePlannerName(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLowerCase()

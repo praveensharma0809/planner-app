@@ -33,12 +33,6 @@ import {
   updateChapter,
 } from "@/app/actions/subjects/chapters"
 import {
-  addSubtopic,
-  deleteSubtopic,
-  updateSubtopic,
-} from "@/app/actions/subjects/subtopics"
-import {
-  assignTasksToCluster,
   bulkUpdateSubjectTaskDuration,
   bulkCreateSubjectTasks,
   createSubjectTask,
@@ -63,6 +57,7 @@ import { SubjectDrawer } from "./SubjectDrawer"
 import {
   MAX_SESSION_LENGTH_MINUTES,
   MIN_SESSION_LENGTH_MINUTES,
+  inferSessionLengthMinutes,
 } from "@/lib/planner/draft"
 
 export interface SubjectNavTopic {
@@ -90,7 +85,6 @@ export interface SubjectNavItem {
 export interface TopicTaskItem {
   id: string
   topicId: string
-  clusterId: string | null
   title: string
   completed: boolean
   durationMinutes: number
@@ -164,11 +158,6 @@ type NameDialogState = {
 
 type TaskCreateMode = "single" | "bulk"
 type NumberPlacement = "suffix" | "prefix"
-
-const NONE_CLUSTER_VALUE = "__none__"
-const NEW_CLUSTER_VALUE = "__new__"
-const ALL_CLUSTER_FILTER_VALUE = "__all__"
-const UNCLUSTERED_FILTER_VALUE = "__unclustered__"
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const
 
 const CLOSED_DIALOG_STATE: NameDialogState = {
@@ -186,8 +175,13 @@ function clampInteger(value: number, min: number, max: number): number {
 }
 
 function defaultIntakeConstraints(): IntakeConstraintsDraft {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, "0")
+  const day = String(today.getDate()).padStart(2, "0")
+
   return {
-    study_start_date: new Date().toISOString().slice(0, 10),
+    study_start_date: `${year}-${month}-${day}`,
     exam_date: "",
     weekday_capacity_minutes: 180,
     weekend_capacity_minutes: 240,
@@ -395,9 +389,6 @@ export function SubjectsDataTable({
   const [chapterDialog, setChapterDialog] = useState<NameDialogState>(CLOSED_DIALOG_STATE)
   const [chapterDialogSaving, setChapterDialogSaving] = useState(false)
 
-  const [clusterDialog, setClusterDialog] = useState<NameDialogState>(CLOSED_DIALOG_STATE)
-  const [clusterDialogSaving, setClusterDialogSaving] = useState(false)
-
   const [taskDialog, setTaskDialog] = useState<NameDialogState>(CLOSED_DIALOG_STATE)
   const [taskDialogSaving, setTaskDialogSaving] = useState(false)
   const [taskDurationDrafts, setTaskDurationDrafts] = useState<Record<string, string>>({})
@@ -415,19 +406,13 @@ export function SubjectsDataTable({
   const [bulkNumberPadding, setBulkNumberPadding] = useState("0")
   const [bulkSeparator, setBulkSeparator] = useState("-")
   const [bulkPlacement, setBulkPlacement] = useState<NumberPlacement>("suffix")
-  const [composerClusterValue, setComposerClusterValue] = useState(NONE_CLUSTER_VALUE)
-  const [composerNewClusterName, setComposerNewClusterName] = useState("")
 
   const [manageMode, setManageMode] = useState(false)
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
-  const [assignClusterValue, setAssignClusterValue] = useState(NONE_CLUSTER_VALUE)
-  const [assigningCluster, setAssigningCluster] = useState(false)
   const [deletingSelectedTasks, setDeletingSelectedTasks] = useState(false)
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null)
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
-  const [clusterFilterValue, setClusterFilterValue] = useState(ALL_CLUSTER_FILTER_VALUE)
-  const [clusterManagerExpanded, setClusterManagerExpanded] = useState(false)
   const [manualOrderChapterIds, setManualOrderChapterIds] = useState<Set<string>>(new Set())
   const [reorderingTaskIds, setReorderingTaskIds] = useState<string[]>([])
   const [reorderingSubjects, setReorderingSubjects] = useState(false)
@@ -497,20 +482,26 @@ export function SubjectsDataTable({
   }>) => {
     const map = new Map<string, TopicParamDraft>()
     for (const row of rows) {
+      const chapterTaskDurations = (tasksByChapter[row.topic_id] ?? []).map((task) =>
+        Math.max(0, task.durationMinutes)
+      )
       map.set(row.topic_id, {
         topic_id: row.topic_id,
         estimated_hours: Math.max(0, row.estimated_hours ?? 0),
         deadline: row.deadline ?? null,
         earliest_start: row.earliest_start ?? null,
         depends_on: row.depends_on ?? [],
-        session_length_minutes: normalizeDurationMinutes(row.session_length_minutes ?? 60),
+        session_length_minutes: inferSessionLengthMinutes(
+          chapterTaskDurations,
+          row.session_length_minutes
+        ),
         rest_after_days: Math.max(0, row.rest_after_days ?? 0),
         max_sessions_per_day: Math.max(0, row.max_sessions_per_day ?? 0),
         study_frequency: row.study_frequency === "spaced" ? "spaced" : "daily",
       })
     }
     return map
-  }, [])
+  }, [tasksByChapter])
 
   const loadTopicParamsSnapshot = useCallback(async (showErrorToast = false) => {
     const paramsRes = await getTopicParams()
@@ -523,6 +514,21 @@ export function SubjectsDataTable({
 
     const map = mapTopicParamsToDraftMap(paramsRes.params)
     setTopicParamsByTopic(map)
+    setSubjects((previous) =>
+      previous.map((subject) => ({
+        ...subject,
+        chapters: subject.chapters.map((chapter) => {
+          const param = map.get(chapter.id)
+          if (!param) return chapter
+          return {
+            ...chapter,
+            earliestStart: param.earliest_start ?? null,
+            deadline: param.deadline ?? null,
+            restAfterDays: Math.max(0, param.rest_after_days ?? 0),
+          }
+        }),
+      }))
+    )
     return map
   }, [addToast, mapTopicParamsToDraftMap])
 
@@ -631,13 +637,8 @@ export function SubjectsDataTable({
   )
 
   useEffect(() => {
-    setClusterFilterValue(ALL_CLUSTER_FILTER_VALUE)
     setSelectedTaskIds(new Set())
     setManageMode(false)
-    setAssignClusterValue(NONE_CLUSTER_VALUE)
-    setComposerClusterValue(NONE_CLUSTER_VALUE)
-    setComposerNewClusterName("")
-    setClusterManagerExpanded(false)
   }, [selectedChapter?.id, showArchived])
 
   useEffect(() => {
@@ -653,50 +654,7 @@ export function SubjectsDataTable({
     () => chapterTasks.filter((task) => task.completed).length,
     [chapterTasks]
   )
-  const chapterClusters = useMemo(
-    () => selectedChapter?.topics ?? [],
-    [selectedChapter]
-  )
-
-  const clusterNameById = useMemo(
-    () => new Map(chapterClusters.map((cluster) => [cluster.id, cluster.name])),
-    [chapterClusters]
-  )
-
-  const { clusterTaskCounts, unclusteredTaskCount } = useMemo(() => {
-    const counts = new Map<string, number>()
-    let unclustered = 0
-
-    for (const task of chapterTasks) {
-      if (!task.clusterId) {
-        unclustered += 1
-        continue
-      }
-      counts.set(task.clusterId, (counts.get(task.clusterId) ?? 0) + 1)
-    }
-
-    return {
-      clusterTaskCounts: counts,
-      unclusteredTaskCount: unclustered,
-    }
-  }, [chapterTasks])
-
-  const visibleTasks = useMemo(() => {
-    if (clusterFilterValue === ALL_CLUSTER_FILTER_VALUE) {
-      return chapterTasks
-    }
-
-    if (clusterFilterValue === UNCLUSTERED_FILTER_VALUE) {
-      return chapterTasks.filter((task) => !task.clusterId)
-    }
-
-    return chapterTasks.filter((task) => task.clusterId === clusterFilterValue)
-  }, [chapterTasks, clusterFilterValue])
-
-  const visibleCompletedCount = useMemo(
-    () => visibleTasks.filter((task) => task.completed).length,
-    [visibleTasks]
-  )
+  const visibleTasks = chapterTasks
 
   const subjectColumnItems: ColumnItem[] = displaySubjects.map((subject) => ({
     id: subject.id,
@@ -711,29 +669,17 @@ export function SubjectsDataTable({
   const chapterColumnItems: ColumnItem[] = (selectedSubject?.chapters ?? []).map((chapter) => ({
     id: chapter.id,
     label: chapter.name,
-    hint: `${chapter.topics.length} cluster${chapter.topics.length === 1 ? "" : "s"}`,
+    hint: `${(tasksByChapter[chapter.id] ?? []).length} task${(tasksByChapter[chapter.id] ?? []).length === 1 ? "" : "s"}`,
     onEdit: showArchived ? undefined : () => openEditChapter(chapter.id, chapter.name),
   }))
 
   const allVisibleSelected =
     visibleTasks.length > 0 && visibleTasks.every((task) => selectedTaskIds.has(task.id))
 
-  const selectedDetailTitle = (() => {
-    if (clusterFilterValue === ALL_CLUSTER_FILTER_VALUE) {
-      return selectedChapter?.name ?? "Overview"
-    }
+  const selectedDetailTitle = selectedChapter?.name ?? "Overview"
 
-    if (clusterFilterValue === UNCLUSTERED_FILTER_VALUE) {
-      return "Unclustered"
-    }
-
-    return clusterNameById.get(clusterFilterValue) ?? "Cluster"
-  })()
-
-  const progressCompleted =
-    clusterFilterValue === ALL_CLUSTER_FILTER_VALUE ? completedCount : visibleCompletedCount
-  const progressTotal =
-    clusterFilterValue === ALL_CLUSTER_FILTER_VALUE ? chapterTasks.length : visibleTasks.length
+  const progressCompleted = completedCount
+  const progressTotal = chapterTasks.length
 
   const bulkPreview = useMemo(() => {
     const baseName = bulkBaseName.trim()
@@ -763,8 +709,6 @@ export function SubjectsDataTable({
     setBulkNumberPadding("0")
     setBulkSeparator("-")
     setBulkPlacement("suffix")
-    setComposerClusterValue(NONE_CLUSTER_VALUE)
-    setComposerNewClusterName("")
   }
 
   function openCreateSubject() {
@@ -807,33 +751,15 @@ export function SubjectsDataTable({
 
   function openEditChapter(chapterId: string, chapterName: string) {
     const chapter = selectedSubject?.chapters.find((item) => item.id === chapterId)
+    const param = topicParamsByTopic.get(chapterId)
     setChapterDialog({
       open: true,
       mode: "edit",
       targetId: chapterId,
       value: chapterName,
-      earliestStart: chapter?.earliestStart ?? "",
-      deadline: chapter?.deadline ?? "",
-      restAfterDays: String(Math.max(0, chapter?.restAfterDays ?? 0)),
-    })
-  }
-
-  function openCreateCluster() {
-    if (!selectedChapter || showArchived) return
-    setClusterDialog({
-      open: true,
-      mode: "create",
-      targetId: null,
-      value: "",
-    })
-  }
-
-  function openEditCluster(clusterId: string, clusterName: string) {
-    setClusterDialog({
-      open: true,
-      mode: "edit",
-      targetId: clusterId,
-      value: clusterName,
+      earliestStart: param?.earliest_start ?? chapter?.earliestStart ?? "",
+      deadline: param?.deadline ?? "",
+      restAfterDays: String(Math.max(0, param?.rest_after_days ?? chapter?.restAfterDays ?? 0)),
     })
   }
 
@@ -856,21 +782,25 @@ export function SubjectsDataTable({
     if (!selectedSubjectId || pendingSubjectId) return
 
     setPendingSubjectId(selectedSubjectId)
-    const result = await toggleArchiveSubject(selectedSubjectId)
+    try {
+      const result = await toggleArchiveSubject(selectedSubjectId)
 
-    if (result.status === "SUCCESS") {
-      setSubjects((previous) =>
-        previous.map((subject) =>
-          subject.id === selectedSubjectId ? { ...subject, archived: result.archived } : subject
+      if (result.status === "SUCCESS") {
+        setSubjects((previous) =>
+          previous.map((subject) =>
+            subject.id === selectedSubjectId ? { ...subject, archived: result.archived } : subject
+          )
         )
-      )
-      addToast(result.archived ? "Subject archived." : "Subject restored.", "success")
-      router.refresh()
-    } else {
-      addToast(result.status === "ERROR" ? result.message : "Unauthorized", "error")
+        addToast(result.archived ? "Subject archived." : "Subject restored.", "success")
+        router.refresh()
+      } else {
+        addToast(result.status === "ERROR" ? result.message : "Unauthorized", "error")
+      }
+    } catch {
+      addToast("Could not update subject archive state.", "error")
+    } finally {
+      setPendingSubjectId(null)
     }
-
-    setPendingSubjectId(null)
   }
 
   async function handleArchiveChapter() {
@@ -949,25 +879,7 @@ export function SubjectsDataTable({
       })
     }
 
-    const reorderedVisibleTasks = arrayMove(visibleTasks, fromIndex, toIndex)
-    let reorderedChapterTasks: TopicTaskItem[]
-
-    if (clusterFilterValue === ALL_CLUSTER_FILTER_VALUE) {
-      reorderedChapterTasks = reorderedVisibleTasks
-    } else {
-      const reorderedVisibleIdSet = new Set(reorderedVisibleTasks.map((task) => task.id))
-
-      let cursor = 0
-      reorderedChapterTasks = chapterTasks.map((task) => {
-        if (!reorderedVisibleIdSet.has(task.id)) {
-          return task
-        }
-
-        const nextTask = reorderedVisibleTasks[cursor]
-        cursor += 1
-        return nextTask
-      })
-    }
+    const reorderedChapterTasks = arrayMove(visibleTasks, fromIndex, toIndex)
 
     const orderedChapterTaskIds = reorderedChapterTasks.map((task) => task.id)
 
@@ -977,12 +889,24 @@ export function SubjectsDataTable({
       [chapterId]: reorderedChapterTasks,
     }))
 
-    const result = await reorderTasks({
-      chapterId,
-      taskIds: orderedChapterTaskIds,
-    })
+    try {
+      const result = await reorderTasks({
+        chapterId,
+        taskIds: orderedChapterTaskIds,
+      })
 
-    if (result.status !== "SUCCESS") {
+      if (result.status !== "SUCCESS") {
+        if (!hadManualOverride) {
+          setManualOrderChapterIds((current) => {
+            const next = new Set(current)
+            next.delete(chapterId)
+            return next
+          })
+        }
+        addToast(result.status === "ERROR" ? result.message : "Failed to reorder tasks.", "error")
+        router.refresh()
+      }
+    } catch {
       if (!hadManualOverride) {
         setManualOrderChapterIds((current) => {
           const next = new Set(current)
@@ -990,11 +914,11 @@ export function SubjectsDataTable({
           return next
         })
       }
-      addToast(result.status === "ERROR" ? result.message : "Failed to reorder tasks.", "error")
+      addToast("Could not reorder tasks right now.", "error")
       router.refresh()
+    } finally {
+      setReorderingTaskIds([])
     }
-
-    setReorderingTaskIds([])
   }
 
   useEffect(() => {
@@ -1019,19 +943,27 @@ export function SubjectsDataTable({
     let alive = true
 
     void (async () => {
-      const result = await reorderTasks({
-        chapterId,
-        taskIds: orderedTaskIds,
-      })
+      try {
+        const result = await reorderTasks({
+          chapterId,
+          taskIds: orderedTaskIds,
+        })
 
-      if (!alive) return
+        if (!alive) return
 
-      if (result.status !== "SUCCESS") {
-        addToast(result.status === "ERROR" ? result.message : "Failed to auto-order tasks.", "error")
+        if (result.status !== "SUCCESS") {
+          addToast(result.status === "ERROR" ? result.message : "Failed to auto-order tasks.", "error")
+          router.refresh()
+        }
+      } catch {
+        if (!alive) return
+        addToast("Could not auto-order tasks.", "error")
         router.refresh()
+      } finally {
+        if (alive) {
+          setReorderingTaskIds([])
+        }
       }
-
-      setReorderingTaskIds([])
     })()
 
     return () => {
@@ -1103,59 +1035,6 @@ export function SubjectsDataTable({
       addToast(result.message, "error")
     } finally {
       setChapterDialogSaving(false)
-    }
-  }
-
-  async function handleSaveCluster(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    if (!clusterDialog.value.trim()) {
-      addToast("Cluster name is required.", "error")
-      return
-    }
-
-    setClusterDialogSaving(true)
-
-    try {
-      if (clusterDialog.mode === "create") {
-        if (!selectedChapter) return
-
-        const result = await addSubtopic(selectedChapter.id, clusterDialog.value)
-        if (result.status === "SUCCESS") {
-          setClusterFilterValue(result.subtopic.id)
-          setClusterDialog(CLOSED_DIALOG_STATE)
-          addToast("Cluster created.", "success")
-          router.refresh()
-          return
-        }
-
-        if (result.status === "UNAUTHORIZED") {
-          addToast("Unauthorized", "error")
-          return
-        }
-
-        addToast(result.message, "error")
-        return
-      }
-
-      if (!clusterDialog.targetId) return
-      const result = await updateSubtopic(clusterDialog.targetId, clusterDialog.value)
-
-      if (result.status === "SUCCESS") {
-        setClusterDialog(CLOSED_DIALOG_STATE)
-        addToast("Cluster updated.", "success")
-        router.refresh()
-        return
-      }
-
-      if (result.status === "UNAUTHORIZED") {
-        addToast("Unauthorized", "error")
-        return
-      }
-
-      addToast(result.message, "error")
-    } finally {
-      setClusterDialogSaving(false)
     }
   }
 
@@ -1243,29 +1122,6 @@ export function SubjectsDataTable({
     addToast(result.message, "error")
   }
 
-  async function handleDeleteCluster(clusterId: string, clusterName: string) {
-    if (!window.confirm(`Delete cluster "${clusterName}"? Its tasks will become unclustered.`)) {
-      return
-    }
-
-    const result = await deleteSubtopic(clusterId)
-    if (result.status === "SUCCESS") {
-      if (clusterFilterValue === clusterId) {
-        setClusterFilterValue(ALL_CLUSTER_FILTER_VALUE)
-      }
-      addToast("Cluster deleted.", "success")
-      router.refresh()
-      return
-    }
-
-    if (result.status === "UNAUTHORIZED") {
-      addToast("Unauthorized", "error")
-      return
-    }
-
-    addToast(result.message, "error")
-  }
-
   async function handleDeleteTask(taskId: string, taskTitle: string) {
     if (!window.confirm(`Delete task "${taskTitle}"?`)) {
       return
@@ -1286,40 +1142,6 @@ export function SubjectsDataTable({
     addToast(result.message, "error")
   }
 
-  async function resolveComposerClusterId(): Promise<string | null | undefined> {
-    if (composerClusterValue === NONE_CLUSTER_VALUE) {
-      return null
-    }
-
-    if (composerClusterValue === NEW_CLUSTER_VALUE) {
-      if (!selectedChapter) {
-        addToast("Choose a chapter first.", "error")
-        return undefined
-      }
-
-      if (!composerNewClusterName.trim()) {
-        addToast("New cluster name is required.", "error")
-        return undefined
-      }
-
-      const createClusterResult = await addSubtopic(selectedChapter.id, composerNewClusterName)
-      if (createClusterResult.status === "SUCCESS") {
-        addToast("Cluster created.", "success")
-        return createClusterResult.subtopic.id
-      }
-
-      if (createClusterResult.status === "UNAUTHORIZED") {
-        addToast("Unauthorized", "error")
-        return undefined
-      }
-
-      addToast(createClusterResult.message, "error")
-      return undefined
-    }
-
-    return composerClusterValue
-  }
-
   async function handleCreateTasks(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -1331,11 +1153,6 @@ export function SubjectsDataTable({
     setTaskComposerSaving(true)
 
     try {
-      const clusterId = await resolveComposerClusterId()
-      if (clusterId === undefined) {
-        return
-      }
-
       if (taskCreateMode === "single") {
         const title = singleTaskTitle.trim()
         if (!title) {
@@ -1346,7 +1163,6 @@ export function SubjectsDataTable({
         const result = await createSubjectTask({
           chapterId: selectedChapter.id,
           title,
-          clusterId,
         })
 
         if (result.status === "SUCCESS") {
@@ -1393,7 +1209,6 @@ export function SubjectsDataTable({
 
       const result = await bulkCreateSubjectTasks({
         chapterId: selectedChapter.id,
-        clusterId,
         baseName,
         count,
         startAt,
@@ -1447,43 +1262,6 @@ export function SubjectsDataTable({
       }
       return next
     })
-  }
-
-  async function handleAssignSelectedTasksToCluster() {
-    if (!selectedChapter) return
-
-    const taskIds = Array.from(selectedTaskIds)
-    if (taskIds.length === 0) {
-      addToast("Select tasks to assign.", "error")
-      return
-    }
-
-    const clusterId = assignClusterValue === NONE_CLUSTER_VALUE ? null : assignClusterValue
-
-    setAssigningCluster(true)
-    try {
-      const result = await assignTasksToCluster({
-        chapterId: selectedChapter.id,
-        taskIds,
-        clusterId,
-      })
-
-      if (result.status === "SUCCESS") {
-        setSelectedTaskIds(new Set())
-        addToast(`Updated ${result.updatedCount} task${result.updatedCount === 1 ? "" : "s"}.`, "success")
-        router.refresh()
-        return
-      }
-
-      if (result.status === "UNAUTHORIZED") {
-        addToast("Unauthorized", "error")
-        return
-      }
-
-      addToast(result.message, "error")
-    } finally {
-      setAssigningCluster(false)
-    }
   }
 
   async function handleDeleteSelectedTasks() {
@@ -1554,9 +1332,41 @@ export function SubjectsDataTable({
 
     try {
       if (nextCompleted) {
-        await completeTask(taskId)
+        const result = await completeTask(taskId)
+        if (result.status !== "SUCCESS") {
+          setTasksByChapter((previous) => ({
+            ...previous,
+            [chapterId]: (previous[chapterId] ?? []).map((task) =>
+              task.id === taskId ? { ...task, completed: currentTask.completed } : task
+            ),
+          }))
+          if (result.status === "UNAUTHORIZED") {
+            addToast("Unauthorized", "error")
+          } else if (result.status === "NOT_FOUND") {
+            addToast("Task not found.", "error")
+          } else {
+            addToast(result.message || "Could not update task status.", "error")
+          }
+          return
+        }
       } else {
-        await uncompleteTask(taskId)
+        const result = await uncompleteTask(taskId)
+        if (result.status !== "SUCCESS") {
+          setTasksByChapter((previous) => ({
+            ...previous,
+            [chapterId]: (previous[chapterId] ?? []).map((task) =>
+              task.id === taskId ? { ...task, completed: currentTask.completed } : task
+            ),
+          }))
+          if (result.status === "UNAUTHORIZED") {
+            addToast("Unauthorized", "error")
+          } else if (result.status === "NOT_FOUND") {
+            addToast("Task not found.", "error")
+          } else {
+            addToast(result.message || "Could not update task status.", "error")
+          }
+          return
+        }
       }
       router.refresh()
     } catch {
@@ -1621,36 +1431,46 @@ export function SubjectsDataTable({
       ),
     }))
 
-    const result = await updateSubjectTaskDuration({
-      taskId,
-      durationMinutes: nextDuration,
-    })
+    try {
+      const result = await updateSubjectTaskDuration({
+        taskId,
+        durationMinutes: nextDuration,
+      })
 
-    if (result.status !== "SUCCESS") {
+      if (result.status !== "SUCCESS") {
+        setTasksByChapter((previous) => ({
+          ...previous,
+          [chapterId]: (previous[chapterId] ?? []).map((task) =>
+            task.id === taskId ? { ...task, durationMinutes: existingTask.durationMinutes } : task
+          ),
+        }))
+
+        addToast(result.status === "ERROR" ? result.message : "Failed to update task duration.", "error")
+      } else {
+        addToast("Task duration updated.", "success")
+        router.refresh()
+      }
+    } catch {
       setTasksByChapter((previous) => ({
         ...previous,
         [chapterId]: (previous[chapterId] ?? []).map((task) =>
           task.id === taskId ? { ...task, durationMinutes: existingTask.durationMinutes } : task
         ),
       }))
+      addToast("Could not update task duration.", "error")
+    } finally {
+      setTaskDurationDrafts((previous) => {
+        const next = { ...previous }
+        delete next[taskId]
+        return next
+      })
 
-      addToast(result.status === "ERROR" ? result.message : "Failed to update task duration.", "error")
-    } else {
-      addToast("Task duration updated.", "success")
-      router.refresh()
+      setTaskDurationSavingIds((previous) => {
+        const next = new Set(previous)
+        next.delete(taskId)
+        return next
+      })
     }
-
-    setTaskDurationDrafts((previous) => {
-      const next = { ...previous }
-      delete next[taskId]
-      return next
-    })
-
-    setTaskDurationSavingIds((previous) => {
-      const next = new Set(previous)
-      next.delete(taskId)
-      return next
-    })
   }
 
   async function handleApplySelectedTaskDuration() {
@@ -1683,13 +1503,29 @@ export function SubjectsDataTable({
       ),
     }))
 
-    const result = await bulkUpdateSubjectTaskDuration({
-      chapterId,
-      taskIds,
-      durationMinutes,
-    })
+    try {
+      const result = await bulkUpdateSubjectTaskDuration({
+        chapterId,
+        taskIds,
+        durationMinutes,
+      })
 
-    if (result.status !== "SUCCESS") {
+      if (result.status !== "SUCCESS") {
+        const beforeMap = new Map(before.map((task) => [task.id, task.durationMinutes]))
+        setTasksByChapter((previous) => ({
+          ...previous,
+          [chapterId]: (previous[chapterId] ?? []).map((task) =>
+            beforeMap.has(task.id)
+              ? { ...task, durationMinutes: beforeMap.get(task.id) ?? task.durationMinutes }
+              : task
+          ),
+        }))
+        addToast(result.status === "ERROR" ? result.message : "Failed to apply duration.", "error")
+      } else {
+        addToast(`Updated duration for ${result.updatedCount} task${result.updatedCount === 1 ? "" : "s"}.`, "success")
+        router.refresh()
+      }
+    } catch {
       const beforeMap = new Map(before.map((task) => [task.id, task.durationMinutes]))
       setTasksByChapter((previous) => ({
         ...previous,
@@ -1699,13 +1535,10 @@ export function SubjectsDataTable({
             : task
         ),
       }))
-      addToast(result.status === "ERROR" ? result.message : "Failed to apply duration.", "error")
-    } else {
-      addToast(`Updated duration for ${result.updatedCount} task${result.updatedCount === 1 ? "" : "s"}.`, "success")
-      router.refresh()
+      addToast("Could not apply duration update.", "error")
+    } finally {
+      setBulkDurationSaving(false)
     }
-
-    setBulkDurationSaving(false)
   }
 
   function updateDayOfWeekCapacity(index: number, rawValue: string) {
@@ -1787,45 +1620,47 @@ export function SubjectsDataTable({
     }
 
     setOffDaySaving(true)
-    const existingDates = new Set(offDays.map((offDay) => offDay.date))
-    const datesToAdd = targetDates.filter((item) => !existingDates.has(item))
+    try {
+      const existingDates = new Set(offDays.map((offDay) => offDay.date))
+      const datesToAdd = targetDates.filter((item) => !existingDates.has(item))
 
-    if (datesToAdd.length === 0) {
-      addToast("Selected dates are already marked as off-days.", "info")
-      setOffDaySaving(false)
-      return
-    }
+      if (datesToAdd.length === 0) {
+        addToast("Selected dates are already marked as off-days.", "info")
+        return
+      }
 
-    const results = await Promise.all(
-      datesToAdd.map((targetDate) => addOffDay({ date: targetDate, reason }))
-    )
-
-    const failed = results.find((result) => result.status !== "SUCCESS")
-    if (failed) {
-      addToast(
-        failed.status === "ERROR" ? failed.message : "Failed to add off-days.",
-        "error"
+      const results = await Promise.all(
+        datesToAdd.map((targetDate) => addOffDay({ date: targetDate, reason }))
       )
+
+      const failed = results.find((result) => result.status !== "SUCCESS")
+      if (failed) {
+        addToast(
+          failed.status === "ERROR" ? failed.message : "Failed to add off-days.",
+          "error"
+        )
+        return
+      }
+
+      setOffDays((previous) => [
+        ...previous,
+        ...results.map((result, index) => ({
+          id: (result as { id: string }).id,
+          date: datesToAdd[index],
+          reason: reason || null,
+        })),
+      ].sort((left, right) => left.date.localeCompare(right.date)))
+
+      setOffDayDateInput("")
+      setOffDayReasonInput("")
+      setSelectedOffDayDates(new Set())
+      addToast(`Added ${datesToAdd.length} off-day${datesToAdd.length === 1 ? "" : "s"}.`, "success")
+      router.refresh()
+    } catch {
+      addToast("Could not add off-days right now.", "error")
+    } finally {
       setOffDaySaving(false)
-      return
     }
-
-    setOffDays((previous) => [
-      ...previous,
-      ...results.map((result, index) => ({
-        id: (result as { id: string }).id,
-        date: datesToAdd[index],
-        reason: reason || null,
-      })),
-    ].sort((left, right) => left.date.localeCompare(right.date)))
-
-    setOffDayDateInput("")
-    setOffDayReasonInput("")
-    setSelectedOffDayDates(new Set())
-    addToast(`Added ${datesToAdd.length} off-day${datesToAdd.length === 1 ? "" : "s"}.`, "success")
-    router.refresh()
-
-    setOffDaySaving(false)
   }
 
   async function handleDeleteOffDay(item: OffDayItem) {
@@ -1852,26 +1687,29 @@ export function SubjectsDataTable({
     }
 
     setConstraintsSaving(true)
+    try {
+      const result = await savePlanConfig({
+        study_start_date: constraintsDraft.study_start_date,
+        exam_date: constraintsDraft.exam_date,
+        weekday_capacity_minutes: Math.max(0, Math.trunc(constraintsDraft.weekday_capacity_minutes)),
+        weekend_capacity_minutes: Math.max(0, Math.trunc(constraintsDraft.weekend_capacity_minutes)),
+        max_active_subjects: Math.max(0, Math.trunc(constraintsDraft.max_active_subjects)),
+        day_of_week_capacity: normalizeDayOfWeekCapacity(constraintsDraft.day_of_week_capacity),
+        custom_day_capacity: constraintsDraft.custom_day_capacity,
+        flexibility_minutes: Math.max(0, Math.trunc(constraintsDraft.flexibility_minutes)),
+        max_daily_minutes: Math.max(30, Math.trunc(constraintsDraft.max_daily_minutes)),
+      })
 
-    const result = await savePlanConfig({
-      study_start_date: constraintsDraft.study_start_date,
-      exam_date: constraintsDraft.exam_date,
-      weekday_capacity_minutes: Math.max(0, Math.trunc(constraintsDraft.weekday_capacity_minutes)),
-      weekend_capacity_minutes: Math.max(0, Math.trunc(constraintsDraft.weekend_capacity_minutes)),
-      max_active_subjects: Math.max(0, Math.trunc(constraintsDraft.max_active_subjects)),
-      day_of_week_capacity: normalizeDayOfWeekCapacity(constraintsDraft.day_of_week_capacity),
-      custom_day_capacity: constraintsDraft.custom_day_capacity,
-      flexibility_minutes: Math.max(0, Math.trunc(constraintsDraft.flexibility_minutes)),
-      max_daily_minutes: Math.max(30, Math.trunc(constraintsDraft.max_daily_minutes)),
-    })
-
-    if (result.status === "SUCCESS") {
-      addToast("Step-2 constraints saved.", "success")
-    } else {
-      addToast(result.status === "ERROR" ? result.message : "Failed to save constraints.", "error")
+      if (result.status === "SUCCESS") {
+        addToast("Step-2 constraints saved.", "success")
+      } else {
+        addToast(result.status === "ERROR" ? result.message : "Failed to save constraints.", "error")
+      }
+    } catch {
+      addToast("Could not save constraints.", "error")
+    } finally {
+      setConstraintsSaving(false)
     }
-
-    setConstraintsSaving(false)
   }
 
   async function handleReorderSubjects(orderedIds: string[]) {
@@ -1889,20 +1727,26 @@ export function SubjectsDataTable({
     setSubjects([...reorderedActive, ...remainingSubjects])
     setReorderingSubjects(true)
 
-    const result = await reorderSubjectsAction(
-      orderedIds.map((id, sortOrder) => ({
-        id,
-        sort_order: sortOrder,
-      }))
-    )
+    try {
+      const result = await reorderSubjectsAction(
+        orderedIds.map((id, sortOrder) => ({
+          id,
+          sort_order: sortOrder,
+        }))
+      )
 
-    if (result.status !== "SUCCESS") {
+      if (result.status !== "SUCCESS") {
+        setSubjects(previousSubjects)
+        addToast(result.status === "ERROR" ? result.message : "Failed to reorder subjects.", "error")
+        router.refresh()
+      }
+    } catch {
       setSubjects(previousSubjects)
-      addToast(result.status === "ERROR" ? result.message : "Failed to reorder subjects.", "error")
+      addToast("Could not reorder subjects.", "error")
       router.refresh()
+    } finally {
+      setReorderingSubjects(false)
     }
-
-    setReorderingSubjects(false)
   }
 
   async function handleReorderChapters(orderedIds: string[]) {
@@ -1924,21 +1768,27 @@ export function SubjectsDataTable({
     )
 
     setReorderingChapters(true)
-    const result = await reorderChaptersAction(
-      selectedSubject.id,
-      orderedIds.map((id, sortOrder) => ({
-        id,
-        sort_order: sortOrder,
-      }))
-    )
+    try {
+      const result = await reorderChaptersAction(
+        selectedSubject.id,
+        orderedIds.map((id, sortOrder) => ({
+          id,
+          sort_order: sortOrder,
+        }))
+      )
 
-    if (result.status !== "SUCCESS") {
+      if (result.status !== "SUCCESS") {
+        setSubjects(previousSubjects)
+        addToast(result.status === "ERROR" ? result.message : "Failed to reorder chapters.", "error")
+        router.refresh()
+      }
+    } catch {
       setSubjects(previousSubjects)
-      addToast(result.status === "ERROR" ? result.message : "Failed to reorder chapters.", "error")
+      addToast("Could not reorder chapters.", "error")
       router.refresh()
+    } finally {
+      setReorderingChapters(false)
     }
-
-    setReorderingChapters(false)
   }
 
   function mapStructureToLocalState(
@@ -1950,11 +1800,9 @@ export function SubjectsDataTable({
         id: string
         name: string
         archived?: boolean
-        subtopics: Array<{ id: string; name: string }>
         tasks: Array<{
           id: string
           topic_id: string | null
-          subtopic_id: string | null
           title: string
           completed: boolean
           duration_minutes: number
@@ -1971,10 +1819,7 @@ export function SubjectsDataTable({
         id: topic.id,
         name: topic.name,
         archived: topic.archived ?? false,
-        topics: topic.subtopics.map((subtopic) => ({
-          id: subtopic.id,
-          name: subtopic.name,
-        })),
+        topics: [],
         earliestStart: topicMetaMap.get(topic.id)?.earliestStart ?? null,
         deadline: topicMetaMap.get(topic.id)?.deadline ?? null,
         restAfterDays: topicMetaMap.get(topic.id)?.restAfterDays ?? 0,
@@ -1987,7 +1832,6 @@ export function SubjectsDataTable({
         nextTasksByChapter[topic.id] = topic.tasks.map((task) => ({
           id: task.id,
           topicId: task.topic_id ?? topic.id,
-          clusterId: task.subtopic_id,
           title: task.title,
           completed: task.completed,
           durationMinutes: normalizeDurationMinutes(task.duration_minutes),
@@ -2005,64 +1849,66 @@ export function SubjectsDataTable({
       setImportingAll(true)
     }
 
-    const [structureRes, paramsMap] = await Promise.all([
-      getStructure({
-        onlyUndoneTasks: onlyUndone,
-        dropTopicsWithoutTasks: onlyUndone,
-      }),
-      loadTopicParamsSnapshot(false),
-    ])
+    try {
+      const [structureRes, paramsMap] = await Promise.all([
+        getStructure({
+          onlyUndoneTasks: onlyUndone,
+          dropTopicsWithoutTasks: onlyUndone,
+        }),
+        loadTopicParamsSnapshot(false),
+      ])
 
-    if (structureRes.status !== "SUCCESS") {
-      addToast(
-        structureRes.status === "ERROR"
-          ? structureRes.message
-          : "Please sign in to import from subjects.",
-        "error"
+      if (structureRes.status !== "SUCCESS") {
+        addToast(
+          structureRes.status === "ERROR"
+            ? structureRes.message
+            : "Please sign in to import from subjects.",
+          "error"
+        )
+        return
+      }
+
+      const topicMetaMap = new Map<string, TopicMetaDraft>()
+      for (const [topicId, param] of paramsMap.entries()) {
+        topicMetaMap.set(topicId, {
+          earliestStart: param.earliest_start,
+          deadline: param.deadline,
+          restAfterDays: Math.max(0, param.rest_after_days ?? 0),
+        })
+      }
+
+      const { nextSubjects, nextTasksByChapter } = mapStructureToLocalState(
+        structureRes.tree.subjects,
+        topicMetaMap
       )
+
+      setSubjects(nextSubjects)
+      setTasksByChapter(nextTasksByChapter)
+      setShowArchived(false)
+      setSelectedTaskIds(new Set())
+      setManageMode(false)
+
+      if (nextSubjects.length > 0) {
+        setSelectedSubjectId(nextSubjects[0].id)
+        const firstChapter = nextSubjects[0].chapters[0]
+        setSelectedChapterId(firstChapter?.id ?? null)
+      } else {
+        setSelectedSubjectId(null)
+        setSelectedChapterId(null)
+      }
+
+      addToast(
+        onlyUndone
+          ? "Imported undone-only structure snapshot."
+          : "Imported full structure snapshot.",
+        "success"
+      )
+    } catch {
+      addToast("Could not import structure from subjects.", "error")
+    } finally {
       setImportingAll(false)
       setImportingUndone(false)
-      return
     }
-
-    const topicMetaMap = new Map<string, TopicMetaDraft>()
-    for (const [topicId, param] of paramsMap.entries()) {
-      topicMetaMap.set(topicId, {
-        earliestStart: param.earliest_start,
-        deadline: param.deadline,
-        restAfterDays: Math.max(0, param.rest_after_days ?? 0),
-      })
-    }
-
-    const { nextSubjects, nextTasksByChapter } = mapStructureToLocalState(
-      structureRes.tree.subjects,
-      topicMetaMap
-    )
-
-    setSubjects(nextSubjects)
-    setTasksByChapter(nextTasksByChapter)
-    setShowArchived(false)
-    setSelectedTaskIds(new Set())
-    setManageMode(false)
-
-    if (nextSubjects.length > 0) {
-      setSelectedSubjectId(nextSubjects[0].id)
-      const firstChapter = nextSubjects[0].chapters[0]
-      setSelectedChapterId(firstChapter?.id ?? null)
-    } else {
-      setSelectedSubjectId(null)
-      setSelectedChapterId(null)
-    }
-
-    addToast(
-      onlyUndone
-        ? "Imported undone-only structure snapshot."
-        : "Imported full structure snapshot.",
-      "success"
-    )
-
-    setImportingAll(false)
-    setImportingUndone(false)
   }
 
   async function handleResetIntakeView() {
@@ -2071,12 +1917,17 @@ export function SubjectsDataTable({
     }
 
     setResettingIntake(true)
-    await Promise.all([
-      importStructureFromSubjects(false),
-      loadStep2Snapshot(true),
-      loadTopicParamsSnapshot(true),
-    ])
-    setResettingIntake(false)
+    try {
+      await Promise.all([
+        importStructureFromSubjects(false),
+        loadStep2Snapshot(true),
+        loadTopicParamsSnapshot(true),
+      ])
+    } catch {
+      addToast("Could not reset intake view.", "error")
+    } finally {
+      setResettingIntake(false)
+    }
   }
 
   async function openDependencyManager(scope: DependencyScope) {
@@ -2107,9 +1958,14 @@ export function SubjectsDataTable({
     setDependencyModalOpen(true)
 
     setDependencyLoading(true)
-    const map = await loadTopicParamsSnapshot(true)
-    setDependencySelectedIds(new Set(map.get(targetId)?.depends_on ?? []))
-    setDependencyLoading(false)
+    try {
+      const map = await loadTopicParamsSnapshot(true)
+      setDependencySelectedIds(new Set(map.get(targetId)?.depends_on ?? []))
+    } catch {
+      addToast("Could not load dependencies.", "error")
+    } finally {
+      setDependencyLoading(false)
+    }
   }
 
   function toggleDependencySelection(chapterId: string) {
@@ -2141,6 +1997,9 @@ export function SubjectsDataTable({
       (sum, task) => sum + Math.max(0, task.durationMinutes),
       0
     )
+    const chapterTaskDurations = (tasksByChapter[dependencyTargetChapterId] ?? []).map((task) =>
+      Math.max(0, task.durationMinutes)
+    )
 const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10)
       const estimatedHours = existing?.estimated_hours
         ? existing.estimated_hours
@@ -2151,45 +2010,55 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
 
     setDependencySaving(true)
 
-    const result = await saveTopicParams([
-      {
-        topic_id: dependencyTargetChapterId,
-        estimated_hours: estimatedHours,
-        priority: 3,
-        deadline: existing?.deadline ?? chapter.deadline ?? null,
-        earliest_start: existing?.earliest_start ?? chapter.earliestStart ?? null,
-        depends_on: dependsOn,
-        session_length_minutes: existing?.session_length_minutes ?? 60,
-        rest_after_days: existing?.rest_after_days ?? Math.max(0, chapter.restAfterDays ?? 0),
-        max_sessions_per_day: existing?.max_sessions_per_day ?? 0,
-        study_frequency: existing?.study_frequency ?? "daily",
-      },
-    ])
-
-    if (result.status === "SUCCESS") {
-      setTopicParamsByTopic((previous) => {
-        const next = new Map(previous)
-        next.set(dependencyTargetChapterId, {
+    try {
+      const result = await saveTopicParams([
+        {
           topic_id: dependencyTargetChapterId,
           estimated_hours: estimatedHours,
-          deadline: existing?.deadline ?? chapter.deadline ?? null,
+          priority: 3,
+          deadline: existing?.deadline ?? null,
           earliest_start: existing?.earliest_start ?? chapter.earliestStart ?? null,
           depends_on: dependsOn,
-          session_length_minutes: existing?.session_length_minutes ?? 60,
+          session_length_minutes: inferSessionLengthMinutes(
+            chapterTaskDurations,
+            existing?.session_length_minutes
+          ),
           rest_after_days: existing?.rest_after_days ?? Math.max(0, chapter.restAfterDays ?? 0),
           max_sessions_per_day: existing?.max_sessions_per_day ?? 0,
           study_frequency: existing?.study_frequency ?? "daily",
+        },
+      ])
+
+      if (result.status === "SUCCESS") {
+        setTopicParamsByTopic((previous) => {
+          const next = new Map(previous)
+          next.set(dependencyTargetChapterId, {
+            topic_id: dependencyTargetChapterId,
+            estimated_hours: estimatedHours,
+            deadline: existing?.deadline ?? null,
+            earliest_start: existing?.earliest_start ?? chapter.earliestStart ?? null,
+            depends_on: dependsOn,
+            session_length_minutes: inferSessionLengthMinutes(
+              chapterTaskDurations,
+              existing?.session_length_minutes
+            ),
+            rest_after_days: existing?.rest_after_days ?? Math.max(0, chapter.restAfterDays ?? 0),
+            max_sessions_per_day: existing?.max_sessions_per_day ?? 0,
+            study_frequency: existing?.study_frequency ?? "daily",
+          })
+          return next
         })
-        return next
-      })
 
-      addToast("Dependencies saved.", "success")
-      setDependencyModalOpen(false)
-    } else {
-      addToast(result.status === "ERROR" ? result.message : "Failed to save dependencies.", "error")
+        addToast("Dependencies saved.", "success")
+        setDependencyModalOpen(false)
+      } else {
+        addToast(result.status === "ERROR" ? result.message : "Failed to save dependencies.", "error")
+      }
+    } catch {
+      addToast("Could not save dependencies.", "error")
+    } finally {
+      setDependencySaving(false)
     }
-
-    setDependencySaving(false)
   }
 
   const customCapacityEntries = useMemo(
@@ -2441,12 +2310,6 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     <span>{selectedSubject.name}</span>
                     <span>{">"}</span>
                     <span>{selectedChapter.name}</span>
-                    {clusterFilterValue !== ALL_CLUSTER_FILTER_VALUE && (
-                      <>
-                        <span>{">"}</span>
-                        <span style={{ color: "var(--sh-text-secondary)" }}>{selectedDetailTitle}</span>
-                      </>
-                    )}
                   </nav>
 
                   <div className="mt-3 flex flex-wrap items-start gap-3">
@@ -2542,30 +2405,6 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                         </div>
 
                         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                          <select
-                            value={assignClusterValue}
-                            onChange={(event) => setAssignClusterValue(event.target.value)}
-                            className="ui-input h-8 min-w-[132px]"
-                          >
-                            <option value={NONE_CLUSTER_VALUE}>Unclustered</option>
-                            {chapterClusters.map((cluster) => (
-                              <option key={`assign-${cluster.id}`} value={cluster.id}>
-                                {cluster.name}
-                              </option>
-                            ))}
-                          </select>
-
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => {
-                              void handleAssignSelectedTasksToCluster()
-                            }}
-                            disabled={selectedTaskIds.size === 0 || assigningCluster}
-                          >
-                            {assigningCluster ? "Applying..." : "Apply Cluster"}
-                          </Button>
-
                           <span className="text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
                             Time
                           </span>
@@ -2597,85 +2436,14 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                       className="mt-2 h-[126px] rounded-lg border p-2 flex flex-col overflow-hidden"
                       style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex h-full flex-col items-start justify-center gap-1 px-1">
                         <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                          Clusters
+                          Tasks
                         </p>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={openCreateCluster}
-                            disabled={showArchived}
-                          >
-                            New Cluster
-                          </Button>
-
-                          {chapterClusters.length > 0 && !showArchived && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setClusterManagerExpanded((value) => !value)}
-                            >
-                              {clusterManagerExpanded ? "Hide Manager" : "Manage Clusters"}
-                            </Button>
-                          )}
-                        </div>
+                        <p className="text-sm" style={{ color: "var(--sh-text-secondary)" }}>
+                          {completedCount}/{chapterTasks.length} completed
+                        </p>
                       </div>
-
-                      <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
-                        <FilterChip
-                          label={`All (${chapterTasks.length})`}
-                          active={clusterFilterValue === ALL_CLUSTER_FILTER_VALUE}
-                          compact={sidebarExpanded}
-                          onClick={() => setClusterFilterValue(ALL_CLUSTER_FILTER_VALUE)}
-                        />
-                        <FilterChip
-                          label={`Unclustered (${unclusteredTaskCount})`}
-                          active={clusterFilterValue === UNCLUSTERED_FILTER_VALUE}
-                          compact={sidebarExpanded}
-                          onClick={() => setClusterFilterValue(UNCLUSTERED_FILTER_VALUE)}
-                        />
-                        {chapterClusters.map((cluster) => (
-                          <FilterChip
-                            key={cluster.id}
-                            label={`${cluster.name} (${clusterTaskCounts.get(cluster.id) ?? 0})`}
-                            active={clusterFilterValue === cluster.id}
-                            compact={sidebarExpanded}
-                            onClick={() => setClusterFilterValue(cluster.id)}
-                          />
-                        ))}
-                      </div>
-
-                      {clusterManagerExpanded && chapterClusters.length > 0 && !showArchived && (
-                        <div className="mt-1.5 grid min-h-0 flex-1 gap-1.5 overflow-y-auto pr-1">
-                          {chapterClusters.map((cluster) => (
-                            <div
-                              key={`cluster-manage-${cluster.id}`}
-                              className="flex items-center justify-between gap-2 rounded-md border px-2 py-1"
-                              style={{ borderColor: "var(--sh-border)" }}
-                            >
-                              <p className="min-w-0 truncate text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                                {cluster.name} · {clusterTaskCounts.get(cluster.id) ?? 0} task
-                                {(clusterTaskCounts.get(cluster.id) ?? 0) === 1 ? "" : "s"}
-                              </p>
-                              <div className="flex items-center gap-1">
-                                <RowActionButton
-                                  label={`Edit cluster ${cluster.name}`}
-                                  onClick={() => openEditCluster(cluster.id, cluster.name)}
-                                />
-                                <RowActionButton
-                                  label={`Delete cluster ${cluster.name}`}
-                                  onClick={() => {
-                                    void handleDeleteCluster(cluster.id, cluster.name)
-                                  }}
-                                  danger
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </section>
                   )}
 
@@ -2744,8 +2512,6 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                                   isPending={pendingTaskIds.has(task.id)}
                                   isDurationSaving={taskDurationSavingIds.has(task.id)}
                                   isReordering={reorderingTaskIds.includes(task.id)}
-                                  clusterName={task.clusterId ? clusterNameById.get(task.clusterId) ?? null : null}
-                                  showClusterBadge={clusterFilterValue === ALL_CLUSTER_FILTER_VALUE}
                                   canEdit={!showArchived}
                                   durationDraft={taskDurationDrafts[task.id] ?? String(task.durationMinutes)}
                                   onToggle={(nextCompleted) => handleToggleTask(task.id, nextCompleted)}
@@ -2786,7 +2552,6 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                           {visibleTasks.map((task) => {
                             const isPending = pendingTaskIds.has(task.id)
                             const isDurationSaving = taskDurationSavingIds.has(task.id)
-                            const clusterName = task.clusterId ? clusterNameById.get(task.clusterId) ?? null : null
 
                             return (
                               <div
@@ -2842,19 +2607,6 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                                     >
                                       {task.title}
                                     </p>
-
-                                    {clusterFilterValue === ALL_CLUSTER_FILTER_VALUE && (
-                                      <span
-                                        className="max-w-[120px] truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                                        style={{
-                                          color: "var(--sh-text-secondary)",
-                                          background: "rgba(255,255,255,0.06)",
-                                        }}
-                                        title={clusterName ?? "Unclustered"}
-                                      >
-                                        {clusterName ?? "Unclustered"}
-                                      </span>
-                                    )}
 
                                     <input
                                       type="number"
@@ -3540,19 +3292,6 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
       </Modal>
 
       <NameModal
-        open={clusterDialog.open}
-        title={clusterDialog.mode === "create" ? "Add Cluster" : "Edit Cluster"}
-        fieldLabel="Cluster Name"
-        value={clusterDialog.value}
-        placeholder="e.g. Lecture Set A"
-        submitLabel={clusterDialog.mode === "create" ? "Add Cluster" : "Save Cluster"}
-        loading={clusterDialogSaving}
-        onChange={(value) => setClusterDialog((previous) => ({ ...previous, value }))}
-        onClose={() => setClusterDialog(CLOSED_DIALOG_STATE)}
-        onSubmit={handleSaveCluster}
-      />
-
-      <NameModal
         open={taskDialog.open}
         title="Edit Task"
         fieldLabel="Task Title"
@@ -3832,35 +3571,6 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
             </div>
           )}
 
-          <div className="space-y-2">
-            <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-              Cluster
-            </label>
-            <select
-              value={composerClusterValue}
-              onChange={(event) => setComposerClusterValue(event.target.value)}
-              className="ui-input"
-            >
-              <option value={NONE_CLUSTER_VALUE}>Unclustered</option>
-              {chapterClusters.map((cluster) => (
-                <option key={`composer-${cluster.id}`} value={cluster.id}>
-                  {cluster.name}
-                </option>
-              ))}
-              <option value={NEW_CLUSTER_VALUE}>Create new cluster...</option>
-            </select>
-
-            {composerClusterValue === NEW_CLUSTER_VALUE && (
-              <Input
-                required
-                label="New Cluster Name"
-                value={composerNewClusterName}
-                onChange={(event) => setComposerNewClusterName(event.target.value)}
-                placeholder="e.g. Lecture Set A"
-              />
-            )}
-          </div>
-
           <div className="flex items-center justify-end gap-2">
             <Button
               type="button"
@@ -3892,8 +3602,6 @@ interface DraggableTaskRowProps {
   isPending: boolean
   isDurationSaving: boolean
   isReordering: boolean
-  clusterName: string | null
-  showClusterBadge: boolean
   canEdit: boolean
   durationDraft: string
   onToggle: (completed: boolean) => void
@@ -3908,8 +3616,6 @@ function DraggableTaskRow({
   isPending,
   isDurationSaving,
   isReordering,
-  clusterName,
-  showClusterBadge,
   canEdit,
   durationDraft,
   onToggle,
@@ -3993,19 +3699,6 @@ function DraggableTaskRow({
           >
             {task.title}
           </p>
-
-          {showClusterBadge && (
-            <span
-              className="max-w-[120px] truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
-              style={{
-                color: "var(--sh-text-secondary)",
-                background: "rgba(255,255,255,0.06)",
-              }}
-              title={clusterName ?? "Unclustered"}
-            >
-              {clusterName ?? "Unclustered"}
-            </span>
-          )}
 
           <input
             type="number"
@@ -4334,30 +4027,6 @@ function NameModal({
         </div>
       </form>
     </Modal>
-  )
-}
-
-interface FilterChipProps {
-  label: string
-  active: boolean
-  compact?: boolean
-  onClick: () => void
-}
-
-function FilterChip({ label, active, compact = false, onClick }: FilterChipProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`shrink-0 whitespace-nowrap rounded-full border font-semibold transition-colors ${compact ? "px-2 py-0.5 text-[10px] leading-tight" : "px-2 py-1 text-[11px]"}`}
-      style={{
-        borderColor: active ? "var(--sh-primary-glow)" : "var(--sh-border)",
-        background: active ? "var(--sh-primary-muted)" : "transparent",
-        color: active ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-      }}
-    >
-      {label}
-    </button>
   )
 }
 

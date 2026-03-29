@@ -1,5 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
-import type { Subject, Subtopic, Task, Topic } from "@/lib/types/db"
+import type { Subject, Task, Topic } from "@/lib/types/db"
 import { redirect } from "next/navigation"
 import {
   SubjectsDataTable,
@@ -9,8 +9,7 @@ import {
 
 type SubjectRow = Pick<Subject, "id" | "name" | "archived" | "sort_order">
 type TopicRow = Pick<Topic, "id" | "subject_id" | "name" | "sort_order" | "archived">
-type SubtopicRow = Pick<Subtopic, "id" | "topic_id" | "name" | "sort_order">
-type TaskRow = Pick<Task, "id" | "topic_id" | "subtopic_id" | "title" | "completed" | "sort_order" | "created_at">
+type TaskRow = Pick<Task, "id" | "topic_id" | "title" | "completed" | "sort_order" | "created_at">
 
 export default async function SubjectsPage() {
   const supabase = await createServerSupabaseClient()
@@ -47,35 +46,22 @@ export default async function SubjectsPage() {
 
   const topicIds = topics.map((topic) => topic.id)
 
-  let subtopics: SubtopicRow[] = []
   let tasks: TaskRow[] = []
 
   if (topicIds.length > 0) {
-    const [{ data: subtopicRows }, { data: taskRows }] = await Promise.all([
-      supabase
-        .from("subtopics")
-        .select("id, topic_id, name, sort_order")
-        .eq("user_id", user.id)
-        .in("topic_id", topicIds)
-        .order("sort_order", { ascending: true }),
-      supabase
-        .from("tasks")
-        .select("id, topic_id, subtopic_id, title, completed, sort_order, created_at")
-        .eq("user_id", user.id)
-        .in("topic_id", topicIds)
-        .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: true }),
-    ])
+    const { data: taskRows } = await supabase
+      .from("tasks")
+      .select("id, topic_id, title, completed, sort_order, created_at")
+      .eq("user_id", user.id)
+      .eq("task_source", "manual")
+      .eq("session_number", 0)
+      .eq("total_sessions", 1)
+      .is("plan_snapshot_id", null)
+      .in("topic_id", topicIds)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
 
-    subtopics = (subtopicRows ?? []) as SubtopicRow[]
     tasks = (taskRows ?? []) as TaskRow[]
-  }
-
-  const subtopicsByTopic = new Map<string, { id: string; name: string }[]>()
-  for (const subtopic of subtopics) {
-    const list = subtopicsByTopic.get(subtopic.topic_id) ?? []
-    list.push({ id: subtopic.id, name: subtopic.name })
-    subtopicsByTopic.set(subtopic.topic_id, list)
   }
 
   const chaptersBySubject = new Map<string, SubjectNavItem["chapters"]>()
@@ -85,7 +71,7 @@ export default async function SubjectsPage() {
       id: topic.id,
       name: topic.name,
       archived: topic.archived ?? false,
-      topics: subtopicsByTopic.get(topic.id) ?? [],
+      topics: [],
     })
     chaptersBySubject.set(topic.subject_id, list)
   }
@@ -105,7 +91,6 @@ export default async function SubjectsPage() {
     list.push({
       id: task.id,
       topicId: task.topic_id,
-      clusterId: task.subtopic_id,
       title: task.title,
       completed: task.completed,
     })

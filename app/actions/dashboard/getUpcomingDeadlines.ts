@@ -26,22 +26,15 @@ export async function getUpcomingDeadlines(): Promise<GetUpcomingDeadlinesRespon
     return { status: "UNAUTHORIZED" }
   }
 
-  const { data: params } = await supabase
-    .from("topic_params")
-    .select("topic_id, deadline, priority, estimated_hours")
+  const { data: topics } = await supabase
+    .from("topics")
+    .select("id, name, subject_id, deadline, priority, estimated_hours")
     .eq("user_id", user.id)
     .not("deadline", "is", null)
 
-  if (!params || params.length === 0) {
+  if (!topics || topics.length === 0) {
     return { status: "SUCCESS", deadlines: [] }
   }
-
-  const topicIds = params.map((p) => p.topic_id)
-
-  const { data: topics } = await supabase
-    .from("topics")
-    .select("id, name, subject_id")
-    .in("id", topicIds)
 
   const topicMap = new Map<string, { name: string; subject_id: string }>()
   for (const t of topics ?? []) {
@@ -65,18 +58,18 @@ export async function getUpcomingDeadlines(): Promise<GetUpcomingDeadlinesRespon
     subjectNameMap.set(s.id, s.name)
   }
 
-  const deadlines: UpcomingDeadline[] = params
-    .map((p) => {
-      const topic = topicMap.get(p.topic_id)
-      if (!topic) return null
+  const deadlines: UpcomingDeadline[] = topics
+    .map((topic) => {
+      const mapped = topicMap.get(topic.id)
+      if (!mapped || !topic.deadline) return null
       return {
-        topic_id: p.topic_id,
-        topic_name: topic.name,
-        subject_id: topic.subject_id,
-        subject_name: subjectNameMap.get(topic.subject_id) ?? "Unknown",
-        deadline: p.deadline!,
-        priority: p.priority,
-        estimated_hours: p.estimated_hours,
+        topic_id: topic.id,
+        topic_name: mapped.name,
+        subject_id: mapped.subject_id,
+        subject_name: subjectNameMap.get(mapped.subject_id) ?? "Unknown",
+        deadline: topic.deadline,
+        priority: topic.priority,
+        estimated_hours: topic.estimated_hours,
       }
     })
     .filter((d): d is UpcomingDeadline => d !== null)

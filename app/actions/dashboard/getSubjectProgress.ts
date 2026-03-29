@@ -44,44 +44,23 @@ export async function getSubjectProgress(): Promise<GetSubjectProgressResponse> 
 
   const subjectIds = subjects.map((s) => s.id)
 
-  // Count topics per subject
+  // Count topics per subject and track earliest per-subject deadline.
   const { data: topics } = await supabase
     .from("topics")
-    .select("id, subject_id")
+    .select("id, subject_id, deadline")
     .in("subject_id", subjectIds)
 
   const topicsBySubject = new Map<string, string[]>()
+  const earliestDeadlineBySubject = new Map<string, string>()
   for (const t of topics ?? []) {
     const list = topicsBySubject.get(t.subject_id) ?? []
     list.push(t.id)
     topicsBySubject.set(t.subject_id, list)
-  }
-
-  // Get earliest deadline per subject from topic_params
-  const allTopicIds = (topics ?? []).map((t) => t.id)
-  let params: Array<{ topic_id: string; deadline: string | null }> = []
-  if (allTopicIds.length > 0) {
-    const { data } = await supabase
-      .from("topic_params")
-      .select("topic_id, deadline")
-      .in("topic_id", allTopicIds)
-      .not("deadline", "is", null)
-
-    params = data ?? []
-  }
-
-  const topicSubjectMap = new Map<string, string>()
-  for (const t of topics ?? []) {
-    topicSubjectMap.set(t.id, t.subject_id)
-  }
-
-  const earliestDeadlineBySubject = new Map<string, string>()
-  for (const p of params ?? []) {
-    const sid = topicSubjectMap.get(p.topic_id)
-    if (!sid || !p.deadline) continue
-    const current = earliestDeadlineBySubject.get(sid)
-    if (!current || p.deadline < current) {
-      earliestDeadlineBySubject.set(sid, p.deadline)
+    if (t.deadline) {
+      const current = earliestDeadlineBySubject.get(t.subject_id)
+      if (!current || t.deadline < current) {
+        earliestDeadlineBySubject.set(t.subject_id, t.deadline)
+      }
     }
   }
 
@@ -94,6 +73,7 @@ export async function getSubjectProgress(): Promise<GetSubjectProgressResponse> 
 
   const taskCountBySubject = new Map<string, { total: number; completed: number }>()
   for (const t of tasks ?? []) {
+    if (!t.subject_id) continue
     const entry = taskCountBySubject.get(t.subject_id) ?? { total: 0, completed: 0 }
     entry.total++
     if (t.completed) entry.completed++

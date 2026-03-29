@@ -2,8 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { createServerSupabaseClientMock } from "../utils/supabaseMock"
 
 type SubjectRow = { id: string; name: string }
-type TopicRow = { id: string; subject_id: string }
-type TopicParamRow = { topic_id: string; deadline: string | null }
+type TopicRow = { id: string; subject_id: string; deadline: string | null }
 type TaskRow = { subject_id: string; completed: boolean }
 
 function datePlusDays(days: number): string {
@@ -16,14 +15,12 @@ function buildSupabaseProgressMock(options: {
   userId?: string | null
   subjects?: SubjectRow[]
   topics?: TopicRow[]
-  params?: TopicParamRow[]
   tasks?: TaskRow[]
 }) {
   const {
     userId = "u1",
     subjects = [],
     topics = [],
-    params = [],
     tasks = [],
   } = options
 
@@ -32,9 +29,6 @@ function buildSupabaseProgressMock(options: {
   const subjectsEqUser = vi.fn(() => ({ eq: subjectsEqArchived }))
 
   const topicsIn = vi.fn().mockResolvedValue({ data: topics, error: null })
-
-  const paramsNot = vi.fn().mockResolvedValue({ data: params, error: null })
-  const paramsIn = vi.fn(() => ({ not: paramsNot }))
 
   const tasksIn = vi.fn().mockResolvedValue({ data: tasks, error: null })
   const tasksEqUser = vi.fn(() => ({ in: tasksIn }))
@@ -54,11 +48,6 @@ function buildSupabaseProgressMock(options: {
       if (table === "topics") {
         return {
           select: vi.fn(() => ({ in: topicsIn })),
-        }
-      }
-      if (table === "topic_params") {
-        return {
-          select: vi.fn(() => ({ in: paramsIn })),
         }
       }
       if (table === "tasks") {
@@ -106,16 +95,10 @@ describe("getSubjectProgress", () => {
       { id: "s3", name: "Math" },
     ]
 
-    const topics: TopicRow[] = [
-      { id: "t1", subject_id: "s1" },
-      { id: "t2", subject_id: "s2" },
-      { id: "t3", subject_id: "s3" },
-    ]
-
-    const params: TopicParamRow[] = [
-      { topic_id: "t1", deadline: datePlusDays(2) },
-      { topic_id: "t2", deadline: datePlusDays(30) },
-      { topic_id: "t3", deadline: datePlusDays(-3) },
+    const topicsWithDeadlines: TopicRow[] = [
+      { id: "t1", subject_id: "s1", deadline: datePlusDays(2) },
+      { id: "t2", subject_id: "s2", deadline: datePlusDays(30) },
+      { id: "t3", subject_id: "s3", deadline: datePlusDays(-3) },
     ]
 
     const tasks: TaskRow[] = [
@@ -124,7 +107,7 @@ describe("getSubjectProgress", () => {
       ...Array.from({ length: 10 }, (_, i) => ({ subject_id: "s3", completed: i < 8 })),
     ]
 
-    const supabase = buildSupabaseProgressMock({ subjects, topics, params, tasks })
+    const supabase = buildSupabaseProgressMock({ subjects, topics: topicsWithDeadlines, tasks })
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
     const { getSubjectProgress } = await import("@/app/actions/dashboard/getSubjectProgress")
@@ -148,14 +131,13 @@ describe("getSubjectProgress", () => {
 
   it("keeps 100% complete past-deadline subjects on_track", async () => {
     const subjects: SubjectRow[] = [{ id: "s1", name: "Done Subject" }]
-    const topics: TopicRow[] = [{ id: "t1", subject_id: "s1" }]
-    const params: TopicParamRow[] = [{ topic_id: "t1", deadline: datePlusDays(-5) }]
+    const topics: TopicRow[] = [{ id: "t1", subject_id: "s1", deadline: datePlusDays(-5) }]
     const tasks: TaskRow[] = Array.from({ length: 5 }, () => ({
       subject_id: "s1",
       completed: true,
     }))
 
-    const supabase = buildSupabaseProgressMock({ subjects, topics, params, tasks })
+    const supabase = buildSupabaseProgressMock({ subjects, topics, tasks })
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
 
     const { getSubjectProgress } = await import("@/app/actions/dashboard/getSubjectProgress")

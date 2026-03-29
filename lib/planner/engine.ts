@@ -27,7 +27,6 @@ export interface PlannableUnit {
   rest_after_days?: number
   max_sessions_per_day?: number
   study_frequency?: StudyFrequency
-  tier?: number
 }
 
 export interface ReservedSlot {
@@ -130,24 +129,35 @@ export type PlanResult =
   | { status: "READY"; schedule: ScheduledSession[]; feasibility: FeasibilityResult }
 
 function isWeekend(date: Date): boolean {
-  const day = date.getDay()
+  const day = date.getUTCDay()
   return day === 0 || day === 6
 }
 
 function toISO(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
+  const year = date.getUTCFullYear()
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0")
+  const day = String(date.getUTCDate()).padStart(2, "0")
   return `${year}-${month}-${day}`
 }
 
 function parseISODate(isoDate: string): Date {
-  return new Date(`${isoDate}T12:00:00`)
+  const parts = isoDate.split("-")
+  if (parts.length !== 3) return new Date(Number.NaN)
+
+  const year = Number(parts[0])
+  const month = Number(parts[1])
+  const day = Number(parts[2])
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return new Date(Number.NaN)
+  }
+
+  return new Date(Date.UTC(year, month - 1, day))
 }
 
 function addDays(date: Date, n: number): Date {
   const next = new Date(date)
-  next.setDate(next.getDate() + n)
+  next.setUTCDate(next.getUTCDate() + n)
   return next
 }
 
@@ -155,9 +165,9 @@ export function buildDaySlots(
   constraints: GlobalConstraints,
   offDays: Set<string>
 ): DaySlot[] {
-  const start = new Date(constraints.study_start_date)
+  const start = parseISODate(constraints.study_start_date)
   const revisionDays = constraints.final_revision_days ?? 0
-  const endDate = addDays(new Date(constraints.exam_date), -revisionDays)
+  const endDate = addDays(parseISODate(constraints.exam_date), -revisionDays)
 
   const flexMinutes = constraints.flexibility_minutes ?? 0
   const maxDaily = constraints.max_daily_minutes ?? 480
@@ -363,32 +373,13 @@ interface UnitState {
 const MS_PER_DAY = 86_400_000
 
 function daysBetween(from: string, to: string): number {
-  return Math.ceil((parseISODate(to).getTime() - parseISODate(from).getTime()) / MS_PER_DAY)
+  return Math.floor((parseISODate(to).getTime() - parseISODate(from).getTime()) / MS_PER_DAY)
 }
 
 function addDaysISO(date: string, days: number): string {
   const next = parseISODate(date)
   next.setDate(next.getDate() + days)
   return toISO(next)
-}
-
-function computeUrgency(state: UnitState, currentDate: string): number {
-  const daysLeft = Math.max(1, daysBetween(currentDate, state.unit.deadline))
-  const ratio = state.coreRemaining / daysLeft
-  const completionRatio =
-    state.coreSessions > 0
-      ? (state.coreSessions - state.coreRemaining) / state.coreSessions
-      : 0
-  return Math.pow(ratio, 1.4) * (1 + (1 - completionRatio))
-}
-
-function computeEffort(state: UnitState): number {
-  return state.coreRemaining * state.unit.session_length_minutes
-}
-
-function getCompletionRatio(state: UnitState): number {
-  if (state.coreSessions === 0) return 0
-  return (state.coreSessions - state.coreRemaining) / state.coreSessions
 }
 
 function detectCircularDeps(units: PlannableUnit[]): boolean {
@@ -421,66 +412,6 @@ function detectCircularDeps(units: PlannableUnit[]): boolean {
   }
 
   return false
-}
-
-function compareByStack(
-  aState: UnitState,
-  bState: UnitState,
-  currentDate: string,
-  stack: PlanOrderCriterion[],
-  subjectOrderIdx: Map<string, number>
-): number {
-  for (const criterion of stack) {
-    let compare = 0
-    switch (criterion) {
-      case "urgency":
-        compare =
-          computeUrgency(bState, currentDate) -
-          computeUrgency(aState, currentDate)
-        break
-      case "priority":
-        compare = aState.unit.priority - bState.unit.priority
-        break
-      case "deadline":
-        compare = aState.unit.deadline.localeCompare(bState.unit.deadline)
-        break
-      case "subject_order":
-        compare =
-          (subjectOrderIdx.get(aState.unit.subject_id) ?? 0) -
-          (subjectOrderIdx.get(bState.unit.subject_id) ?? 0)
-        break
-      case "effort":
-        compare = computeEffort(bState) - computeEffort(aState)
-        break
-      case "completion":
-        compare = getCompletionRatio(bState) - getCompletionRatio(aState)
-        break
-    }
-
-    if (compare !== 0) return compare
-  }
-
-  return 0
-}
-
-function legacyOrderToStack(order: string): PlanOrderCriterion[] {
-  switch (order) {
-    case "priority":
-      return ["urgency", "subject_order", "deadline"]
-    case "deadline":
-      return ["urgency", "deadline", "subject_order"]
-    case "subject":
-      return ["subject_order", "urgency"]
-    case "balanced":
-    default:
-      return ["urgency", "subject_order", "deadline"]
-  }
-}
-
-function computeAdaptiveFlexibleThreshold(loadRatio: number): number {
-  if (loadRatio > 0.9) return 0.6
-  if (loadRatio > 0.75) return 0.7
-  return 0.8
 }
 
 function computeInternalSubjectGapDays(
@@ -520,8 +451,7 @@ function getActiveTopicsForSubject(
   constraints: GlobalConstraints,
   oversizedIds: Set<string>,
   subjectNewTopicBlockedUntil: Map<string, string>,
-  relaxDeadline: boolean,
-  _adaptiveThreshold: number
+  relaxDeadline: boolean
 ): UnitState[] {
   const topics = subjectTopics.get(subjectId) ?? []
 
@@ -633,11 +563,7 @@ export function schedule(
   const maxTopicsPerSubjectPerDay =
     constraints.max_topics_per_subject_per_day ?? 1
 
-  function rankTopicsForPlacement(
-    topics: UnitState[],
-    _placed: Set<string>,
-    _date: string
-  ): UnitState[] {
+  function rankTopicsForPlacement(topics: UnitState[]): UnitState[] {
     return topics
   }
 
@@ -661,7 +587,6 @@ export function schedule(
     totalBaseCapacity > 0
       ? totalMinutesNeeded / totalBaseCapacity
       : Number.POSITIVE_INFINITY
-  const adaptiveThreshold = computeAdaptiveFlexibleThreshold(loadRatio)
   const minSubjectGap = computeInternalSubjectGapDays(
     loadRatio,
     constraints.min_subject_gap_days
@@ -808,8 +733,7 @@ export function schedule(
         constraints,
         oversizedIds,
         subjectNewTopicBlockedUntil,
-        false,
-        adaptiveThreshold
+        false
       )
       if (active.length > 0) activeBySubject.set(subjectId, active)
     }
@@ -843,14 +767,11 @@ export function schedule(
           constraints,
           oversizedIds,
           subjectNewTopicBlockedUntil,
-          false,
-          adaptiveThreshold
+          false
         )
         const placed = topicsPlacedPerSubject.get(subjectId) ?? new Set<string>()
         const rankedTopics = rankTopicsForPlacement(
-          activeTopics.filter((state) => inProgressTopics.has(state.unit.id)),
-          placed,
-          day.date
+          activeTopics.filter((state) => inProgressTopics.has(state.unit.id))
         )
 
         for (const state of rankedTopics) {
@@ -897,13 +818,12 @@ export function schedule(
           constraints,
           oversizedIds,
           subjectNewTopicBlockedUntil,
-          false,
-          adaptiveThreshold
+          false
         )
         if (activeTopics.length === 0) continue
 
         const placed = topicsPlacedPerSubject.get(subjectId) ?? new Set<string>()
-        const rankedTopics = rankTopicsForPlacement(activeTopics, placed, day.date)
+        const rankedTopics = rankTopicsForPlacement(activeTopics)
 
         let didPlace = false
         for (const state of rankedTopics) {

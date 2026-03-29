@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { getPlanHistory } from "@/app/actions/planner/plan"
 import type { PlanSnapshot } from "@/lib/types/db"
@@ -12,6 +12,7 @@ interface PlanHistoryProps {
   emptyMessage?: string
   emptyHint?: string
   maxVisible?: number
+  refreshKey?: number
 }
 
 export function PlanHistory({
@@ -21,18 +22,30 @@ export function PlanHistory({
   emptyMessage = "No plans committed yet.",
   emptyHint = "Create your first plan to start building history.",
   maxVisible = 5,
+  refreshKey,
 }: PlanHistoryProps) {
   const [history, setHistory] = useState<PlanSnapshot[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const loadHistory = useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
+    const res = await getPlanHistory()
+    if (res.status === "SUCCESS") {
+      setHistory(res.snapshots)
+      setLoading(false)
+      return
+    }
+
+    setHistory([])
+    setLoadError("Could not load plan history right now.")
+    setLoading(false)
+  }, [])
 
   useEffect(() => {
-    getPlanHistory().then((res) => {
-      if (res.status === "SUCCESS") {
-        setHistory(res.snapshots)
-      }
-      setLoading(false)
-    })
-  }, [])
+    void loadHistory()
+  }, [loadHistory, refreshKey])
 
   const visibleHistory = history.slice(0, maxVisible)
 
@@ -82,6 +95,11 @@ export function PlanHistory({
               </Link>
             ) : (
               <p className="text-[11px] mt-2" style={{ color: "var(--sh-text-muted)" }}>{emptyHint}</p>
+            )}
+            {loadError && (
+              <p className="text-[11px] mt-2" style={{ color: "var(--sh-text-muted)" }}>
+                {loadError}
+              </p>
             )}
           </div>
         ) : (

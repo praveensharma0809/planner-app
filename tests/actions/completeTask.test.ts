@@ -27,7 +27,7 @@ function buildCompleteTaskMock(options: {
   // Chainable query builder factory
   function makeChain(finalValue: unknown) {
     const chain: Record<string, unknown> = {}
-    const methods = ["update", "select", "eq", "maybeSingle", "single"]
+    const methods = ["update", "select", "eq", "is", "maybeSingle", "single"]
     for (const m of methods) {
       chain[m] = vi.fn((...args: unknown[]) => {
         void args

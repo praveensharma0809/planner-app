@@ -1,6 +1,7 @@
 "use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { isCanonicalIntakeManualTask } from "@/lib/planner/contracts"
 
 type SessionType = "core" | "revision" | "practice"
 
@@ -13,7 +14,10 @@ type ScheduleTaskRow = {
   session_type: SessionType
   priority: number
   completed: boolean
-  is_plan_generated: boolean
+  task_source: "manual" | "plan"
+  plan_snapshot_id: string | null
+  session_number: number
+  total_sessions: number
   created_at: string
 }
 
@@ -23,7 +27,8 @@ type SubjectRow = {
   sort_order: number | null
 }
 
-export type ScheduleWeekTask = ScheduleTaskRow & {
+export type ScheduleWeekTask = Omit<ScheduleTaskRow, "task_source"> & {
+  is_planner_task: boolean
   subject_name: string
 }
 
@@ -97,7 +102,7 @@ export async function getScheduleWeekData(
     supabase
       .from("tasks")
       .select(
-        "id, subject_id, title, scheduled_date, duration_minutes, session_type, priority, completed, is_plan_generated, created_at"
+        "id, subject_id, title, scheduled_date, duration_minutes, session_type, priority, completed, task_source, plan_snapshot_id, session_number, total_sessions, created_at"
       )
       .eq("user_id", user.id)
       .gte("scheduled_date", weekStartISO)
@@ -116,12 +121,22 @@ export async function getScheduleWeekData(
   }
 
   const subjects = (subjectRows ?? []) as SubjectRow[]
-  const tasks = (taskRows ?? []) as ScheduleTaskRow[]
+  const tasks = ((taskRows ?? []) as ScheduleTaskRow[])
+    .filter((task) => !isCanonicalIntakeManualTask(task))
 
   const subjectNameById = new Map(subjects.map((subject) => [subject.id, subject.name]))
 
   const resolvedTasks: ScheduleWeekTask[] = tasks.map((task) => ({
-    ...task,
+    is_planner_task: task.task_source === "plan",
+    id: task.id,
+    subject_id: task.subject_id,
+    title: task.title,
+    scheduled_date: task.scheduled_date,
+    duration_minutes: task.duration_minutes,
+    session_type: task.session_type,
+    priority: task.priority,
+    completed: task.completed,
+    created_at: task.created_at,
     subject_name: task.subject_id
       ? subjectNameById.get(task.subject_id) ?? "Others"
       : "Others",

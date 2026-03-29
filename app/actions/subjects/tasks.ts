@@ -17,24 +17,16 @@ type TaskActionResponse =
 type CreateSubjectTaskInput = {
   chapterId: string
   title: string
-  clusterId: string | null
 }
 
 type BulkCreateSubjectTasksInput = {
   chapterId: string
-  clusterId: string | null
   baseName: string
   count: number
   startAt: number
   numberPadding: number
   separator: string
   placement: TaskNamingPlacement
-}
-
-type AssignTasksToClusterInput = {
-  chapterId: string
-  taskIds: string[]
-  clusterId: string | null
 }
 
 type DeleteSubjectTasksInput = {
@@ -63,11 +55,6 @@ type BulkCreateSubjectTasksResponse =
   | { status: "ERROR"; message: string }
   | { status: "SUCCESS"; createdCount: number }
 
-type AssignTasksToClusterResponse =
-  | { status: "UNAUTHORIZED" }
-  | { status: "ERROR"; message: string }
-  | { status: "SUCCESS"; updatedCount: number }
-
 type DeleteSubjectTasksResponse =
   | { status: "UNAUTHORIZED" }
   | { status: "ERROR"; message: string }
@@ -82,7 +69,11 @@ const DEFAULT_DURATION_MINUTES = 60
 const DEFAULT_PRIORITY = 3
 
 function todayISODate(): string {
-  return new Date().toISOString().slice(0, 10)
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
 }
 
 function revalidateTaskViews() {
@@ -146,42 +137,6 @@ async function resolveChapter(
   return { ok: true, subjectId: chapter.subject_id }
 }
 
-async function resolveCluster(
-  clusterId: string | null,
-  chapterId: string,
-  userId: string
-): Promise<
-  | { ok: true; clusterId: string | null }
-  | { ok: false; message: string }
-> {
-  if (!clusterId) {
-    return { ok: true, clusterId: null }
-  }
-
-  const supabase = await createServerSupabaseClient()
-
-  const { data: cluster, error: clusterError } = await supabase
-    .from("subtopics")
-    .select("id, topic_id")
-    .eq("id", clusterId)
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (clusterError) {
-    return { ok: false, message: clusterError.message }
-  }
-
-  if (!cluster) {
-    return { ok: false, message: "Cluster not found." }
-  }
-
-  if (cluster.topic_id !== chapterId) {
-    return { ok: false, message: "Cluster does not belong to the selected chapter." }
-  }
-
-  return { ok: true, clusterId: cluster.id }
-}
-
 async function getNextTaskSortOrder(
   chapterId: string,
   userId: string
@@ -233,11 +188,6 @@ export async function createSubjectTask(
     return { status: "ERROR", message: chapter.message }
   }
 
-  const cluster = await resolveCluster(input.clusterId, input.chapterId, user.id)
-  if (!cluster.ok) {
-    return { status: "ERROR", message: cluster.message }
-  }
-
   const nextSortOrder = await getNextTaskSortOrder(input.chapterId, user.id)
   if (!nextSortOrder.ok) {
     return { status: "ERROR", message: nextSortOrder.message }
@@ -249,18 +199,17 @@ export async function createSubjectTask(
       user_id: user.id,
       subject_id: chapter.subjectId,
       topic_id: input.chapterId,
-      subtopic_id: cluster.clusterId,
       title,
       scheduled_date: todayISODate(),
       duration_minutes: DEFAULT_DURATION_MINUTES,
       session_type: "core",
       priority: DEFAULT_PRIORITY,
       completed: false,
-      is_plan_generated: false,
+      task_source: "manual",
       session_number: 0,
       total_sessions: 1,
       sort_order: nextSortOrder.nextSortOrder,
-      plan_version: null,
+      plan_snapshot_id: null,
     })
     .select("id")
     .single()
@@ -301,11 +250,6 @@ export async function bulkCreateSubjectTasks(
     return { status: "ERROR", message: chapter.message }
   }
 
-  const cluster = await resolveCluster(input.clusterId, input.chapterId, user.id)
-  if (!cluster.ok) {
-    return { status: "ERROR", message: cluster.message }
-  }
-
   const nextSortOrder = await getNextTaskSortOrder(input.chapterId, user.id)
   if (!nextSortOrder.ok) {
     return { status: "ERROR", message: nextSortOrder.message }
@@ -318,18 +262,17 @@ export async function bulkCreateSubjectTasks(
       user_id: user.id,
       subject_id: chapter.subjectId,
       topic_id: input.chapterId,
-      subtopic_id: cluster.clusterId,
       title: composeTaskName(baseName, index, placement, separator, numberPadding),
       scheduled_date: scheduledDate,
       duration_minutes: DEFAULT_DURATION_MINUTES,
       session_type: "core" as const,
       priority: DEFAULT_PRIORITY,
       completed: false,
-      is_plan_generated: false,
+      task_source: "manual" as const,
       session_number: 0,
       total_sessions: 1,
       sort_order: nextSortOrder.nextSortOrder + offset,
-      plan_version: null,
+      plan_snapshot_id: null,
     }
   })
 
@@ -344,49 +287,6 @@ export async function bulkCreateSubjectTasks(
 
   revalidateTaskViews()
   return { status: "SUCCESS", createdCount: inserted?.length ?? count }
-}
-
-export async function assignTasksToCluster(
-  input: AssignTasksToClusterInput
-): Promise<AssignTasksToClusterResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { status: "UNAUTHORIZED" }
-  }
-
-  const uniqueTaskIds = Array.from(new Set(input.taskIds.filter(Boolean)))
-  if (uniqueTaskIds.length === 0) {
-    return { status: "ERROR", message: "Select at least one task." }
-  }
-
-  const chapter = await resolveChapter(input.chapterId, user.id)
-  if (!chapter.ok) {
-    return { status: "ERROR", message: chapter.message }
-  }
-
-  const cluster = await resolveCluster(input.clusterId, input.chapterId, user.id)
-  if (!cluster.ok) {
-    return { status: "ERROR", message: cluster.message }
-  }
-
-  const { data: updatedRows, error: updateError } = await supabase
-    .from("tasks")
-    .update({ subtopic_id: cluster.clusterId })
-    .eq("user_id", user.id)
-    .eq("topic_id", input.chapterId)
-    .in("id", uniqueTaskIds)
-    .select("id")
-
-  if (updateError) {
-    return { status: "ERROR", message: updateError.message }
-  }
-
-  revalidateTaskViews()
-  return { status: "SUCCESS", updatedCount: updatedRows?.length ?? 0 }
 }
 
 export async function updateSubjectTaskTitle(taskId: string, title: string): Promise<TaskActionResponse> {

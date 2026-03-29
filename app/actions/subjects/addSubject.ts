@@ -2,17 +2,12 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { isISODate, normalizeOptionalDate } from "@/lib/planner/contracts"
 
 interface AddSubjectInput {
   name: string
   sort_order?: number
   deadline?: string | null
-}
-
-function normalizeOptionalDate(value: string | null | undefined): string | null {
-  if (typeof value !== "string") return null
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : null
 }
 
 export async function addSubject(input: AddSubjectInput) {
@@ -30,6 +25,9 @@ export async function addSubject(input: AddSubjectInput) {
   }
 
   const deadline = normalizeOptionalDate(input.deadline)
+  if (deadline && !isISODate(deadline)) {
+    return { status: "ERROR" as const, message: "Deadline must be a valid date." }
+  }
 
   const { data, error } = await supabase.from("subjects").insert({
     user_id: user.id,

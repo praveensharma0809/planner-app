@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { useTheme } from "@/app/components/ThemeProvider"
 import { useSidebar } from "./AppShell"
 import {
+  createDefaultWizardProgress,
   loadWizardProgress,
   PLANNER_PHASES,
   PLANNER_WIZARD_PROGRESS_EVENT,
@@ -113,19 +114,20 @@ export function Topbar() {
   const pageTitle = resolvePageTitle(pathname)
   const isPlannerRoute = pathname.startsWith("/planner")
 
-  const [plannerProgress, setPlannerProgress] = useState<PlannerWizardProgress>({
-    phase: 1,
-    maxPhase: 1,
-  })
+  const [plannerProgress, setPlannerProgress] = useState<PlannerWizardProgress>(
+    createDefaultWizardProgress
+  )
 
   useEffect(() => {
     if (!isPlannerRoute) return
-
-    // Load initial state on client
     const saved = loadWizardProgress()
     if (saved) {
       setPlannerProgress(saved)
     }
+  }, [isPlannerRoute])
+
+  useEffect(() => {
+    if (!isPlannerRoute) return
 
     const handleProgressChanged = (event: Event) => {
       const detail = (event as CustomEvent<PlannerWizardProgress>).detail

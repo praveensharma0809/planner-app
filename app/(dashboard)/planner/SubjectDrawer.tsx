@@ -27,7 +27,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
   const [name, setName] = useState("")
   const [startDate, setStartDate] = useState("")
   const [deadline, setDeadline] = useState("")
-  const [restAfterDays, setRestAfterDays] = useState("0")
+  const [, setRestAfterDays] = useState("0")
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [shouldRender, setShouldRender] = useState(open)
@@ -109,11 +109,6 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
       addToast("Subject start date must be on or before subject deadline.", "error")
       return
     }
-
-    const parsedRest = Number.parseInt(restAfterDays || "0", 10)
-    const normalizedRestAfterDays = Number.isFinite(parsedRest)
-      ? Math.max(0, parsedRest)
-      : 0
 
     setLoading(true)
 

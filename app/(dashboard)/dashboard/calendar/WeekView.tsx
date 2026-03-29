@@ -5,6 +5,7 @@ import { Task } from "@/lib/types/db"
 import { rescheduleTask } from "@/app/actions/plan/rescheduleTask"
 import { completeTask } from "@/app/actions/plan/completeTask"
 import { uncompleteTask } from "@/app/actions/plan/uncompleteTask"
+import { useToast } from "@/app/components/Toast"
 
 interface WeekViewProps {
   days: string[]
@@ -13,14 +14,22 @@ interface WeekViewProps {
 }
 
 function formatDay(iso: string) {
-  return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })
+  return new Date(iso + "T00:00:00Z").toLocaleDateString("en-US", {
+    weekday: "short",
+    timeZone: "UTC",
+  })
 }
 
 function formatDayDate(iso: string) {
-  return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  return new Date(iso + "T00:00:00Z").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  })
 }
 
 export function WeekView({ days, weekMap: initialWeekMap, today }: WeekViewProps) {
+  const { addToast } = useToast()
   const [weekMap, setWeekMap] = useState(initialWeekMap)
   const [dragTaskId, setDragTaskId] = useState<string | null>(null)
   const [dragOverDay, setDragOverDay] = useState<string | null>(null)
@@ -59,6 +68,7 @@ export function WeekView({ days, weekMap: initialWeekMap, today }: WeekViewProps
       return
     }
     if (targetDate < today) {
+      addToast("You cannot move tasks to a past date.", "error")
       setDragTaskId(null)
       setDragSourceDay(null)
       return
@@ -97,6 +107,16 @@ export function WeekView({ days, weekMap: initialWeekMap, today }: WeekViewProps
             nextMap[sourceDay] = [...(nextMap[sourceDay] ?? []), revertedTask]
             return nextMap
           })
+
+          if (res.status === "UNAUTHORIZED") {
+            addToast("Please sign in again to move tasks.", "error")
+          } else if (res.status === "INVALID_DATE") {
+            addToast("Target date is invalid.", "error")
+          } else if (res.status === "NOT_FOUND") {
+            addToast("Task not found.", "error")
+          } else {
+            addToast(res.message || "Could not move task.", "error")
+          }
         }
       } catch {
         setWeekMap(prev => {
@@ -111,6 +131,7 @@ export function WeekView({ days, weekMap: initialWeekMap, today }: WeekViewProps
           nextMap[sourceDay] = [...(nextMap[sourceDay] ?? []), revertedTask]
           return nextMap
         })
+        addToast("Could not move task right now.", "error")
       }
     })
   }
@@ -134,7 +155,26 @@ export function WeekView({ days, weekMap: initialWeekMap, today }: WeekViewProps
     })
     startTransition(async () => {
       try {
-        await completeTask(taskId)
+        const result = await completeTask(taskId)
+        if (result.status !== "SUCCESS") {
+          setWeekMap(prev => {
+            const nextMap: Record<string, Task[]> = {}
+            for (const [date, tasks] of Object.entries(prev)) {
+              nextMap[date] = tasks.map(t =>
+                t.id === taskId ? { ...t, completed: false } : t
+              )
+            }
+            return nextMap
+          })
+
+          if (result.status === "UNAUTHORIZED") {
+            addToast("Please sign in again.", "error")
+          } else if (result.status === "NOT_FOUND") {
+            addToast("Task not found.", "error")
+          } else {
+            addToast(result.message || "Could not mark task complete.", "error")
+          }
+        }
       } catch {
         setWeekMap(prev => {
           const nextMap: Record<string, Task[]> = {}
@@ -145,6 +185,7 @@ export function WeekView({ days, weekMap: initialWeekMap, today }: WeekViewProps
           }
           return nextMap
         })
+        addToast("Could not mark task complete.", "error")
       } finally {
         setCompletingId(null)
       }
@@ -164,7 +205,26 @@ export function WeekView({ days, weekMap: initialWeekMap, today }: WeekViewProps
     })
     startTransition(async () => {
       try {
-        await uncompleteTask(taskId)
+        const result = await uncompleteTask(taskId)
+        if (result.status !== "SUCCESS") {
+          setWeekMap(prev => {
+            const nextMap: Record<string, Task[]> = {}
+            for (const [date, tasks] of Object.entries(prev)) {
+              nextMap[date] = tasks.map(t =>
+                t.id === taskId ? { ...t, completed: true } : t
+              )
+            }
+            return nextMap
+          })
+
+          if (result.status === "UNAUTHORIZED") {
+            addToast("Please sign in again.", "error")
+          } else if (result.status === "NOT_FOUND") {
+            addToast("Task not found.", "error")
+          } else {
+            addToast(result.message || "Could not undo completion.", "error")
+          }
+        }
       } catch {
         setWeekMap(prev => {
           const nextMap: Record<string, Task[]> = {}
@@ -175,6 +235,7 @@ export function WeekView({ days, weekMap: initialWeekMap, today }: WeekViewProps
           }
           return nextMap
         })
+        addToast("Could not undo completion.", "error")
       } finally {
         setUncompletingId(null)
       }
@@ -214,6 +275,16 @@ export function WeekView({ days, weekMap: initialWeekMap, today }: WeekViewProps
             nextMap[sourceDate] = [...(nextMap[sourceDate] ?? []), revertedTask]
             return nextMap
           })
+
+          if (res.status === "UNAUTHORIZED") {
+            addToast("Please sign in again to move tasks.", "error")
+          } else if (res.status === "INVALID_DATE") {
+            addToast("Target date is invalid.", "error")
+          } else if (res.status === "NOT_FOUND") {
+            addToast("Task not found.", "error")
+          } else {
+            addToast(res.message || "Could not move task.", "error")
+          }
         }
       } catch {
         setWeekMap(prev => {
@@ -228,6 +299,7 @@ export function WeekView({ days, weekMap: initialWeekMap, today }: WeekViewProps
           nextMap[sourceDate] = [...(nextMap[sourceDate] ?? []), revertedTask]
           return nextMap
         })
+        addToast("Could not move task right now.", "error")
       }
     })
   }

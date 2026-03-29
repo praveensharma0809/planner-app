@@ -16,12 +16,6 @@ import {
   updateChapter,
 } from "@/app/actions/subjects/chapters"
 import {
-  addSubtopic,
-  deleteSubtopic,
-  updateSubtopic,
-} from "@/app/actions/subjects/subtopics"
-import {
-  assignTasksToCluster,
   bulkCreateSubjectTasks,
   createSubjectTask,
   deleteSubjectTasks,
@@ -59,7 +53,6 @@ export interface SubjectNavItem {
 export interface TopicTaskItem {
   id: string
   topicId: string
-  clusterId: string | null
   title: string
   completed: boolean
 }
@@ -86,11 +79,6 @@ type NameDialogState = {
 
 type TaskCreateMode = "single" | "bulk"
 type NumberPlacement = "suffix" | "prefix"
-
-const NONE_CLUSTER_VALUE = "__none__"
-const NEW_CLUSTER_VALUE = "__new__"
-const ALL_CLUSTER_FILTER_VALUE = "__all__"
-const UNCLUSTERED_FILTER_VALUE = "__unclustered__"
 
 const CLOSED_DIALOG_STATE: NameDialogState = {
   open: false,
@@ -215,9 +203,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   const [chapterDialog, setChapterDialog] = useState<NameDialogState>(CLOSED_DIALOG_STATE)
   const [chapterDialogSaving, setChapterDialogSaving] = useState(false)
 
-  const [clusterDialog, setClusterDialog] = useState<NameDialogState>(CLOSED_DIALOG_STATE)
-  const [clusterDialogSaving, setClusterDialogSaving] = useState(false)
-
   const [taskDialog, setTaskDialog] = useState<NameDialogState>(CLOSED_DIALOG_STATE)
   const [taskDialogSaving, setTaskDialogSaving] = useState(false)
 
@@ -231,19 +216,13 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   const [bulkNumberPadding, setBulkNumberPadding] = useState("0")
   const [bulkSeparator, setBulkSeparator] = useState("-")
   const [bulkPlacement, setBulkPlacement] = useState<NumberPlacement>("suffix")
-  const [composerClusterValue, setComposerClusterValue] = useState(NONE_CLUSTER_VALUE)
-  const [composerNewClusterName, setComposerNewClusterName] = useState("")
 
   const [manageMode, setManageMode] = useState(false)
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
-  const [assignClusterValue, setAssignClusterValue] = useState(NONE_CLUSTER_VALUE)
-  const [assigningCluster, setAssigningCluster] = useState(false)
   const [deletingSelectedTasks, setDeletingSelectedTasks] = useState(false)
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null)
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
-  const [clusterFilterValue, setClusterFilterValue] = useState(ALL_CLUSTER_FILTER_VALUE)
-  const [clusterManagerExpanded, setClusterManagerExpanded] = useState(false)
   const [manualOrderChapterIds, setManualOrderChapterIds] = useState<Set<string>>(new Set())
   const [reorderingTaskIds, setReorderingTaskIds] = useState<string[]>([])
 
@@ -302,53 +281,16 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     selectedSubject?.chapters.find((chapter) => chapter.id === selectedChapterId) ?? null
 
   useEffect(() => {
-    setClusterFilterValue(ALL_CLUSTER_FILTER_VALUE)
     setSelectedTaskIds(new Set())
     setManageMode(false)
-    setAssignClusterValue(NONE_CLUSTER_VALUE)
-    setComposerClusterValue(NONE_CLUSTER_VALUE)
-    setComposerNewClusterName("")
-    setClusterManagerExpanded(false)
   }, [selectedChapter?.id, showArchived])
 
-  const chapterTasks = selectedChapter ? tasksByChapter[selectedChapter.id] ?? [] : []
-  const completedCount = chapterTasks.filter((task) => task.completed).length
-  const chapterClusters = selectedChapter?.topics ?? []
-
-  const clusterNameById = useMemo(
-    () => new Map(chapterClusters.map((cluster) => [cluster.id, cluster.name])),
-    [chapterClusters]
+  const chapterTasks = useMemo(
+    () => (selectedChapter ? tasksByChapter[selectedChapter.id] ?? [] : []),
+    [selectedChapter, tasksByChapter]
   )
-
-  const { clusterTaskCounts, unclusteredTaskCount } = useMemo(() => {
-    const counts = new Map<string, number>()
-    let unclustered = 0
-
-    for (const task of chapterTasks) {
-      if (!task.clusterId) {
-        unclustered += 1
-        continue
-      }
-      counts.set(task.clusterId, (counts.get(task.clusterId) ?? 0) + 1)
-    }
-
-    return {
-      clusterTaskCounts: counts,
-      unclusteredTaskCount: unclustered,
-    }
-  }, [chapterTasks])
-
-  const visibleTasks = useMemo(() => {
-    if (clusterFilterValue === ALL_CLUSTER_FILTER_VALUE) {
-      return chapterTasks
-    }
-
-    if (clusterFilterValue === UNCLUSTERED_FILTER_VALUE) {
-      return chapterTasks.filter((task) => !task.clusterId)
-    }
-
-    return chapterTasks.filter((task) => task.clusterId === clusterFilterValue)
-  }, [chapterTasks, clusterFilterValue])
+  const completedCount = chapterTasks.filter((task) => task.completed).length
+  const visibleTasks = chapterTasks
 
   const subjectColumnItems: ColumnItem[] = displaySubjects.map((subject) => ({
     id: subject.id,
@@ -366,7 +308,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   const chapterColumnItems: ColumnItem[] = (selectedSubject?.chapters ?? []).map((chapter) => ({
     id: chapter.id,
     label: chapter.name,
-    hint: `${chapter.topics.length} cluster${chapter.topics.length === 1 ? "" : "s"}`,
+    hint: `${(tasksByChapter[chapter.id] ?? []).length} task${(tasksByChapter[chapter.id] ?? []).length === 1 ? "" : "s"}`,
     onEdit: showArchived ? undefined : () => openEditChapter(chapter.id, chapter.name),
     onDelete:
       showArchived
@@ -379,17 +321,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   const allVisibleSelected =
     visibleTasks.length > 0 && visibleTasks.every((task) => selectedTaskIds.has(task.id))
 
-  const selectedDetailTitle = (() => {
-    if (clusterFilterValue === ALL_CLUSTER_FILTER_VALUE) {
-      return selectedChapter?.name ?? "Overview"
-    }
-
-    if (clusterFilterValue === UNCLUSTERED_FILTER_VALUE) {
-      return "Unclustered"
-    }
-
-    return clusterNameById.get(clusterFilterValue) ?? "Cluster"
-  })()
+  const selectedDetailTitle = selectedChapter?.name ?? "Overview"
 
   const bulkPreview = useMemo(() => {
     const baseName = bulkBaseName.trim()
@@ -419,8 +351,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     setBulkNumberPadding("0")
     setBulkSeparator("-")
     setBulkPlacement("suffix")
-    setComposerClusterValue(NONE_CLUSTER_VALUE)
-    setComposerNewClusterName("")
   }
 
   function openCreateSubject() {
@@ -452,25 +382,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       mode: "edit",
       targetId: chapterId,
       value: chapterName,
-    })
-  }
-
-  function openCreateCluster() {
-    if (!selectedChapter || showArchived) return
-    setClusterDialog({
-      open: true,
-      mode: "create",
-      targetId: null,
-      value: "",
-    })
-  }
-
-  function openEditCluster(clusterId: string, clusterName: string) {
-    setClusterDialog({
-      open: true,
-      mode: "edit",
-      targetId: clusterId,
-      value: clusterName,
     })
   }
 
@@ -586,25 +497,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       })
     }
 
-    const reorderedVisibleTasks = arrayMove(visibleTasks, fromIndex, toIndex)
-    let reorderedChapterTasks: TopicTaskItem[]
-
-    if (clusterFilterValue === ALL_CLUSTER_FILTER_VALUE) {
-      reorderedChapterTasks = reorderedVisibleTasks
-    } else {
-      const reorderedVisibleIdSet = new Set(reorderedVisibleTasks.map((task) => task.id))
-
-      let cursor = 0
-      reorderedChapterTasks = chapterTasks.map((task) => {
-        if (!reorderedVisibleIdSet.has(task.id)) {
-          return task
-        }
-
-        const nextTask = reorderedVisibleTasks[cursor]
-        cursor += 1
-        return nextTask
-      })
-    }
+    const reorderedChapterTasks = arrayMove(visibleTasks, fromIndex, toIndex)
 
     const orderedChapterTaskIds = reorderedChapterTasks.map((task) => task.id)
 
@@ -730,59 +623,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     }
   }
 
-  async function handleSaveCluster(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    if (!clusterDialog.value.trim()) {
-      addToast("Cluster name is required.", "error")
-      return
-    }
-
-    setClusterDialogSaving(true)
-
-    try {
-      if (clusterDialog.mode === "create") {
-        if (!selectedChapter) return
-
-        const result = await addSubtopic(selectedChapter.id, clusterDialog.value)
-        if (result.status === "SUCCESS") {
-          setClusterFilterValue(result.subtopic.id)
-          setClusterDialog(CLOSED_DIALOG_STATE)
-          addToast("Cluster created.", "success")
-          router.refresh()
-          return
-        }
-
-        if (result.status === "UNAUTHORIZED") {
-          addToast("Unauthorized", "error")
-          return
-        }
-
-        addToast(result.message, "error")
-        return
-      }
-
-      if (!clusterDialog.targetId) return
-      const result = await updateSubtopic(clusterDialog.targetId, clusterDialog.value)
-
-      if (result.status === "SUCCESS") {
-        setClusterDialog(CLOSED_DIALOG_STATE)
-        addToast("Cluster updated.", "success")
-        router.refresh()
-        return
-      }
-
-      if (result.status === "UNAUTHORIZED") {
-        addToast("Unauthorized", "error")
-        return
-      }
-
-      addToast(result.message, "error")
-    } finally {
-      setClusterDialogSaving(false)
-    }
-  }
-
   async function handleSaveTaskTitle(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -867,29 +707,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     addToast(result.message, "error")
   }
 
-  async function handleDeleteCluster(clusterId: string, clusterName: string) {
-    if (!window.confirm(`Delete cluster "${clusterName}"? Its tasks will become unclustered.`)) {
-      return
-    }
-
-    const result = await deleteSubtopic(clusterId)
-    if (result.status === "SUCCESS") {
-      if (clusterFilterValue === clusterId) {
-        setClusterFilterValue(ALL_CLUSTER_FILTER_VALUE)
-      }
-      addToast("Cluster deleted.", "success")
-      router.refresh()
-      return
-    }
-
-    if (result.status === "UNAUTHORIZED") {
-      addToast("Unauthorized", "error")
-      return
-    }
-
-    addToast(result.message, "error")
-  }
-
   async function handleDeleteTask(taskId: string, taskTitle: string) {
     if (!window.confirm(`Delete task "${taskTitle}"?`)) {
       return
@@ -910,40 +727,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     addToast(result.message, "error")
   }
 
-  async function resolveComposerClusterId(): Promise<string | null | undefined> {
-    if (composerClusterValue === NONE_CLUSTER_VALUE) {
-      return null
-    }
-
-    if (composerClusterValue === NEW_CLUSTER_VALUE) {
-      if (!selectedChapter) {
-        addToast("Choose a chapter first.", "error")
-        return undefined
-      }
-
-      if (!composerNewClusterName.trim()) {
-        addToast("New cluster name is required.", "error")
-        return undefined
-      }
-
-      const createClusterResult = await addSubtopic(selectedChapter.id, composerNewClusterName)
-      if (createClusterResult.status === "SUCCESS") {
-        addToast("Cluster created.", "success")
-        return createClusterResult.subtopic.id
-      }
-
-      if (createClusterResult.status === "UNAUTHORIZED") {
-        addToast("Unauthorized", "error")
-        return undefined
-      }
-
-      addToast(createClusterResult.message, "error")
-      return undefined
-    }
-
-    return composerClusterValue
-  }
-
   async function handleCreateTasks(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -955,11 +738,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     setTaskComposerSaving(true)
 
     try {
-      const clusterId = await resolveComposerClusterId()
-      if (clusterId === undefined) {
-        return
-      }
-
       if (taskCreateMode === "single") {
         const title = singleTaskTitle.trim()
         if (!title) {
@@ -970,7 +748,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         const result = await createSubjectTask({
           chapterId: selectedChapter.id,
           title,
-          clusterId,
         })
 
         if (result.status === "SUCCESS") {
@@ -1017,7 +794,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
       const result = await bulkCreateSubjectTasks({
         chapterId: selectedChapter.id,
-        clusterId,
         baseName,
         count,
         startAt,
@@ -1071,43 +847,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       }
       return next
     })
-  }
-
-  async function handleAssignSelectedTasksToCluster() {
-    if (!selectedChapter) return
-
-    const taskIds = Array.from(selectedTaskIds)
-    if (taskIds.length === 0) {
-      addToast("Select tasks to assign.", "error")
-      return
-    }
-
-    const clusterId = assignClusterValue === NONE_CLUSTER_VALUE ? null : assignClusterValue
-
-    setAssigningCluster(true)
-    try {
-      const result = await assignTasksToCluster({
-        chapterId: selectedChapter.id,
-        taskIds,
-        clusterId,
-      })
-
-      if (result.status === "SUCCESS") {
-        setSelectedTaskIds(new Set())
-        addToast(`Updated ${result.updatedCount} task${result.updatedCount === 1 ? "" : "s"}.`, "success")
-        router.refresh()
-        return
-      }
-
-      if (result.status === "UNAUTHORIZED") {
-        addToast("Unauthorized", "error")
-        return
-      }
-
-      addToast(result.message, "error")
-    } finally {
-      setAssigningCluster(false)
-    }
   }
 
   async function handleDeleteSelectedTasks() {
@@ -1316,12 +1055,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                     <span>{selectedSubject.name}</span>
                     <span>{">"}</span>
                     <span>{selectedChapter.name}</span>
-                    {clusterFilterValue !== ALL_CLUSTER_FILTER_VALUE && (
-                      <>
-                        <span>{">"}</span>
-                        <span style={{ color: "var(--sh-text-secondary)" }}>{selectedDetailTitle}</span>
-                      </>
-                    )}
                   </nav>
 
                   <div className="mt-3 flex flex-wrap items-start gap-3">
@@ -1336,7 +1069,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                         {completedCount}/{chapterTasks.length} tasks completed
                       </p>
                       <p className="mt-1 text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                        Add tasks, bulk-create series, and cluster tasks from this overview panel.
+                        Add tasks and bulk-create series from this overview panel.
                       </p>
                     </div>
 
@@ -1376,91 +1109,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                     </div>
                   </div>
 
-                  <section
-                    className={`mt-3 rounded-lg border p-2.5 ${sidebarExpanded ? "overflow-visible" : "overflow-hidden"}`}
-                    style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                        Clusters
-                      </p>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={openCreateCluster}
-                          disabled={showArchived}
-                        >
-                          New Cluster
-                        </Button>
-
-                        {chapterClusters.length > 0 && !showArchived && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setClusterManagerExpanded((value) => !value)}
-                          >
-                            {clusterManagerExpanded ? "Hide Manager" : "Manage Clusters"}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
-                      <FilterChip
-                        label={`All (${chapterTasks.length})`}
-                        active={clusterFilterValue === ALL_CLUSTER_FILTER_VALUE}
-                        compact={sidebarExpanded}
-                        onClick={() => setClusterFilterValue(ALL_CLUSTER_FILTER_VALUE)}
-                      />
-                      <FilterChip
-                        label={`Unclustered (${unclusteredTaskCount})`}
-                        active={clusterFilterValue === UNCLUSTERED_FILTER_VALUE}
-                        compact={sidebarExpanded}
-                        onClick={() => setClusterFilterValue(UNCLUSTERED_FILTER_VALUE)}
-                      />
-                      {chapterClusters.map((cluster) => (
-                        <FilterChip
-                          key={cluster.id}
-                          label={`${cluster.name} (${clusterTaskCounts.get(cluster.id) ?? 0})`}
-                          active={clusterFilterValue === cluster.id}
-                          compact={sidebarExpanded}
-                          onClick={() => setClusterFilterValue(cluster.id)}
-                        />
-                      ))}
-                    </div>
-
-                    {clusterManagerExpanded && chapterClusters.length > 0 && !showArchived && (
-                      <div className="mt-2 grid max-h-28 gap-1.5 overflow-y-auto pr-1">
-                        {chapterClusters.map((cluster) => (
-                          <div
-                            key={`cluster-manage-${cluster.id}`}
-                            className="flex items-center justify-between gap-2 rounded-md border px-2 py-1"
-                            style={{ borderColor: "var(--sh-border)" }}
-                          >
-                            <p className="min-w-0 truncate text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                              {cluster.name} · {clusterTaskCounts.get(cluster.id) ?? 0} task
-                              {(clusterTaskCounts.get(cluster.id) ?? 0) === 1 ? "" : "s"}
-                            </p>
-                            <div className="flex items-center gap-1">
-                              <RowActionButton
-                                label={`Edit cluster ${cluster.name}`}
-                                onClick={() => openEditCluster(cluster.id, cluster.name)}
-                              />
-                              <RowActionButton
-                                label={`Delete cluster ${cluster.name}`}
-                                onClick={() => {
-                                  void handleDeleteCluster(cluster.id, cluster.name)
-                                }}
-                                danger
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-
                   {manageMode && (
                     <section
                       className="mt-2 rounded-lg border p-2.5"
@@ -1470,30 +1118,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                           <span className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
                             {selectedTaskIds.size} selected
                           </span>
-
-                          <select
-                            value={assignClusterValue}
-                            onChange={(event) => setAssignClusterValue(event.target.value)}
-                            className="ui-input h-9 min-w-[180px]"
-                          >
-                            <option value={NONE_CLUSTER_VALUE}>Unclustered</option>
-                            {chapterClusters.map((cluster) => (
-                              <option key={`assign-${cluster.id}`} value={cluster.id}>
-                                {cluster.name}
-                              </option>
-                            ))}
-                          </select>
-
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => {
-                              void handleAssignSelectedTasksToCluster()
-                            }}
-                            disabled={selectedTaskIds.size === 0 || assigningCluster}
-                          >
-                            {assigningCluster ? "Applying..." : "Apply Cluster"}
-                          </Button>
 
                           <Button
                             variant="ghost"
@@ -1555,8 +1179,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                                   task={task}
                                   isPending={pendingTaskIds.has(task.id)}
                                   isReordering={reorderingTaskIds.includes(task.id)}
-                                  clusterName={task.clusterId ? clusterNameById.get(task.clusterId) ?? null : null}
-                                  showClusterBadge={clusterFilterValue === ALL_CLUSTER_FILTER_VALUE}
                                   showFullTitle={sidebarExpanded}
                                   canEdit={!showArchived}
                                   onToggle={(nextCompleted) => handleToggleTask(task.id, nextCompleted)}
@@ -1573,7 +1195,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                           {visibleTasks.map((task) => {
                             const isPending = pendingTaskIds.has(task.id)
-                            const clusterName = task.clusterId ? clusterNameById.get(task.clusterId) ?? null : null
 
                             return (
                               <div
@@ -1628,19 +1249,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                                   >
                                     {task.title}
                                   </p>
-
-                                  {clusterFilterValue === ALL_CLUSTER_FILTER_VALUE && (
-                                    <span
-                                      className="max-w-[104px] truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                                      style={{
-                                        color: "var(--sh-text-secondary)",
-                                        background: "rgba(255,255,255,0.06)",
-                                      }}
-                                      title={clusterName ?? "Unclustered"}
-                                    >
-                                      {clusterName ?? "Unclustered"}
-                                    </span>
-                                  )}
 
                                   <RowActionButton
                                     label="Edit task title"
@@ -1699,19 +1307,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         onChange={(value) => setChapterDialog((previous) => ({ ...previous, value }))}
         onClose={() => setChapterDialog(CLOSED_DIALOG_STATE)}
         onSubmit={handleSaveChapter}
-      />
-
-      <NameModal
-        open={clusterDialog.open}
-        title={clusterDialog.mode === "create" ? "Add Cluster" : "Edit Cluster"}
-        fieldLabel="Cluster Name"
-        value={clusterDialog.value}
-        placeholder="e.g. Lecture Set A"
-        submitLabel={clusterDialog.mode === "create" ? "Add Cluster" : "Save Cluster"}
-        loading={clusterDialogSaving}
-        onChange={(value) => setClusterDialog((previous) => ({ ...previous, value }))}
-        onClose={() => setClusterDialog(CLOSED_DIALOG_STATE)}
-        onSubmit={handleSaveCluster}
       />
 
       <NameModal
@@ -1869,35 +1464,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
             </div>
           )}
 
-          <div className="space-y-2">
-            <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-              Cluster
-            </label>
-            <select
-              value={composerClusterValue}
-              onChange={(event) => setComposerClusterValue(event.target.value)}
-              className="ui-input"
-            >
-              <option value={NONE_CLUSTER_VALUE}>Unclustered</option>
-              {chapterClusters.map((cluster) => (
-                <option key={`composer-${cluster.id}`} value={cluster.id}>
-                  {cluster.name}
-                </option>
-              ))}
-              <option value={NEW_CLUSTER_VALUE}>Create new cluster...</option>
-            </select>
-
-            {composerClusterValue === NEW_CLUSTER_VALUE && (
-              <Input
-                required
-                label="New Cluster Name"
-                value={composerNewClusterName}
-                onChange={(event) => setComposerNewClusterName(event.target.value)}
-                placeholder="e.g. Lecture Set A"
-              />
-            )}
-          </div>
-
           <div className="flex items-center justify-end gap-2">
             <Button
               type="button"
@@ -1928,8 +1494,6 @@ interface DraggableTaskRowProps {
   task: TopicTaskItem
   isPending: boolean
   isReordering: boolean
-  clusterName: string | null
-  showClusterBadge: boolean
   showFullTitle: boolean
   canEdit: boolean
   onToggle: (completed: boolean) => void
@@ -1941,8 +1505,6 @@ function DraggableTaskRow({
   task,
   isPending,
   isReordering,
-  clusterName,
-  showClusterBadge,
   showFullTitle,
   canEdit,
   onToggle,
@@ -2023,19 +1585,6 @@ function DraggableTaskRow({
         >
           {task.title}
         </p>
-
-        {showClusterBadge && (
-          <span
-            className="max-w-[104px] truncate rounded px-1.5 py-0.5 text-[10px] font-semibold"
-            style={{
-              color: "var(--sh-text-secondary)",
-              background: "rgba(255,255,255,0.06)",
-            }}
-            title={clusterName ?? "Unclustered"}
-          >
-            {clusterName ?? "Unclustered"}
-          </span>
-        )}
 
         <RowActionButton
           label="Edit task title"
@@ -2207,30 +1756,6 @@ function NameModal({
         </div>
       </form>
     </Modal>
-  )
-}
-
-interface FilterChipProps {
-  label: string
-  active: boolean
-  compact?: boolean
-  onClick: () => void
-}
-
-function FilterChip({ label, active, compact = false, onClick }: FilterChipProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`shrink-0 whitespace-nowrap rounded-full border font-semibold transition-colors ${compact ? "px-2 py-0.5 text-[10px] leading-tight" : "px-2 py-1 text-[11px]"}`}
-      style={{
-        borderColor: active ? "var(--sh-primary-glow)" : "var(--sh-border)",
-        background: active ? "var(--sh-primary-muted)" : "transparent",
-        color: active ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-      }}
-    >
-      {label}
-    </button>
   )
 }
 

@@ -1,5 +1,6 @@
 ﻿"use client"
 
+import Link from "next/link"
 import { useState } from "react"
 import type { ScheduledSession, FeasibilityResult } from "@/lib/planner/engine"
 import type { KeepPreviousMode } from "@/app/actions/planner/plan"
@@ -9,10 +10,19 @@ interface PlanConfirmProps {
   feasibility: FeasibilityResult
   onCommit: (keepMode: KeepPreviousMode, summary?: string) => void
   isCommitting: boolean
-  commitResult: { status: string; taskCount?: number } | null
+  commitResult: { status: string; taskCount?: number; message?: string } | null
   commitBlocked?: boolean
   commitBlockedReason?: string
   onResolveIssues?: () => void
+}
+
+function formatMinutes(totalMinutes: number): string {
+  if (totalMinutes <= 0) return "0m"
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours === 0) return `${minutes}m`
+  if (minutes === 0) return `${hours}h`
+  return `${hours}h ${minutes}m`
 }
 
 export default function PlanConfirm({
@@ -38,8 +48,11 @@ export default function PlanConfirm({
         sessions[0].scheduled_date)
     : null
   const summaryPlaceholder = newPlanStart
-    ? `Plan from ${newPlanStart} ┬╖ ${sessions.length} session${sessions.length === 1 ? "" : "s"}`
+    ? `Plan from ${newPlanStart} - ${sessions.length} session${sessions.length === 1 ? "" : "s"}`
     : `Committed ${sessions.length} session${sessions.length === 1 ? "" : "s"}`
+  const calendarMonthHref = newPlanStart
+    ? `/dashboard/calendar?month=${newPlanStart.slice(0, 7)}`
+    : "/dashboard/calendar"
 
   const keepOptions: { value: KeepPreviousMode; label: string; desc: string; color: string }[] = [
     {
@@ -58,7 +71,7 @@ export default function PlanConfirm({
     },
     {
       value: "merge",
-      label: "Merge ΓÇö keep all, add new",
+      label: "Merge - keep all, add new",
       desc: "Keep all existing tasks and add new sessions alongside them. Nothing is deleted.",
       color: "purple",
     },
@@ -90,7 +103,7 @@ export default function PlanConfirm({
               {sessions.length} sessions
             </span>
             <span className="px-2 py-0.5 bg-teal-500/10 border border-teal-500/20 rounded-md text-teal-300 font-medium">
-              {uniqueDays} days ┬╖ {Math.round(totalMinutes / 60)}h
+              {uniqueDays} days - {formatMinutes(totalMinutes)}
             </span>
           </div>
         </div>
@@ -102,7 +115,7 @@ export default function PlanConfirm({
         {[
           { label: "Total Sessions", value: sessions.length },
           { label: "Study Days", value: uniqueDays },
-          { label: "Total Hours", value: Math.round(totalMinutes / 60) },
+          { label: "Total Time", value: formatMinutes(totalMinutes) },
         ].map(({ label, value }) => (
           <div key={label} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-center">
             <div className="text-[10px] text-white/35 uppercase tracking-wider mb-1">{label}</div>
@@ -200,20 +213,31 @@ export default function PlanConfirm({
       {/* What happens note */}
       <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 space-y-1 text-[11px] text-white/35">
         <div className="font-medium text-white/50 mb-1.5">After committing:</div>
-        <div>ΓÇó Manually created tasks are always preserved</div>
-        <div>ΓÇó A snapshot of this plan is saved for history</div>
-        <div>ΓÇó You can return here any time and commit a new version</div>
+        <div>- Manually created tasks are always preserved.</div>
+        <div>- A snapshot of this plan is saved for history.</div>
+        <div>- You can return here any time and commit a new version.</div>
       </div>
 
       {/* Commit result messages */}
       {commitResult?.status === "SUCCESS" && (
         <div className="bg-emerald-500/[0.06] border border-emerald-500/15 rounded-xl p-3 text-sm text-emerald-300">
-          Γ£ô Plan committed ΓÇö {commitResult.taskCount} tasks created. You can still make changes and recommit.
+          Plan committed successfully. {commitResult.taskCount} tasks created.
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link href="/dashboard" className="rounded-md border border-emerald-400/35 px-2.5 py-1 text-[11px] font-semibold hover:bg-emerald-500/20">
+              Open Dashboard
+            </Link>
+            <Link href={calendarMonthHref} className="rounded-md border border-emerald-400/35 px-2.5 py-1 text-[11px] font-semibold hover:bg-emerald-500/20">
+              Open Calendar
+            </Link>
+            <Link href="/schedule" className="rounded-md border border-emerald-400/35 px-2.5 py-1 text-[11px] font-semibold hover:bg-emerald-500/20">
+              Open Scheduler
+            </Link>
+          </div>
         </div>
       )}
       {commitResult?.status === "ERROR" && (
         <div className="bg-red-500/[0.06] border border-red-500/15 rounded-xl p-3 text-sm text-red-300">
-          Failed to commit plan. Please try again.
+          {commitResult.message ?? "Failed to commit plan. Please try again."}
         </div>
       )}
 
@@ -230,8 +254,8 @@ export default function PlanConfirm({
             : isCommitting
             ? "Committing..."
             : commitResult?.status === "SUCCESS"
-              ? "Recommit Plan ΓåÆ"
-              : "Commit Plan ΓåÆ"}
+              ? "Recommit Plan"
+              : "Commit Plan"}
         </button>
       </div>
     </div>

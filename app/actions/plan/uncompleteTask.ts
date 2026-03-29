@@ -3,6 +3,12 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 
+export type UncompleteTaskResponse =
+  | { status: "SUCCESS" }
+  | { status: "UNAUTHORIZED" }
+  | { status: "NOT_FOUND" }
+  | { status: "ERROR"; message: string }
+
 /**
  * Marks a completed task as incomplete.
  * Decrements the parent subject's completed_items counter.
@@ -10,13 +16,17 @@ import { revalidatePath } from "next/cache"
  * and could break things; we keep it simple).
  */
 export async function uncompleteTask(taskId: string) {
-  if (!taskId || typeof taskId !== "string") return
+  if (!taskId || typeof taskId !== "string") {
+    return { status: "NOT_FOUND" } satisfies UncompleteTaskResponse
+  }
 
   const supabase = await createServerSupabaseClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return
+  if (!user) {
+    return { status: "UNAUTHORIZED" } satisfies UncompleteTaskResponse
+  }
 
   // Mark task incomplete — only if it is currently completed (idempotent guard).
   const { data: updatedTask, error: taskError } = await supabase
@@ -28,9 +38,19 @@ export async function uncompleteTask(taskId: string) {
     .select("subject_id")
     .maybeSingle()
 
-  if (taskError || !updatedTask) return
+  if (taskError) {
+    return {
+      status: "ERROR",
+      message: taskError.message,
+    } satisfies UncompleteTaskResponse
+  }
+
+  if (!updatedTask) {
+    return { status: "NOT_FOUND" } satisfies UncompleteTaskResponse
+  }
 
   revalidatePath("/dashboard/calendar")
   revalidatePath("/dashboard")
   revalidatePath("/schedule")
+  return { status: "SUCCESS" } satisfies UncompleteTaskResponse
 }

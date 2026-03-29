@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { normalizeOptionalDate, validateDateWindow } from "@/lib/planner/contracts"
 
 function revalidateStructureViews() {
   revalidatePath("/dashboard/subjects")
@@ -23,12 +24,6 @@ interface ChapterMetadataInput {
   earliest_start?: string | null
   deadline?: string | null
   rest_after_days?: number
-}
-
-function normalizeOptionalDate(value: string | null | undefined): string | null {
-  if (typeof value !== "string") return null
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : null
 }
 
 export async function addChapter(subjectId: string, name: string): Promise<AddChapterResponse> {
@@ -131,10 +126,16 @@ export async function updateChapter(
 
   const chapterStart = normalizeOptionalDate(metadata?.earliest_start)
   const chapterDeadline = normalizeOptionalDate(metadata?.deadline)
-  if (chapterStart && chapterDeadline && chapterStart > chapterDeadline) {
+  const chapterDateWindowError = validateDateWindow(
+    chapterStart,
+    chapterDeadline,
+    "Chapter start date",
+    "chapter deadline"
+  )
+  if (chapterDateWindowError) {
     return {
       status: "ERROR",
-      message: "Chapter start date must be on or before chapter deadline.",
+      message: chapterDateWindowError,
     }
   }
 
@@ -162,64 +163,25 @@ export async function updateChapter(
     }
   }
 
+  const topicUpdatePayload: Record<string, unknown> = { name: trimmedName }
+
+  if (metadata) {
+    topicUpdatePayload.earliest_start = chapterStart
+    topicUpdatePayload.deadline = chapterDeadline
+    topicUpdatePayload.rest_after_days = Math.max(
+      0,
+      Math.trunc(metadata.rest_after_days ?? 0)
+    )
+  }
+
   const { error } = await supabase
     .from("topics")
-    .update({ name: trimmedName })
+    .update(topicUpdatePayload)
     .eq("id", chapterId)
     .eq("user_id", user.id)
 
   if (error) {
     return { status: "ERROR", message: error.message }
-  }
-
-  if (metadata) {
-    const payload = {
-      earliest_start: chapterStart,
-      deadline: chapterDeadline,
-      rest_after_days: Math.max(0, Math.trunc(metadata.rest_after_days ?? 0)),
-      updated_at: new Date().toISOString(),
-    }
-
-    const { data: existingParams, error: paramsReadError } = await supabase
-      .from("topic_params")
-      .select("topic_id")
-      .eq("topic_id", chapterId)
-      .eq("user_id", user.id)
-      .maybeSingle()
-
-    if (paramsReadError) {
-      return { status: "ERROR", message: paramsReadError.message }
-    }
-
-    if (existingParams) {
-      const { error: updateParamsError } = await supabase
-        .from("topic_params")
-        .update(payload)
-        .eq("topic_id", chapterId)
-        .eq("user_id", user.id)
-
-      if (updateParamsError) {
-        return { status: "ERROR", message: updateParamsError.message }
-      }
-    } else {
-      const { error: insertParamsError } = await supabase
-        .from("topic_params")
-        .insert({
-          user_id: user.id,
-          topic_id: chapterId,
-          estimated_hours: 0,
-          priority: 3,
-          depends_on: [],
-          revision_sessions: 0,
-          practice_sessions: 0,
-          session_length_minutes: 60,
-          ...payload,
-        })
-
-      if (insertParamsError) {
-        return { status: "ERROR", message: insertParamsError.message }
-      }
-    }
   }
 
   revalidateStructureViews()

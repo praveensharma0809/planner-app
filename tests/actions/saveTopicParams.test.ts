@@ -46,7 +46,11 @@ describe("saveTopicParams", () => {
   })
 
   it("rejects dependency cycles before writing topic params", async () => {
-    const upsertMock = vi.fn()
+    const updateMock = vi.fn(() => ({
+      eq: vi.fn(() => ({
+        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+      })),
+    }))
     const topicsInMock = vi.fn().mockResolvedValue({
       data: [
         { id: "topic-1", name: "Algebra", subject_id: "subject-1" },
@@ -73,6 +77,7 @@ describe("saveTopicParams", () => {
                 in: topicsInMock,
               })),
             })),
+            update: updateMock,
           }
         }
 
@@ -85,13 +90,6 @@ describe("saveTopicParams", () => {
             })),
           }
         }
-
-        if (table === "topic_params") {
-          return {
-            upsert: upsertMock,
-          }
-        }
-
         throw new Error(`Unexpected table: ${table}`)
       }),
     }
@@ -125,7 +123,7 @@ describe("saveTopicParams", () => {
       status: "ERROR",
       message: "Dependency loop detected: Algebra -> Geometry -> Algebra. Remove one dependency and try again.",
     })
-    expect(upsertMock).not.toHaveBeenCalled()
+    expect(updateMock).not.toHaveBeenCalled()
     expect(revalidatePathMock).not.toHaveBeenCalled()
   })
 })
