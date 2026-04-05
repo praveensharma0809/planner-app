@@ -5,9 +5,15 @@ import { revalidatePath } from "next/cache"
 
 interface UpdateProfileInput {
   full_name: string
-  primary_exam: string
-  exam_date: string
-  daily_available_minutes: number
+  email?: string
+  phone_number?: string
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const PHONE_PATTERN = /^[+]?[-()\s0-9]{7,20}$/
+
+function normalizeOptional(value: string | undefined): string {
+  return (value ?? "").trim()
 }
 
 export async function updateProfile(input: UpdateProfileInput) {
@@ -21,33 +27,43 @@ export async function updateProfile(input: UpdateProfileInput) {
   }
 
   // Validate
-  if (!input.full_name.trim()) {
+  const fullName = input.full_name.trim()
+  const normalizedEmail = normalizeOptional(input.email).toLowerCase()
+  const phoneNumber = normalizeOptional(input.phone_number)
+
+  if (!fullName) {
     return { status: "ERROR" as const, message: "Full name is required." }
   }
-  if (!input.primary_exam.trim()) {
-    return { status: "ERROR" as const, message: "Goal name is required." }
+
+  if (normalizedEmail && !EMAIL_PATTERN.test(normalizedEmail)) {
+    return { status: "ERROR" as const, message: "Please enter a valid email address." }
   }
-  if (!input.exam_date) {
-    return { status: "ERROR" as const, message: "Goal deadline is required." }
+
+  if (phoneNumber && !PHONE_PATTERN.test(phoneNumber)) {
+    return { status: "ERROR" as const, message: "Please enter a valid phone number." }
   }
-  if (
-    !input.daily_available_minutes ||
-    input.daily_available_minutes < 15 ||
-    input.daily_available_minutes > 960
-  ) {
-    return {
-      status: "ERROR" as const,
-      message: "Daily minutes must be between 15 and 960.",
+
+  const phoneDigits = phoneNumber.replace(/\D/g, "")
+  if (phoneNumber && (phoneDigits.length < 7 || phoneDigits.length > 15)) {
+    return { status: "ERROR" as const, message: "Please enter a valid phone number." }
+  }
+
+  const currentEmail = (user.email ?? "").trim().toLowerCase()
+  if (normalizedEmail && normalizedEmail !== currentEmail) {
+    const { error: emailError } = await supabase.auth.updateUser({
+      email: normalizedEmail,
+    })
+
+    if (emailError) {
+      return { status: "ERROR" as const, message: emailError.message }
     }
   }
 
   const { error } = await supabase
     .from("profiles")
     .update({
-      full_name: input.full_name.trim(),
-      primary_exam: input.primary_exam.trim(),
-      exam_date: input.exam_date,
-      daily_available_minutes: input.daily_available_minutes,
+      full_name: fullName,
+      phone: phoneNumber || null,
     })
     .eq("id", user.id)
 

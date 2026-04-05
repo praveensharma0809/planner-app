@@ -15,7 +15,6 @@ export interface PlannerTopicForParams {
 export interface PlannerParamValues {
   topic_id: string
   estimated_hours: number
-  priority: number
   deadline: string
   earliest_start: string
   depends_on: string[]
@@ -30,7 +29,7 @@ export interface PlannerConstraintValues {
   exam_date: string
   weekday_capacity_minutes: number
   weekend_capacity_minutes: number
-  plan_order: "priority" | "deadline" | "subject" | "balanced"
+  plan_order: "deadline" | "subject" | "balanced"
   final_revision_days: number
   buffer_percentage: number
   max_active_subjects: number
@@ -38,7 +37,6 @@ export interface PlannerConstraintValues {
   custom_day_capacity: Record<string, number>
   plan_order_stack: PlanOrderCriterion[]
   flexibility_minutes: number
-  max_daily_minutes: number
   max_topics_per_subject_per_day: number
   min_subject_gap_days: number
   subject_ordering: Record<string, TopicOrderingMode>
@@ -164,7 +162,6 @@ export type PlanIssueConstraintField =
   | "weekday_capacity_minutes"
   | "weekend_capacity_minutes"
   | "max_active_subjects"
-  | "max_daily_minutes"
   | "flexibility_minutes"
 
 export interface PlanIssueInlineConstraint {
@@ -219,6 +216,16 @@ export interface BuildPlanIssuesInput {
   planStatus?: string | null
 }
 
+export interface GeneratedSessionCoverage {
+  expectedSessions: number
+  generatedSessions: number
+  manualSessions: number
+  missingGeneratedSessions: number
+}
+
+export const MISSING_GENERATED_SESSIONS_MESSAGE =
+  "You have removed required planned sessions. Add them back or regenerate plan."
+
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 function isIsoDate(value: string): boolean {
@@ -254,6 +261,24 @@ function daySpreadMinutes(sessions: ScheduledSession[]): number {
 
 export function hasCriticalIssues(issues: PlanIssue[]): boolean {
   return issues.some((issue) => issue.severity === "critical")
+}
+
+export function getSessionCoverage(
+  feasibility: FeasibilityResult | null,
+  sessions: ScheduledSession[]
+): GeneratedSessionCoverage {
+  const expectedSessions = feasibility
+    ? feasibility.units.reduce((sum, unit) => sum + unit.totalSessions, 0)
+    : 0
+  const generatedSessions = sessions.filter((session) => !session.is_manual).length
+  const manualSessions = sessions.filter((session) => session.is_manual).length
+
+  return {
+    expectedSessions,
+    generatedSessions,
+    manualSessions,
+    missingGeneratedSessions: Math.max(0, expectedSessions - generatedSessions),
+  }
 }
 
 export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
@@ -334,13 +359,15 @@ export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
 
   let expectedSessions = 0
   let droppedSessions = 0
+  let generatedSessions = 0
+  let manualSessions = 0
 
   if (feasibility) {
-    expectedSessions = feasibility.units.reduce(
-      (sum, unit) => sum + unit.totalSessions,
-      0
-    )
-    droppedSessions = Math.max(0, expectedSessions - sessions.length)
+    const coverage = getSessionCoverage(feasibility, sessions)
+    expectedSessions = coverage.expectedSessions
+    droppedSessions = coverage.missingGeneratedSessions
+    generatedSessions = coverage.generatedSessions
+    manualSessions = coverage.manualSessions
 
     if (
       droppedSessions > 0 ||
@@ -351,13 +378,15 @@ export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
         issueId: "unscheduled-sessions",
         severity: "critical",
         title: "Some sessions are not scheduled",
-        userMessage:
-          "The plan is incomplete. Commit is blocked until all required sessions are placed.",
+        userMessage: droppedSessions > 0
+          ? MISSING_GENERATED_SESSIONS_MESSAGE
+          : "The plan is incomplete. Commit is blocked until all required sessions are placed.",
         resolverHint:
           "Increase capacity, adjust deadlines, or reduce strictness on constrained topics.",
         rootCauseValues: {
           "Expected sessions": expectedSessions,
-          "Scheduled sessions": sessions.length,
+          "Generated sessions": generatedSessions,
+          "Manual sessions": manualSessions,
           Missing: droppedSessions,
         },
         inlineEdits: [

@@ -8,8 +8,14 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import dynamic from "next/dynamic"
 import { Sidebar } from "@/app/components/layout/Sidebar"
-import { Topbar } from "@/app/components/layout/Topbar"
+import { ScheduleTopbarProvider } from "@/app/components/layout/ScheduleTopbarContext"
+
+const Topbar = dynamic(
+  () => import("@/app/components/layout/Topbar").then((m) => m.Topbar),
+  { ssr: false }
+)
 
 // ─── Context ──────────────────────────────────────────────────
 
@@ -102,37 +108,37 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <SidebarContext.Provider
-      value={{ collapsed, mobileOpen, toggleCollapse, toggleMobile, closeMobile }}
-    >
-      <div className="relative flex min-h-screen">
-        {/* Ambient gradient background */}
-        <div className="mesh-bg" aria-hidden="true" />
+    <SidebarContext.Provider value={{ collapsed, mobileOpen, toggleCollapse, toggleMobile, closeMobile }}>
+      <ScheduleTopbarProvider>
+        <div className="relative flex h-dvh min-h-0">
+          {/* Ambient gradient background */}
+          <div className="mesh-bg" aria-hidden="true" />
 
-        {/* Mobile overlay — covers content behind open sidebar */}
-        <div
-          className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300 ${
-            mobileOpen
-              ? "opacity-100 pointer-events-auto"
-              : "opacity-0 pointer-events-none"
-          }`}
-          onClick={closeMobile}
-          aria-hidden="true"
-        />
+          {/* Mobile overlay — covers content behind open sidebar */}
+          <div
+            className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300 ${
+              mobileOpen
+                ? "opacity-100 pointer-events-auto"
+                : "opacity-0 pointer-events-none"
+            }`}
+            onClick={closeMobile}
+            aria-hidden="true"
+          />
 
-        {/* Sidebar */}
-        <Sidebar />
+          {/* Sidebar */}
+          <Sidebar />
 
-        {/* Right body: topbar + scrollable main */}
-        <div
-          className={`flex flex-col flex-1 min-w-0 transition-[margin-left] duration-300 ease-in-out ${
-            collapsed ? "lg:ml-[var(--sidebar-collapsed-width)]" : "lg:ml-[var(--sidebar-width)]"
-          }`}
-        >
-          <Topbar />
-          <main className="shell-main">{children}</main>
+          {/* Right body: topbar + scrollable main */}
+          <div
+            className={`flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden transition-[margin-left] duration-300 ease-in-out ${
+              collapsed ? "lg:ml-[var(--sidebar-collapsed-width)]" : "lg:ml-[var(--sidebar-width)]"
+            }`}
+          >
+            <Topbar />
+            <main className="shell-main flex h-full min-h-0 w-full min-w-0 flex-col items-stretch overflow-hidden">{children}</main>
+          </div>
         </div>
-      </div>
+      </ScheduleTopbarProvider>
     </SidebarContext.Provider>
   )
 }

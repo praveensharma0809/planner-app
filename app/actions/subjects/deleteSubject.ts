@@ -17,6 +17,53 @@ export async function deleteSubject(subjectId: string) {
     return { status: "ERROR" as const, message: "Invalid subject ID." }
   }
 
+  const { data: existingSubject, error: existingError } = await supabase
+    .from("subjects")
+    .select("id")
+    .eq("id", subjectId)
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (existingError) {
+    return { status: "ERROR" as const, message: existingError.message }
+  }
+
+  if (!existingSubject) {
+    return { status: "ERROR" as const, message: "Subject not found." }
+  }
+
+  // Defensive cleanup: remove children first so subject deletion cannot leave residual rows
+  // even if foreign keys are misconfigured in a downstream environment.
+  const { error: taskError } = await supabase
+    .from("tasks")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("subject_id", subjectId)
+
+  if (taskError) {
+    return { status: "ERROR" as const, message: taskError.message }
+  }
+
+  const { error: topicTaskError } = await supabase
+    .from("topic_tasks")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("subject_id", subjectId)
+
+  if (topicTaskError) {
+    return { status: "ERROR" as const, message: topicTaskError.message }
+  }
+
+  const { error: topicError } = await supabase
+    .from("topics")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("subject_id", subjectId)
+
+  if (topicError) {
+    return { status: "ERROR" as const, message: topicError.message }
+  }
+
   const { error } = await supabase
     .from("subjects")
     .delete()

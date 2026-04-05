@@ -3,9 +3,11 @@ export const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 export const SESSION_TYPES = ["core", "revision", "practice"] as const
 export const STUDY_FREQUENCIES = ["daily", "spaced"] as const
 export const TASK_SOURCES = ["manual", "plan"] as const
+export const TASK_TYPES = ["subject", "standalone"] as const
 
 export type SessionType = (typeof SESSION_TYPES)[number]
 export type StudyFrequency = (typeof STUDY_FREQUENCIES)[number]
+export type TaskType = (typeof TASK_TYPES)[number]
 
 type CanonicalIntakeTaskLike = {
   task_source?: string | null
@@ -38,6 +40,17 @@ export function normalizeSessionType(
 export function normalizeStudyFrequency(value: string | null | undefined): StudyFrequency {
   const candidate = value as StudyFrequency | null | undefined
   return candidate && STUDY_FREQUENCIES.includes(candidate) ? candidate : "daily"
+}
+
+export function normalizeTaskType(
+  value: string | null | undefined,
+  fallback: TaskType = "subject"
+): TaskType {
+  const candidate = value as TaskType | null | undefined
+  if (candidate && TASK_TYPES.includes(candidate)) {
+    return candidate
+  }
+  return fallback
 }
 
 /**

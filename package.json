@@ -4,13 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:reset-cache": "node -e \"require('fs').rmSync('.next-dev',{recursive:true,force:true})\"",
+    "reset:next-cache": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true});require('fs').rmSync('.next-dev',{recursive:true,force:true})\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:contracts": "vitest run tests/contracts/dbV2ContractGuard.test.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "ci:check": "npm run typecheck && npm run lint && npm run test:contracts && npm run test && npm run build"
+    "ci:check": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState } from "react"
 import { usePathname } from "next/navigation"
 import { useTheme } from "@/app/components/ThemeProvider"
+import {
+  useScheduleTopbar,
+  type ScheduleTopbarState,
+} from "@/app/components/layout/ScheduleTopbarContext"
 import { useSidebar } from "./AppShell"
 import {
   createDefaultWizardProgress,
@@ -84,6 +88,7 @@ function MoonIcon() {
 
 const ROUTE_TITLES: Array<{ pattern: RegExp; title: string }> = [
   { pattern: /^\/dashboard$/,               title: "Overview"   },
+  { pattern: /^\/dashboard\/overview/,      title: "Overview"   },
   { pattern: /^\/dashboard\/calendar/,      title: "Calendar"   },
   { pattern: /^\/dashboard\/subjects/,      title: "Subjects"   },
   { pattern: /^\/dashboard\/timetable/,     title: "Timetable"  },
@@ -110,21 +115,37 @@ function resolvePageTitle(pathname: string): string {
 export function Topbar() {
   const { toggleMobile } = useSidebar()
   const { theme, toggle } = useTheme()
+  const { state: scheduleTopbar } = useScheduleTopbar()
   const pathname = usePathname()
   const pageTitle = resolvePageTitle(pathname)
   const isPlannerRoute = pathname.startsWith("/planner")
+  const isScheduleRoute = pathname.startsWith("/schedule")
+  const showScheduleControls = isScheduleRoute && scheduleTopbar.enabled
+  const hideMenuOnRoute =
+    pathname === "/dashboard" ||
+    pathname === "/dashboard/overview" ||
+    pathname.startsWith("/dashboard/calendar") ||
+    pathname.startsWith("/dashboard/subjects") ||
+    pathname === "/dashboard/schedule" ||
+    pathname.startsWith("/dashboard/schedule") ||
+    pathname === "/schedule" ||
+    pathname.startsWith("/schedule/")
 
   const [plannerProgress, setPlannerProgress] = useState<PlannerWizardProgress>(
-    createDefaultWizardProgress
+    createDefaultWizardProgress()
   )
+  const [isMounted, setIsMounted] = useState(false)
 
   useEffect(() => {
-    if (!isPlannerRoute) return
-    const saved = loadWizardProgress()
-    if (saved) {
-      setPlannerProgress(saved)
+    const frame = requestAnimationFrame(() => {
+      setIsMounted(true)
+      setPlannerProgress(loadWizardProgress() ?? createDefaultWizardProgress())
+    })
+
+    return () => {
+      cancelAnimationFrame(frame)
     }
-  }, [isPlannerRoute])
+  }, [])
 
   useEffect(() => {
     if (!isPlannerRoute) return
@@ -158,10 +179,45 @@ export function Topbar() {
     window.dispatchEvent(new CustomEvent(PLANNER_WIZARD_RESET_EVENT))
   }
 
+  if (showScheduleControls && !isPlannerRoute) {
+    return (
+      <header className="topbar-root topbar-root-schedule" role="banner">
+        <div className="schedule-topbar-head-row">
+          <div className="schedule-topbar-head-left">
+            {!hideMenuOnRoute && (
+              <button
+                onClick={toggleMobile}
+                className="topbar-icon-btn lg:hidden"
+                aria-label="Open navigation menu"
+              >
+                <MenuIcon />
+              </button>
+            )}
+
+            <h1 className="topbar-page-title schedule-topbar-title" title={scheduleTopbar.weekRangeTitle}>
+              {scheduleTopbar.weekRangeTitle}
+            </h1>
+          </div>
+
+          <button
+            onClick={toggle}
+            className="topbar-icon-btn"
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
+        </div>
+
+        <ScheduleTopbarControls state={scheduleTopbar} />
+      </header>
+    )
+  }
+
   return (
     <header className="topbar-root" role="banner">
       {/* Mobile hamburger */}
-      {!isPlannerRoute && (
+      {!isPlannerRoute && !hideMenuOnRoute && (
         <button
           onClick={toggleMobile}
           className="topbar-icon-btn lg:hidden"
@@ -176,7 +232,7 @@ export function Topbar() {
         {pageTitle}
       </h1>
 
-      {isPlannerRoute && (
+      {isPlannerRoute && isMounted && (
         <>
           <nav className="planner-topbar-phase-nav" aria-label="Planner phases">
             {PLANNER_PHASES.map((phase) => {
@@ -219,5 +275,88 @@ export function Topbar() {
         {theme === "dark" ? <SunIcon /> : <MoonIcon />}
       </button>
     </header>
+  )
+}
+
+function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
+  return (
+    <div className="schedule-topbar-controls" aria-label="Schedule controls">
+      <div className="schedule-topbar-section schedule-topbar-section-nav" aria-label="Week and month navigation">
+        <div className="schedule-topbar-group schedule-topbar-group-nav">
+          <button type="button" className="schedule-topbar-btn" onClick={state.onPrevMonth} aria-label="Previous month">
+            Month-
+          </button>
+          <button type="button" className="schedule-topbar-btn" onClick={state.onPrevWeek} aria-label="Previous week">
+            Week-
+          </button>
+          <button
+            type="button"
+            className="schedule-topbar-btn"
+            onClick={state.onCurrentWeek}
+            aria-label="Current week"
+            disabled={state.isCurrentWeek}
+          >
+            Current
+          </button>
+          <button type="button" className="schedule-topbar-btn" onClick={state.onNextWeek} aria-label="Next week">
+            Week+
+          </button>
+          <button type="button" className="schedule-topbar-btn" onClick={state.onNextMonth} aria-label="Next month">
+            Month+
+          </button>
+        </div>
+      </div>
+
+      <div className="schedule-topbar-section schedule-topbar-section-subjects">
+        <div className="schedule-topbar-chip-scroll" aria-label="Subject filters">
+          {state.chips.map((chip) => {
+            const isActive = chip.id === state.activeChipId
+            return (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => state.onChipClick(chip.id)}
+                className={`schedule-topbar-chip ${isActive ? "schedule-topbar-chip-active" : ""}`}
+                aria-pressed={isActive}
+              >
+                {chip.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="schedule-topbar-section schedule-topbar-section-actions" aria-label="Schedule actions">
+        <div className="schedule-topbar-group">
+          <select
+            value={state.statusFilter}
+            onChange={(event) => state.onStatusFilterChange(event.target.value as ScheduleTopbarState["statusFilter"])}
+            className="schedule-topbar-select"
+            aria-label="Filter by completion status"
+          >
+            <option value="all">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="completed">Completed</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={state.onImportPlanner}
+            disabled={state.isImportingPlanner}
+            className="schedule-topbar-btn"
+          >
+            {state.isImportingPlanner ? "Syncing" : "Import"}
+          </button>
+
+          <button
+            type="button"
+            onClick={state.onAddEvent}
+            className="schedule-topbar-btn schedule-topbar-btn-primary"
+          >
+            + Add Event
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

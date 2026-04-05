@@ -1,9 +1,10 @@
 ﻿"use client"
 
 import { useEffect, useMemo, useState } from "react"
-import type {
-  PlannerConstraintValues as ConstraintValues,
-  PlannerSubjectOption,
+import {
+  getSessionCoverage,
+  type PlannerConstraintValues as ConstraintValues,
+  type PlannerSubjectOption,
 } from "@/lib/planner/draft"
 import type { ScheduledSession, FeasibilityResult } from "@/lib/planner/engine"
 
@@ -122,11 +123,18 @@ function getFitStatus(feasibility: FeasibilityResult, droppedSessions: number, f
   }
 }
 
-function buildManualTitle(topic: PreviewTopicOption, note: string) {
-  if (!note.trim()) {
+function buildManualTitle(topic: PreviewTopicOption | null, note: string) {
+  const trimmed = note.trim()
+
+  if (!topic) {
+    return trimmed || "Custom Session"
+  }
+
+  if (!trimmed) {
     return `${topic.topicName} (Manual)`
   }
-  return `${topic.topicName} - ${note.trim()}`
+
+  return `${topic.topicName} - ${trimmed}`
 }
 
 export default function PlanPreview({
@@ -305,22 +313,26 @@ export default function PlanPreview({
 
   const addManualSession = () => {
     if (!manualDraft) return
-    const topic = topicOptions.find((option) => option.id === manualDraft.topicId)
-    if (!topic) return
+    if (!manualDraft.subjectId) return
+
+    const topic = manualDraft.topicId
+      ? topicOptions.find((option) => option.id === manualDraft.topicId) ?? null
+      : null
 
     const nextSession: ScheduledSession = {
-      subject_id: topic.subjectId,
-      topic_id: topic.id,
+      subject_id: manualDraft.subjectId,
+      topic_id: topic?.id ?? "",
       title: buildManualTitle(topic, manualDraft.note),
       scheduled_date: manualDraft.date,
       duration_minutes: Math.max(15, manualDraft.durationMinutes),
       session_type: "core",
-      priority: 3,
       session_number: 0,
       total_sessions: 0,
       is_pinned: true,
       is_manual: true,
     }
+
+    console.log("UI session:", nextSession)
 
     setManualDraft(null)
     commitSessions([...localSessions, nextSession])
@@ -333,7 +345,9 @@ export default function PlanPreview({
   const planReview = useMemo(() => {
     const issues: ReviewIssue[] = []
     const subjectCount = new Set(localSessions.map((session) => session.subject_id)).size
-    const topicCount = new Set(localSessions.map((session) => session.topic_id)).size
+    const topicCount = new Set(
+      localSessions.map((session) => session.topic_id).filter((topicId) => topicId.trim().length > 0)
+    ).size
     const flexDays = grouped.filter((day) =>
       day.sessions.some((session) => session.is_flex_day)
     ).length
@@ -348,17 +362,18 @@ export default function PlanPreview({
     const loadSpread =
       busiestDay && lightestDay ? busiestDay.totalMinutes - lightestDay.totalMinutes : 0
 
-    const placedByTopic = new Map<string, number>()
-    for (const session of localSessions) {
-      placedByTopic.set(
+    const enginePlacedByTopic = new Map<string, number>()
+    for (const session of sessions) {
+      if (session.is_manual || !session.topic_id || session.topic_id.trim().length === 0) continue
+      enginePlacedByTopic.set(
         session.topic_id,
-        (placedByTopic.get(session.topic_id) ?? 0) + 1
+        (enginePlacedByTopic.get(session.topic_id) ?? 0) + 1
       )
     }
 
     const droppedTopics: DroppedTopic[] = feasibility.units
       .map((unit) => {
-        const placedSessions = placedByTopic.get(unit.unitId) ?? 0
+        const placedSessions = enginePlacedByTopic.get(unit.unitId) ?? 0
         const dropped = Math.max(0, unit.totalSessions - placedSessions)
         return {
           unitId: unit.unitId,
@@ -371,14 +386,10 @@ export default function PlanPreview({
       .filter((topic) => topic.droppedSessions > 0)
       .sort((a, b) => b.droppedSessions - a.droppedSessions || a.name.localeCompare(b.name))
 
-    const expectedSessionCount = feasibility.units.reduce(
-      (sum, unit) => sum + unit.totalSessions,
-      0
-    )
-    const droppedSessions = droppedTopics.reduce(
-      (sum, topic) => sum + topic.droppedSessions,
-      0
-    )
+    const coverage = getSessionCoverage(feasibility, sessions)
+    const expectedSessionCount = coverage.expectedSessions
+    const generatedSessionCount = coverage.generatedSessions
+    const droppedSessions = coverage.missingGeneratedSessions
     const placedRatio = expectedSessionCount > 0
       ? (expectedSessionCount - droppedSessions) / expectedSessionCount
       : 1
@@ -386,131 +397,87 @@ export default function PlanPreview({
     if (droppedSessions > 0) {
       issues.push({
         level: "critical",
-        message: `${droppedSessions} session(s) could not be scheduled (${totalSessions}/${expectedSessionCount} placed).`,
-        fix: "Increase daily capacity or extend exam date to fit all sessions.",
-        targetPhase: 1,
+        message: `${droppedSessions} session(s) are still unplaced in the latest generated plan output (${generatedSessionCount}/${expectedSessionCount} generated placed).`,
       })
     }
 
     const impossible = feasibility.units.filter((unit) => unit.status === "impossible")
     const risky = feasibility.units.filter((unit) => unit.status === "at_risk")
-    const tight = feasibility.units.filter((unit) => unit.status === "tight")
 
     if (impossible.length > 0) {
       issues.push({
         level: "critical",
-        message: `${impossible.length} topic(s) can't fit in their time window at all.`,
-        fix: "Extend deadlines or reduce estimated hours for these topics.",
-        targetPhase: 1,
+        message: `${impossible.length} topic(s) cannot fit inside their available date window.`,
       })
     }
+
     if (risky.length > 0) {
       issues.push({
         level: "warning",
-        message: `${risky.length} topic(s) at risk - very tight on deadline.`,
-        fix: "Increase daily capacity or push deadlines back slightly.",
-        targetPhase: 1,
-      })
-    }
-    if (tight.length > 0) {
-      issues.push({
-        level: "info",
-        message: `${tight.length} topic(s) have a tight schedule but should fit.`,
+        message: `${risky.length} topic(s) are extremely tight and may slip with any disruption.`,
       })
     }
 
     if (feasibility.globalGap > 0) {
       const gapHours = Math.ceil(feasibility.globalGap / 60)
       issues.push({
-        level: "critical",
-        message: `Total work exceeds available capacity by ${gapHours}h.`,
-        fix: "Increase daily study hours or reduce topic effort.",
-        targetPhase: 1,
-      })
-    }
-
-    if (busiestDay && busiestDay.totalMinutes >= Math.max(360, avgPerDay + 150)) {
-      issues.push({
         level: "warning",
-        message: `Peak day (${busiestDay.date}) has ${minToHuman(busiestDay.totalMinutes)} of study - potentially exhausting.`,
-        fix: "Reduce session lengths or set focus depth to smooth workload.",
-        targetPhase: 1,
+        message: `Aggregate workload still exceeds base capacity by about ${gapHours} hour(s).`,
       })
     }
 
     if (loadSpread >= 180) {
       issues.push({
         level: "warning",
-        message: `Daily load varies by ${minToHuman(loadSpread)} (${minToHuman(lightestDay?.totalMinutes ?? 0)} to ${minToHuman(busiestDay?.totalMinutes ?? 0)}).`,
-        fix: "Add buffer % and focus depth to flatten daily spikes.",
-        targetPhase: 1,
+        message: `Daily load spread is high (${minToHuman(lightestDay?.totalMinutes ?? 0)} to ${minToHuman(busiestDay?.totalMinutes ?? 0)}).`,
       })
     }
 
-    if (constraints) {
-      if (constraints.flexibility_minutes === 0 && constraints.buffer_percentage === 0) {
-        issues.push({
-          level: "warning",
-          message: "No flexibility allowance or buffer - no slack for missed sessions or off days.",
-          fix: "Set flexibility allowance (+30-60m) or buffer in constraints.",
-          targetPhase: 1,
-        })
-      }
-      if (constraints.final_revision_days === 0) {
-        issues.push({
-          level: "info",
-          message: "No revision days reserved before exam.",
-          fix: "Reserve 2-5 revision days in constraints.",
-          targetPhase: 1,
-        })
-      }
-      if (constraints.max_active_subjects === 0 && subjectCount >= 4) {
-        issues.push({
-          level: "info",
-          message: `All ${subjectCount} subjects active daily - heavy context switching.`,
-          fix: "Set focus depth to 2-3 subjects/day for deeper work.",
-          targetPhase: 1,
-        })
-      }
+    if (constraints && constraints.study_start_date >= constraints.exam_date) {
+      issues.push({
+        level: "critical",
+        message: "Final deadline must be after start date.",
+      })
     }
 
     const generationNotes: string[] = []
     if (constraints) {
-      if (constraints.plan_order_stack && constraints.plan_order_stack.length > 0) {
-        generationNotes.push(`Order: ${constraints.plan_order_stack.slice(0, 3).join(" > ")}`)
-      } else {
-        const planOrderLabel: Record<string, string> = {
-          balanced: "Balanced urgency",
-          priority: "Priority first",
-          deadline: "Deadline first",
-          subject: "Subject order",
-        }
-        generationNotes.push(`Mode: ${planOrderLabel[constraints.plan_order] ?? constraints.plan_order}`)
-      }
+      generationNotes.push(`Window: ${constraints.study_start_date} to ${constraints.exam_date}`)
+      generationNotes.push(
+        `Capacity: ${constraints.weekday_capacity_minutes}m weekday / ${constraints.weekend_capacity_minutes}m weekend`
+      )
       generationNotes.push(
         constraints.max_active_subjects > 0
-          ? `Focus: top ${constraints.max_active_subjects} subject(s)/day`
-          : "Focus: all subjects active"
+          ? `Max active subjects/day: ${constraints.max_active_subjects}`
+          : "Max active subjects/day: no cap"
       )
-      generationNotes.push(
-        `Capacity: ${minToHuman(constraints.weekday_capacity_minutes)} weekday / ${minToHuman(constraints.weekend_capacity_minutes)} weekend`
-      )
-      if (constraints.flexibility_minutes && constraints.flexibility_minutes > 0) {
-        generationNotes.push(`Flex: +${constraints.flexibility_minutes}m/day overflow`)
+      generationNotes.push(`Flex allowance: ${constraints.flexibility_minutes}m/day`)
+
+      const dayOverrideCount = constraints.day_of_week_capacity.filter((value) => value != null).length
+      const customDateOverrideCount = Object.keys(constraints.custom_day_capacity ?? {}).length
+      if (dayOverrideCount > 0 || customDateOverrideCount > 0) {
+        generationNotes.push(
+          `Overrides: ${dayOverrideCount} weekday override(s), ${customDateOverrideCount} custom date override(s)`
+        )
       }
-      if (constraints.final_revision_days > 0) {
-        generationNotes.push(`${constraints.final_revision_days}d revision reserved`)
-      }
-    } else {
-      generationNotes.push("Sequential topics within each subject")
-      generationNotes.push("Interleaved subject rotation")
-      generationNotes.push("Urgency-based balancing")
     }
 
     const fixMap = new Map<string, number>()
-    for (const issue of issues) {
-      if (issue.fix && !fixMap.has(issue.fix)) {
-        fixMap.set(issue.fix, issue.targetPhase ?? 1)
+
+    for (const suggestion of feasibility.suggestions) {
+      const text = suggestion.message.trim()
+      if (text.length > 0 && !fixMap.has(text)) {
+        fixMap.set(text, 1)
+      }
+    }
+
+    for (const unit of feasibility.units) {
+      if (unit.status !== "impossible" && unit.status !== "at_risk") continue
+      for (const suggestion of unit.suggestions) {
+        const text = suggestion.message.trim()
+        if (text.length > 0 && !fixMap.has(text)) {
+          fixMap.set(text, 1)
+        }
       }
     }
 
@@ -529,7 +496,7 @@ export default function PlanPreview({
       issues,
       fixes: Array.from(fixMap.entries()).map(([text, phase]) => ({ text, targetPhase: phase })),
     }
-  }, [avgPerDay, constraints, feasibility, grouped, localSessions, totalMinutes, totalSessions])
+  }, [constraints, feasibility, grouped, localSessions, sessions, totalMinutes])
 
   const sessionTypeColor = (session: ScheduledSession) => {
     const base = session.session_type === "revision"
@@ -558,42 +525,15 @@ export default function PlanPreview({
 
   return (
     <div className="space-y-5">
-      <div className="space-y-1.5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <p className="text-xs text-white/30 uppercase tracking-widest font-medium">
-              Phase 2
-            </p>
-            <h2 className="text-xl font-semibold">Plan Preview</h2>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/[0.08] text-white/60">
-              {totalSessions} sessions
-            </span>
-            <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/[0.08] text-white/60">
-              {Math.round(totalMinutes / 60)}h total
-            </span>
-            <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/[0.08] text-white/60">
-              {planReview.subjectCount} subjects
-            </span>
-            <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/[0.08] text-white/60">
-              {planReview.topicCount} topics
-            </span>
-            <span className={`text-[11px] px-2 py-0.5 rounded-md border font-medium ${planReview.fitStatus.className}`}>
-              {planReview.fitStatus.badge} | {planReview.fitStatus.detail}
-            </span>
-            {planReview.droppedSessions > 0 && (
-              <span className="text-[11px] px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/30 text-red-300 font-medium">
-                {planReview.droppedSessions} dropped
-              </span>
-            )}
-            <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/[0.08] text-white/60">
-              ends {lastDay}
-            </span>
-          </div>
-        </div>
-        <p className="text-sm text-white/50 break-words leading-relaxed">
-          Review and edit your plan. Drag sessions between days, pin the ones you want to keep fixed, or add manual sessions before commit.
+      <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
+        <p className="text-xs uppercase tracking-widest text-white/35 font-medium">
+          Preview Summary
+        </p>
+        <p className="mt-1 text-sm text-white/60 break-words leading-relaxed">
+          {`${totalSessions} sessions | ${minToHuman(totalMinutes)} total | ${totalDays} days | ${minToHuman(avgPerDay)} avg/day | Ends ${lastDay}`}
+        </p>
+        <p className="mt-1 text-[11px] text-white/35">
+          Fit indicators are based on the last generated plan.
         </p>
       </div>
 
@@ -628,12 +568,12 @@ export default function PlanPreview({
               disabled={isReoptimizing || reservedSessions.length === 0}
               className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/15 disabled:border-white/[0.08] disabled:bg-white/[0.03] disabled:text-white/30 disabled:cursor-not-allowed"
             >
-              {isReoptimizing ? "Re-optimizing..." : "Re-optimize Free Sessions"}
+              {isReoptimizing ? "Rebuilding..." : "Rebuild Around Locked Sessions"}
             </button>
           </div>
         </div>
         <p className="text-xs text-white/35 leading-relaxed break-words">
-          Drag any session onto another day to move it. Moved and manually added sessions become pinned automatically and the re-optimizer will rebuild the remaining free sessions around them.
+          Drag any session to a different day to lock it in place. Locked sessions (pinned + custom) are preserved, and rebuild updates only the remaining generated sessions.
         </p>
       </div>
 
@@ -861,6 +801,7 @@ export default function PlanPreview({
                         } : current)}
                         className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white/75 outline-none"
                       >
+                        <option value="">Custom session (no topic link)</option>
                         {selectedSubjectTopics.map((topic) => (
                           <option key={topic.id} value={topic.id}>{topic.topicName}</option>
                         ))}
@@ -883,7 +824,9 @@ export default function PlanPreview({
                     </label>
 
                     <label className="space-y-1">
-                      <span className="text-[10px] uppercase tracking-widest text-white/35">Note</span>
+                      <span className="text-[10px] uppercase tracking-widest text-white/35">
+                        {manualDraft.topicId ? "Note" : "Custom Title"}
+                      </span>
                       <input
                         type="text"
                         value={manualDraft.note}
@@ -891,7 +834,7 @@ export default function PlanPreview({
                           ...current,
                           note: event.target.value,
                         } : current)}
-                        placeholder="Optional label"
+                        placeholder={manualDraft.topicId ? "Optional label" : "Optional custom session title"}
                         className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white/75 outline-none placeholder:text-white/20"
                       />
                     </label>
@@ -908,10 +851,9 @@ export default function PlanPreview({
                     <button
                       type="button"
                       onClick={addManualSession}
-                      disabled={!manualDraft.topicId}
                       className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200 hover:bg-fuchsia-500/15 disabled:border-white/[0.08] disabled:bg-white/[0.03] disabled:text-white/30 disabled:cursor-not-allowed"
                     >
-                      Add Manual Session
+                      Add Session
                     </button>
                   </div>
                 </div>

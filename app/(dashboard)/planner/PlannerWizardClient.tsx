@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { useToast } from "@/app/components/Toast"
 import {
   getPlanConfig,
@@ -8,11 +9,14 @@ import {
   getTopicParams,
   savePlanConfig,
   saveTopicParams,
+  type IntakeImportMode,
 } from "@/app/actions/planner/setup"
 import {
   buildPlanIssues,
+  getSessionCoverage,
   hasCriticalIssues,
   inferSessionLengthMinutes,
+  MISSING_GENERATED_SESSIONS_MESSAGE,
   type PlanIssue,
   type PlanIssueAction,
   type PlanIssueConstraintField,
@@ -51,10 +55,12 @@ import {
   PLANNER_WIZARD_RESET_EVENT,
   saveWizardProgress,
 } from "./wizard-state"
+import { normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
 
 interface PlannerWizardClientProps {
   initialSubjects: SubjectNavItem[]
   initialTasksByChapter: Record<string, TopicTaskItem[]>
+  initialImportMode: IntakeImportMode
 }
 
 interface IssueComputationOverrides {
@@ -90,7 +96,6 @@ function mapSubjectOrdering(
 function mapDbToParamValues(param: {
   topic_id: string
   estimated_hours: number
-  priority: number
   deadline?: string | null
   earliest_start?: string | null
   depends_on?: string[] | null
@@ -102,7 +107,6 @@ function mapDbToParamValues(param: {
   return {
     topic_id: param.topic_id,
     estimated_hours: param.estimated_hours,
-    priority: Number.isFinite(param.priority) ? Math.min(5, Math.max(1, Math.round(param.priority))) : 3,
     deadline: param.deadline ?? "",
     earliest_start: param.earliest_start ?? "",
     depends_on: param.depends_on ?? [],
@@ -116,7 +120,6 @@ function mapDbToParamValues(param: {
 function mapDbParamsToMap(rows: Array<{
   topic_id: string
   estimated_hours: number
-  priority: number
   deadline?: string | null
   earliest_start?: string | null
   depends_on?: string[] | null
@@ -145,7 +148,6 @@ function mapDbToConstraintValues(config: {
   custom_day_capacity?: Record<string, number> | null
   plan_order_stack?: string[] | null
   flexibility_minutes?: number
-  max_daily_minutes?: number
   max_topics_per_subject_per_day?: number
   min_subject_gap_days?: number
   subject_ordering?: Record<string, string> | null
@@ -166,7 +168,6 @@ function mapDbToConstraintValues(config: {
     plan_order_stack:
       (config.plan_order_stack as ConstraintValues["plan_order_stack"]) ?? ["urgency", "subject_order", "deadline"],
     flexibility_minutes: config.flexibility_minutes ?? 0,
-    max_daily_minutes: config.max_daily_minutes ?? 480,
     max_topics_per_subject_per_day: config.max_topics_per_subject_per_day ?? 1,
     min_subject_gap_days: config.min_subject_gap_days ?? 0,
     subject_ordering: mapSubjectOrdering(config.subject_ordering),
@@ -174,45 +175,14 @@ function mapDbToConstraintValues(config: {
   }
 }
 
-function todayISODate(): string {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, "0")
-  const day = String(now.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
-}
-
 function roundedHoursFromMinutes(totalMinutes: number): number {
   if (totalMinutes <= 0) return 1
   return Math.max(0.5, Math.round((totalMinutes / 60) * 10) / 10)
 }
 
-function defaultConstraintValues(latestSubjectDeadline?: string): ConstraintValues {
-  const studyStart = todayISODate()
-  const fallbackExamDate = addDaysISO(studyStart, 90)
-  const examDate = latestSubjectDeadline && latestSubjectDeadline > studyStart
-    ? latestSubjectDeadline
-    : fallbackExamDate
-
-  return {
-    study_start_date: studyStart,
-    exam_date: examDate,
-    weekday_capacity_minutes: 180,
-    weekend_capacity_minutes: 240,
-    plan_order: "balanced",
-    final_revision_days: 0,
-    buffer_percentage: 0,
-    max_active_subjects: 0,
-    day_of_week_capacity: [null, null, null, null, null, null, null],
-    custom_day_capacity: {},
-    plan_order_stack: ["urgency", "subject_order", "deadline"],
-    flexibility_minutes: 0,
-    max_daily_minutes: 480,
-    max_topics_per_subject_per_day: 1,
-    min_subject_gap_days: 0,
-    subject_ordering: {},
-    flexible_threshold: {},
-  }
+function roundedHours(totalMinutes: number): number {
+  if (totalMinutes <= 0) return 0
+  return Math.round((totalMinutes / 60) * 10) / 10
 }
 
 function buildDeadlineMap(subjects: StructureSubject[]): Map<string, string> {
@@ -225,83 +195,73 @@ function buildDeadlineMap(subjects: StructureSubject[]): Map<string, string> {
   return map
 }
 
-  function getLatestSubjectDeadline(subjects: StructureSubject[]): string | undefined {
-    let latest: string | undefined
+function buildParamsFromStructure(
+  subjects: StructureSubject[],
+  existingMap: Map<string, ParamValues>,
+  globalExamDate: string
+): ParamValues[] {
+  const values: ParamValues[] = []
 
-    for (const subject of subjects) {
-      if (!subject.deadline) continue
-      if (!latest || subject.deadline > latest) {
-        latest = subject.deadline
-      }
+  for (const subject of subjects) {
+    const subjectDeadline = (subject.deadline ?? "").trim()
+
+    for (const topic of subject.topics) {
+      if (topic.archived) continue
+
+      const current = existingMap.get(topic.id)
+      const currentDeadline = (current?.deadline ?? "").trim()
+      const resolvedDeadline =
+        currentDeadline
+        && currentDeadline !== globalExamDate
+        && currentDeadline !== subjectDeadline
+          ? currentDeadline
+          : ""
+      const taskMinutes = topic.tasks.reduce(
+        (sum, task) => sum + Math.max(0, task.duration_minutes ?? 0),
+        0
+      )
+      const taskDurations = topic.tasks.map((task) => Math.max(0, task.duration_minutes ?? 0))
+      const derivedHours = roundedHoursFromMinutes(taskMinutes)
+      const currentEstimatedHours = current?.estimated_hours ?? 0
+
+      values.push({
+        topic_id: topic.id,
+        estimated_hours: currentEstimatedHours > 0 ? currentEstimatedHours : (derivedHours > 0 ? derivedHours : 1),
+        deadline: resolvedDeadline,
+        earliest_start: current?.earliest_start ?? "",
+        depends_on: current?.depends_on ?? [],
+        session_length_minutes: inferSessionLengthMinutes(
+          taskDurations,
+          current?.session_length_minutes
+        ),
+        rest_after_days: current?.rest_after_days ?? 0,
+        max_sessions_per_day: current?.max_sessions_per_day ?? 0,
+        study_frequency: current?.study_frequency === "spaced" ? "spaced" : "daily",
+      })
     }
-
-    return latest
   }
 
-  function buildParamsFromStructure(
-    subjects: StructureSubject[],
-    existingMap: Map<string, ParamValues>,
-    globalExamDate: string
-  ): ParamValues[] {
-    const values: ParamValues[] = []
-
-    for (const subject of subjects) {
-      const subjectDeadline = (subject.deadline ?? "").trim()
-
-      for (const topic of subject.topics) {
-        if (topic.archived) continue
-
-        const current = existingMap.get(topic.id)
-        const currentDeadline = (current?.deadline ?? "").trim()
-        const resolvedDeadline =
-          currentDeadline &&
-          currentDeadline !== globalExamDate &&
-          currentDeadline !== subjectDeadline
-            ? currentDeadline
-            : ""
-        const taskMinutes = topic.tasks.reduce(
-          (sum, task) => sum + Math.max(0, task.duration_minutes ?? 0),
-          0
-        )
-        const taskDurations = topic.tasks.map((task) => Math.max(0, task.duration_minutes ?? 0))
-        const derivedHours = roundedHoursFromMinutes(taskMinutes)
-        const currentEstimatedHours = current?.estimated_hours ?? 0
-
-        values.push({
-          topic_id: topic.id,
-          estimated_hours: currentEstimatedHours > 0 ? currentEstimatedHours : (derivedHours > 0 ? derivedHours : 1),
-          priority: 3,
-          deadline: resolvedDeadline,
-          earliest_start: current?.earliest_start ?? "",
-          depends_on: current?.depends_on ?? [],
-          session_length_minutes: inferSessionLengthMinutes(
-            taskDurations,
-            current?.session_length_minutes
-          ),
-          rest_after_days: current?.rest_after_days ?? 0,
-          max_sessions_per_day: current?.max_sessions_per_day ?? 0,
-          study_frequency: current?.study_frequency === "spaced" ? "spaced" : "daily",
-        })
-      }
-    }
-
-    return values
-  }
+  return values
+}
 
 function addDaysISO(isoDate: string, days: number): string {
-  const date = new Date(`${isoDate}T12:00:00`)
+  const normalized = normalizeLocalDate(isoDate)
+  if (!normalized) return isoDate
+
+  const date = new Date(`${normalized}T12:00:00`)
+  if (Number.isNaN(date.getTime())) return isoDate
+
   date.setDate(date.getDate() + days)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
+  return normalizeLocalDate(date) ?? normalized
 }
 
 export default function PlannerWizardClient({
   initialSubjects,
   initialTasksByChapter,
+  initialImportMode,
 }: PlannerWizardClientProps) {
   const { addToast } = useToast()
+  const router = useRouter()
 
   const [phase, setPhase] = useState<number>(1)
   const [maxPhase, setMaxPhase] = useState<number>(1)
@@ -326,9 +286,30 @@ export default function PlannerWizardClient({
   const [planIssues, setPlanIssues] = useState<PlanIssue[]>([])
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false)
   const [lastPlanStatus, setLastPlanStatus] = useState<string | null>(null)
+  const [selectedIntakeTaskIds, setSelectedIntakeTaskIds] = useState<string[]>([])
+  const [previewSubjects, setPreviewSubjects] = useState<StructureSubject[]>([])
 
   const [isAdvancing, setIsAdvancing] = useState(false)
   const hydratedRef = useRef(false)
+
+  const fetchLatestConstraintsFromDb = useCallback(async (): Promise<ConstraintValues> => {
+    const configRes = await getPlanConfig()
+
+    if (configRes.status === "UNAUTHORIZED") {
+      throw new Error("Please sign in.")
+    }
+
+    if (configRes.status === "ERROR") {
+      throw new Error(configRes.message)
+    }
+
+    if (!configRes.config) {
+      // Temporary debug guard to surface config-link issues during generation.
+      throw new Error("Step-2 config missing")
+    }
+
+    return mapDbToConstraintValues(configRes.config)
+  }, [])
 
   useEffect(() => {
     const stored = loadWizardProgress()
@@ -369,6 +350,10 @@ export default function PlannerWizardClient({
 
     if (configRes.status === "SUCCESS" && configRes.config) {
       setConstraints(mapDbToConstraintValues(configRes.config))
+    } else if (configRes.status === "ERROR") {
+      if (showErrors) {
+        addToast(configRes.message, "error")
+      }
     }
   }, [addToast])
 
@@ -469,8 +454,6 @@ export default function PlannerWizardClient({
             return Math.max(0, value)
           case "max_active_subjects":
             return Math.min(8, Math.max(0, value))
-          case "max_daily_minutes":
-            return Math.min(720, Math.max(30, value))
           case "flexibility_minutes":
             return Math.min(120, Math.max(0, value))
           default:
@@ -509,39 +492,104 @@ export default function PlannerWizardClient({
     [planIssues]
   )
 
+  const sessionCoverage = useMemo(
+    () => getSessionCoverage(feasibility, sessions),
+    [feasibility, sessions]
+  )
+  const missingGeneratedSessions = sessionCoverage.missingGeneratedSessions
+
   useEffect(() => {
     if (!constraints && !feasibility && sessions.length === 0 && !lastPlanStatus) return
     setPlanIssues(recomputeIssues())
   }, [constraints, feasibility, lastPlanStatus, recomputeIssues, sessions])
 
-  const subjectOptions: PlannerSubjectOption[] = useMemo(
-    () => initialSubjects.map((subject) => ({
+  const subjectOptions: PlannerSubjectOption[] = useMemo(() => {
+    if (previewSubjects.length > 0) {
+      return previewSubjects
+        .filter((subject) => subject.archived !== true)
+        .map((subject) => {
+          const activeTopics = subject.topics.filter((topic) => topic.archived !== true)
+          return {
+            id: subject.id,
+            name: subject.name,
+            deadline: subject.deadline ?? undefined,
+            topicIds: activeTopics.map((topic) => topic.id),
+            topics: activeTopics.map((topic) => ({ id: topic.id, name: topic.name })),
+          }
+        })
+    }
+
+    return initialSubjects.map((subject) => ({
       id: subject.id,
       name: subject.name,
       deadline: subjectDeadlineState.get(subject.id),
       topicIds: subject.chapters.map((chapter) => chapter.id),
       topics: subject.chapters.map((chapter) => ({ id: chapter.id, name: chapter.name })),
-    })),
-    [initialSubjects, subjectDeadlineState]
-  )
+    }))
+  }, [initialSubjects, previewSubjects, subjectDeadlineState])
 
-  const previewTopicOptions = useMemo(
-    () => initialSubjects.flatMap((subject) =>
+  const previewTopicOptions = useMemo(() => {
+    if (previewSubjects.length > 0) {
+      return previewSubjects
+        .filter((subject) => subject.archived !== true)
+        .flatMap((subject) =>
+          subject.topics
+            .filter((topic) => topic.archived !== true)
+            .map((topic) => ({
+              id: topic.id,
+              subjectId: subject.id,
+              subjectName: subject.name,
+              topicName: topic.name,
+            }))
+        )
+    }
+
+    return initialSubjects.flatMap((subject) =>
       subject.chapters.map((chapter) => ({
         id: chapter.id,
         subjectId: subject.id,
         subjectName: subject.name,
         topicName: chapter.name,
       }))
-    ),
-    [initialSubjects]
-  )
+    )
+  }, [initialSubjects, previewSubjects])
+
+  const phaseTwoHeaderChips = useMemo(() => {
+    if (phase !== 2 || !feasibility) return [] as string[]
+
+    const totalMinutes = sessions.reduce((sum, session) => sum + session.duration_minutes, 0)
+    const subjectCount = new Set(sessions.map((session) => session.subject_id)).size
+    const topicCount = new Set(
+      sessions.map((session) => session.topic_id).filter((topicId) => topicId.trim().length > 0)
+    ).size
+    const unplacedSessions = sessionCoverage.missingGeneratedSessions
+
+    const chips = [
+      `${sessions.length} sessions`,
+      `${roundedHours(totalMinutes)}h total`,
+      `${subjectCount} subjects`,
+      `${topicCount} topics`,
+      feasibility.feasible ? "Fit: Relaxed" : feasibility.flexFeasible ? "Fit: Snug" : "Fit: Overloaded",
+    ]
+
+    if (unplacedSessions > 0) {
+      chips.push(`${unplacedSessions} unplaced`)
+    }
+
+    return chips
+  }, [feasibility, phase, sessionCoverage.missingGeneratedSessions, sessions])
 
   async function continueToPreview() {
     setIsAdvancing(true)
 
     try {
-      const structure = await getStructure()
+      const scopedTaskIds = selectedIntakeTaskIds.length > 0 ? selectedIntakeTaskIds : undefined
+
+      const structure = await getStructure({
+        onlyUndoneTasks: true,
+        dropTopicsWithoutTasks: true,
+        selectedTaskIds: scopedTaskIds,
+      })
 
       if (structure.status !== "SUCCESS") {
         if (structure.status === "ERROR") {
@@ -560,40 +608,36 @@ export default function PlannerWizardClient({
 
       if (subjectCount === 0 || chapterCount === 0) {
         addToast(
-          "Add at least one subject and one chapter before generating preview.",
+          scopedTaskIds
+            ? "No undone tasks matched your current task selection."
+            : "Add at least one subject and one chapter before generating preview.",
           "error"
         )
         return
       }
 
       setSubjectDeadlineState(buildDeadlineMap(structure.tree.subjects))
-      const latestSubjectDeadline = getLatestSubjectDeadline(structure.tree.subjects)
+      setPreviewSubjects(structure.tree.subjects)
 
-      const [paramsRes, configRes] = await Promise.all([
+      const [paramsRes, latestConstraints] = await Promise.all([
         getTopicParams(),
-        getPlanConfig(),
+        fetchLatestConstraintsFromDb(),
       ])
 
       const existingParamMap = paramsRes.status === "SUCCESS"
         ? mapDbParamsToMap(paramsRes.params)
         : new Map<string, ParamValues>()
 
-      const nextConstraints =
-        configRes.status === "SUCCESS" && configRes.config
-          ? mapDbToConstraintValues(configRes.config)
-          : defaultConstraintValues(latestSubjectDeadline)
-
       const nextParams = buildParamsFromStructure(
         structure.tree.subjects,
         existingParamMap,
-        nextConstraints.exam_date
+        latestConstraints.exam_date
       )
 
       const saveParamsRes = await saveTopicParams(
         nextParams.map((param) => ({
           topic_id: param.topic_id,
           estimated_hours: param.estimated_hours,
-          priority: 3,
           deadline: param.deadline || null,
           earliest_start: param.earliest_start || null,
           depends_on: param.depends_on,
@@ -613,94 +657,115 @@ export default function PlannerWizardClient({
       }
 
       setParamMap(new Map(nextParams.map((param) => [param.topic_id, param])))
-      setConstraints(nextConstraints)
+      setConstraints(latestConstraints)
 
-      const generated = await runPlanGeneration(nextConstraints)
+      const generated = await runPlanGeneration(latestConstraints)
       if (generated) {
         addToast("Phase 1 complete. Preview is ready.", "success")
       }
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : "Could not prepare the planner preview."
+      addToast(message, "error")
     } finally {
       setIsAdvancing(false)
     }
   }
 
   const runPlanGeneration = useCallback(async (nextConstraints: ConstraintValues) => {
-    setCommitResult(null)
-    const saveRes = await savePlanConfig(nextConstraints)
-    if (saveRes.status !== "SUCCESS") {
-      addToast(saveRes.status === "ERROR" ? saveRes.message : "Please sign in.", "error")
-      return false
-    }
+    try {
+      setCommitResult(null)
+      const saveRes = await savePlanConfig(nextConstraints)
+      if (saveRes.status !== "SUCCESS") {
+        addToast(saveRes.status === "ERROR" ? saveRes.message : "Please sign in.", "error")
+        return false
+      }
 
-    setConstraints(nextConstraints)
+      const latestConstraints = await fetchLatestConstraintsFromDb()
+      setConstraints(latestConstraints)
 
-    setIsGenerating(true)
-    const plan = await generatePlanAction()
-    setIsGenerating(false)
-    setLastPlanStatus(plan.status)
+      setIsGenerating(true)
+      let plan: Awaited<ReturnType<typeof generatePlanAction>>
+      try {
+        plan = await generatePlanAction({
+          selectedTaskIds: selectedIntakeTaskIds,
+        })
+      } finally {
+        setIsGenerating(false)
+      }
 
-    let nextSessions: ScheduledSession[] = []
-    let nextFeasibility: FeasibilityResult | null = null
+      setLastPlanStatus(plan.status)
 
-    if (plan.status === "READY" || plan.status === "PARTIAL") {
-      nextSessions = plan.schedule
-      nextFeasibility = plan.feasibility
-      setSessions(nextSessions)
-      setFeasibility(nextFeasibility)
-      goToPhase(2)
-    } else if (plan.status === "INFEASIBLE") {
-      nextFeasibility = plan.feasibility
-      setFeasibility(nextFeasibility)
-      setSessions([])
-      goToPhase(1)
-    } else if (plan.status === "NO_DAYS") {
-      setFeasibility(null)
-      setSessions([])
-      goToPhase(1)
-    } else if (plan.status === "NO_CONFIG") {
-      addToast("Could not save intake constraints.", "error")
-      return false
-    } else if (plan.status === "NO_TOPICS") {
-      addToast("Add at least one pending task in your chapters before generating the plan.", "error")
-      return false
-    } else if (plan.status === "ERROR") {
-      addToast(`Engine Error: ${plan.message}`, "error")
-      return false
-    } else if (plan.status === "UNAUTHORIZED") {
-      addToast("Please sign in.", "error")
-      return false
-    }
+      let nextSessions: ScheduledSession[] = []
+      let nextFeasibility: FeasibilityResult | null = null
 
-    const issues = refreshIssues({
-      constraints: nextConstraints,
-      feasibility: nextFeasibility,
-      sessions: nextSessions,
-      planStatus: plan.status,
-    })
+      if (plan.status === "READY" || plan.status === "PARTIAL") {
+        nextSessions = plan.schedule
+        nextFeasibility = plan.feasibility
+        setSessions(nextSessions)
+        setFeasibility(nextFeasibility)
+        goToPhase(2)
+      } else if (plan.status === "INFEASIBLE") {
+        nextFeasibility = plan.feasibility
+        setFeasibility(nextFeasibility)
+        setSessions([])
+        goToPhase(1)
+      } else if (plan.status === "NO_DAYS") {
+        setFeasibility(null)
+        setSessions([])
+        goToPhase(1)
+      } else if (plan.status === "NO_CONFIG") {
+        addToast("Step-2 config missing. Save Step-2 constraints first.", "error")
+        return false
+      } else if (plan.status === "NO_TOPICS") {
+        addToast("Add at least one pending task in your chapters before generating the plan.", "error")
+        return false
+      } else if (plan.status === "ERROR") {
+        addToast(`Engine Error: ${plan.message}`, "error")
+        return false
+      } else if (plan.status === "UNAUTHORIZED") {
+        addToast("Please sign in.", "error")
+        return false
+      }
 
-    if (hasCriticalIssues(issues)) {
-      setIsIssueModalOpen(true)
-      addToast("Resolve critical plan issues in the issue window.", "error")
-      return false
-    }
+      const issues = refreshIssues({
+        constraints: latestConstraints,
+        feasibility: nextFeasibility,
+        sessions: nextSessions,
+        planStatus: plan.status,
+      })
 
-    if (plan.status === "READY") {
-      addToast("Plan generated and fully schedulable.", "success")
+      if (hasCriticalIssues(issues)) {
+        setIsIssueModalOpen(true)
+        addToast("Resolve critical plan issues in the issue window.", "error")
+        return false
+      }
+
+      if (plan.status === "READY") {
+        addToast("Plan generated and fully schedulable.", "success")
+        return true
+      }
+
+      if (plan.status === "PARTIAL") {
+        addToast("Plan generated with unplaced sessions. Review issues before commit.", "info")
+        return true
+      }
+
+      if (plan.status === "INFEASIBLE" || plan.status === "NO_DAYS") {
+        addToast("Plan check completed. Resolve issues to continue.", "info")
+        return false
+      }
+
       return true
-    }
-
-    if (plan.status === "PARTIAL") {
-      addToast("Plan generated with unplaced sessions. Review issues before commit.", "info")
-      return true
-    }
-
-    if (plan.status === "INFEASIBLE" || plan.status === "NO_DAYS") {
-      addToast("Plan check completed. Resolve issues to continue.", "info")
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : "Could not generate planner preview."
+      addToast(message, "error")
       return false
     }
-
-    return true
-  }, [addToast, goToPhase, refreshIssues])
+  }, [addToast, fetchLatestConstraintsFromDb, goToPhase, refreshIssues, selectedIntakeTaskIds])
 
   async function handleIssueRecheck() {
     if (!constraints) return
@@ -715,6 +780,12 @@ export default function PlannerWizardClient({
 
   function handlePreviewConfirm() {
     const issues = refreshIssues()
+    if (missingGeneratedSessions > 0) {
+      setIsIssueModalOpen(true)
+      addToast(MISSING_GENERATED_SESSIONS_MESSAGE, "error")
+      return
+    }
+
     if (hasCriticalIssues(issues)) {
       setIsIssueModalOpen(true)
       addToast("Fix critical issues before moving to commit.", "error")
@@ -726,13 +797,30 @@ export default function PlannerWizardClient({
 
   async function handleReoptimizePreview(reservedSessions: ScheduledSession[]) {
     setIsReoptimizing(true)
-    const result = await reoptimizePreviewPlan(reservedSessions)
+    const result = await reoptimizePreviewPlan(reservedSessions, {
+      selectedTaskIds: selectedIntakeTaskIds,
+    })
     setIsReoptimizing(false)
 
     if (result.status === "SUCCESS") {
       setCommitResult(null)
       setSessions(result.schedule)
       setLastPlanStatus("READY")
+
+      try {
+        const scopedTaskIds = selectedIntakeTaskIds.length > 0 ? selectedIntakeTaskIds : undefined
+        const structure = await getStructure({
+          onlyUndoneTasks: true,
+          dropTopicsWithoutTasks: true,
+          selectedTaskIds: scopedTaskIds,
+        })
+        if (structure.status === "SUCCESS") {
+          setPreviewSubjects(structure.tree.subjects)
+        }
+      } catch {
+        // Reopt result is still usable even if structure refresh fails.
+      }
+
       const issues = refreshIssues({ sessions: result.schedule, planStatus: "READY" })
       if (hasCriticalIssues(issues)) {
         setIsIssueModalOpen(true)
@@ -760,7 +848,15 @@ export default function PlannerWizardClient({
   }
 
   async function handleCommit(keepMode: KeepPreviousMode, summary?: string) {
+    if (isCommitting) return
+
     const issues = refreshIssues()
+    if (missingGeneratedSessions > 0) {
+      setIsIssueModalOpen(true)
+      addToast(MISSING_GENERATED_SESSIONS_MESSAGE, "error")
+      return
+    }
+
     if (hasCriticalIssues(issues)) {
       setIsIssueModalOpen(true)
       addToast("Commit is blocked until critical issues are resolved.", "error")
@@ -769,33 +865,71 @@ export default function PlannerWizardClient({
 
     setIsCommitting(true)
     setCommitResult(null)
-    const result = await commitPlan(sessions, keepMode, summary)
-    setIsCommitting(false)
+    try {
+      for (const session of sessions) {
+        console.log("UI session:", session)
+      }
+      console.log("Commit payload:", sessions)
 
-    if (result.status === "SUCCESS") {
-      setCommitResult({ status: "SUCCESS", taskCount: result.taskCount })
-      setHistoryRefreshKey((current) => current + 1)
-      addToast(`Plan committed: ${result.taskCount} tasks created.`, "success")
-      return
+      const result = await commitPlan(sessions, keepMode, summary)
+
+      if (result.status === "SUCCESS") {
+        setCommitResult({ status: "SUCCESS", taskCount: result.taskCount })
+        setHistoryRefreshKey((current) => current + 1)
+        addToast(`Plan committed: ${result.taskCount} tasks created.`, "success")
+        router.push("/dashboard")
+        return
+      }
+
+      const errorMessage = result.status === "ERROR"
+        ? result.message
+        : "Failed to commit plan."
+      setCommitResult({ status: "ERROR", message: errorMessage })
+      addToast(errorMessage, "error")
+    } catch (error) {
+      const errorMessage = error instanceof Error
+        ? error.message
+        : "Failed to commit plan."
+      setCommitResult({ status: "ERROR", message: errorMessage })
+      addToast(errorMessage, "error")
+    } finally {
+      setIsCommitting(false)
     }
-
-    const errorMessage = result.status === "ERROR"
-      ? result.message
-      : "Failed to commit plan."
-    setCommitResult({ status: "ERROR", message: errorMessage })
-    addToast(errorMessage, "error")
   }
 
   return (
-    <div className="page-root fade-in">
+    <div className="page-root fade-in flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto">
       <div className="ui-card mt-3 p-4 sm:p-5">
-        <div className="mb-3 flex items-center gap-2 flex-wrap">
-          <h2 className="text-[11px] uppercase tracking-[0.14em] font-semibold text-sky-400/85">
-            {activePhase.title}
-          </h2>
-          <p className="text-sm" style={{ color: "var(--sh-text-secondary)" }}>
-            {activePhase.description}
-          </p>
+        <div className="mb-3 flex flex-col gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            {phase === 3 ? (
+              <p className="text-sm" style={{ color: "var(--sh-text-secondary)" }}>
+                Phase 3: Confirm + Commit - Choose commit strategy and save the final plan.
+              </p>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-[11px] uppercase tracking-[0.14em] font-semibold text-sky-400/85">
+                  {activePhase.title}
+                </h2>
+                <p className="text-sm" style={{ color: "var(--sh-text-secondary)" }}>
+                  {activePhase.description}
+                </p>
+              </div>
+            )}
+
+            {phase === 2 && phaseTwoHeaderChips.length > 0 && (
+              <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5">
+                {phaseTwoHeaderChips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="text-[11px] px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/[0.08] text-white/60"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {phase === 1 ? (
@@ -803,8 +937,10 @@ export default function PlannerWizardClient({
             <SubjectsDataTable
               initialSubjects={initialSubjects}
               initialTasksByChapter={initialTasksByChapter}
+              initialImportMode={initialImportMode}
               embedded
               showPageHeader={false}
+              onSelectedTaskIdsChange={setSelectedIntakeTaskIds}
             />
 
             <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 sm:p-4">
@@ -866,8 +1002,14 @@ export default function PlannerWizardClient({
                   onCommit={handleCommit}
                   isCommitting={isCommitting}
                   commitResult={commitResult}
-                  commitBlocked={hasCriticalPlanIssues}
-                  commitBlockedReason={hasCriticalPlanIssues ? "Critical issues still need fixes in the issue window." : undefined}
+                  commitBlocked={missingGeneratedSessions > 0 || hasCriticalPlanIssues}
+                  commitBlockedReason={
+                    missingGeneratedSessions > 0
+                      ? MISSING_GENERATED_SESSIONS_MESSAGE
+                      : hasCriticalPlanIssues
+                        ? "Critical issues still need fixes in the issue window."
+                        : undefined
+                  }
                   onResolveIssues={() => setIsIssueModalOpen(true)}
                 />
 
@@ -876,6 +1018,7 @@ export default function PlannerWizardClient({
                   showPlannerLinks={false}
                   emptyMessage="No plans committed yet."
                   emptyHint="Commit a schedule to start building history."
+                  maxVisible={4}
                   refreshKey={historyRefreshKey}
                 />
               </div>

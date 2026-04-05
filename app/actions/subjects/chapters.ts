@@ -20,10 +20,57 @@ export type AddChapterResponse =
   | { status: "ERROR"; message: string }
   | { status: "SUCCESS"; chapterId: string }
 
+export interface ArchivedChapterListItem {
+  id: string
+  subject_id: string
+  name: string
+  sort_order: number
+  created_at: string
+}
+
+export type GetArchivedChaptersResponse =
+  | { status: "UNAUTHORIZED" }
+  | { status: "ERROR"; message: string }
+  | { status: "SUCCESS"; chapters: ArchivedChapterListItem[] }
+
 interface ChapterMetadataInput {
   earliest_start?: string | null
   deadline?: string | null
   rest_after_days?: number
+}
+
+export async function getArchivedChapters(subjectId?: string): Promise<GetArchivedChaptersResponse> {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { status: "UNAUTHORIZED" }
+  }
+
+  let query = supabase
+    .from("topics")
+    .select("id, subject_id, name, sort_order, created_at")
+    .eq("user_id", user.id)
+    .eq("archived", true)
+
+  if (subjectId) {
+    query = query.eq("subject_id", subjectId)
+  }
+
+  const { data, error } = await query
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true })
+
+  if (error) {
+    return { status: "ERROR", message: error.message }
+  }
+
+  return {
+    status: "SUCCESS",
+    chapters: (data ?? []) as ArchivedChapterListItem[],
+  }
 }
 
 export async function addChapter(subjectId: string, name: string): Promise<AddChapterResponse> {
@@ -211,6 +258,16 @@ export async function deleteChapter(chapterId: string): Promise<ChapterActionRes
 
   if (!existing) {
     return { status: "ERROR", message: "Chapter not found." }
+  }
+
+  const { error: taskDeleteError } = await supabase
+    .from("topic_tasks")
+    .delete()
+    .eq("topic_id", chapterId)
+    .eq("user_id", user.id)
+
+  if (taskDeleteError) {
+    return { status: "ERROR", message: taskDeleteError.message }
   }
 
   const { error } = await supabase

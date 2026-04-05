@@ -19,15 +19,21 @@ export async function getTopicsForUser(
   supabase: SupabaseLike,
   userId: string,
   select: string,
-  topicIds?: string[]
+  topicIds?: string[],
+  subjectIds?: string[]
 ) {
-  const query = supabase
+  let query = supabase
     .from("topics")
     .select(select)
     .eq("user_id", userId)
+    .eq("archived", false)
+
+  if (subjectIds && subjectIds.length > 0) {
+    query = query.in("subject_id", subjectIds)
+  }
 
   if (topicIds && topicIds.length > 0) {
-    return query.in("id", topicIds)
+    query = query.in("id", topicIds)
   }
 
   return query
@@ -42,34 +48,34 @@ export async function getSubjectsForUser(
     .from("subjects")
     .select(select)
     .eq("user_id", userId)
+    .eq("archived", false)
+    .not("name", "ilike", "others")
+     .not("name", "ilike", "__deprecated_others__")
     .order("sort_order", { ascending: true })
 }
 
 export async function getOpenManualTasksByTopic(
   supabase: SupabaseLike,
   userId: string,
-  select = "topic_id, title, duration_minutes, sort_order, created_at",
-  topicIds?: string[]
+  select = "id, topic_id, title, duration_minutes, sort_order, created_at",
+  topicIds?: string[],
+  taskIds?: string[]
 ) {
-  const query = supabase
-    .from("tasks")
+  let query = supabase
+    .from("topic_tasks")
     .select(select)
     .eq("user_id", userId)
-    .eq("task_source", "manual")
     .eq("completed", false)
 
   if (topicIds && topicIds.length > 0) {
-    return query.in("topic_id", topicIds)
+    query = query.in("topic_id", topicIds)
+  }
+
+  if (taskIds && taskIds.length > 0) {
+    query = query.in("id", taskIds)
   }
 
   return query
-}
-
-export async function getOffDaysForUser(
-  supabase: SupabaseLike,
-  userId: string
-) {
-  return supabase.from("off_days").select("date").eq("user_id", userId)
 }
 
 export async function getTopicParamsForUser(
@@ -80,7 +86,7 @@ export async function getTopicParamsForUser(
   const query = supabase
     .from("topics")
     .select(
-      "id, estimated_hours, priority, deadline, earliest_start, depends_on, session_length_minutes, rest_after_days, max_sessions_per_day, study_frequency"
+      "id, estimated_hours, deadline, earliest_start, depends_on, session_length_minutes, rest_after_days, max_sessions_per_day, study_frequency"
     )
     .eq("user_id", userId)
 
@@ -112,15 +118,16 @@ export async function commitPlanAtomic(
     configSnapshot: unknown
     keepMode: string
     newPlanStartDate: string | null
+    commitHash: string
   }
 ) {
-  return supabase.rpc("commit_plan_atomic", {
-    p_user_id: args.userId,
+  return supabase.rpc("commit_plan_atomic_v2", {
     p_tasks: args.tasks,
     p_snapshot_summary: args.summary,
     p_config_snapshot: args.configSnapshot,
     p_keep_mode: args.keepMode,
     p_new_plan_start_date: args.newPlanStartDate,
+    p_commit_hash: args.commitHash,
   })
 }
 
@@ -131,13 +138,13 @@ export async function getPendingPlanTasks(
   return supabase
     .from("tasks")
     .select(
-      "subject_id, topic_id, title, duration_minutes, session_type, priority, session_number, total_sessions, scheduled_date"
+      "id, subject_id, topic_id, title, duration_minutes, session_type, session_number, total_sessions, scheduled_date, source_topic_task_id"
     )
     .eq("user_id", userId)
     .eq("task_source", "plan")
+    .eq("task_type", "subject")
     .eq("completed", false)
     .order("scheduled_date", { ascending: true })
-    .order("priority", { ascending: true })
 }
 
 export async function getRescheduleContext(
@@ -146,7 +153,7 @@ export async function getRescheduleContext(
   plannerSettingsSelect: string,
   topicSelect: string
 ) {
-  return Promise.all([
+  const [profileRes, configRes, subjectsRes] = await Promise.all([
     supabase
       .from("profiles")
       .select("daily_available_minutes, exam_date")
@@ -157,21 +164,43 @@ export async function getRescheduleContext(
       .select(plannerSettingsSelect)
       .eq("user_id", userId)
       .maybeSingle(),
-    supabase.from("off_days").select("date").eq("user_id", userId),
     supabase
       .from("subjects")
       .select("id, name, sort_order, deadline")
       .eq("user_id", userId)
       .eq("archived", false)
+      .not("name", "ilike", "others")
+       .not("name", "ilike", "__deprecated_others__")
       .order("sort_order", { ascending: true }),
-    supabase.from("topics").select(topicSelect).eq("user_id", userId),
-    supabase
-      .from("topics")
-      .select(
-        "id, estimated_hours, priority, deadline, earliest_start, depends_on, session_length_minutes, rest_after_days, max_sessions_per_day, study_frequency"
-      )
-      .eq("user_id", userId),
   ])
+
+  const subjectIds = ((subjectsRes.data ?? []) as Array<{ id: string }>).map(
+    (subject) => subject.id
+  )
+
+  const [topicsRes, topicParamsRes] = subjectIds.length > 0
+    ? await Promise.all([
+      supabase
+        .from("topics")
+        .select(topicSelect)
+        .eq("user_id", userId)
+        .eq("archived", false)
+        .in("subject_id", subjectIds),
+      supabase
+        .from("topics")
+        .select(
+          "id, estimated_hours, deadline, earliest_start, depends_on, session_length_minutes, rest_after_days, max_sessions_per_day, study_frequency"
+        )
+        .eq("user_id", userId)
+        .eq("archived", false)
+        .in("subject_id", subjectIds),
+    ])
+    : [
+      { data: [], error: null },
+      { data: [], error: null },
+    ]
+
+  return [profileRes, configRes, subjectsRes, topicsRes, topicParamsRes]
 }
 
 export async function getExistingTasksInRange(
@@ -182,8 +211,9 @@ export async function getExistingTasksInRange(
 ) {
   return supabase
     .from("tasks")
-    .select("scheduled_date, duration_minutes, task_source, completed")
+    .select("scheduled_date, duration_minutes, task_source, task_type, completed")
     .eq("user_id", userId)
+    .eq("task_type", "subject")
     .gte("scheduled_date", startDate)
     .lte("scheduled_date", endDate)
 }
@@ -197,6 +227,7 @@ export async function deletePendingPlanTasks(
     .delete()
     .eq("user_id", userId)
     .eq("task_source", "plan")
+    .eq("task_type", "subject")
     .eq("completed", false)
 }
 

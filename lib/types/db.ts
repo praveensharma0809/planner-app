@@ -31,7 +31,6 @@ export interface Topic {
   sort_order: number
   archived: boolean
   estimated_hours?: number
-  priority?: number
   deadline?: string | null
   earliest_start?: string | null
   depends_on?: string[]
@@ -45,28 +44,34 @@ export interface Topic {
 export interface Task {
   id: string
   user_id: string
-  subject_id: string
+  subject_id: string | null
   topic_id: string | null
   title: string
+  task_type: "subject" | "standalone"
   scheduled_date: string
   duration_minutes: number
   session_type: "core" | "revision" | "practice"
-  priority: number
   session_number?: number
   total_sessions?: number
   sort_order?: number
   completed: boolean
   task_source: "manual" | "plan"
   plan_snapshot_id: string | null
+  source_topic_task_id?: string | null
   created_at: string
 }
 
-export interface OffDay {
+export interface TopicTask {
   id: string
   user_id: string
-  date: string
-  reason: string | null
+  subject_id: string
+  topic_id: string
+  title: string
+  duration_minutes: number
+  completed: boolean
+  sort_order: number
   created_at: string
+  updated_at?: string
 }
 
 export interface PlanSnapshot {

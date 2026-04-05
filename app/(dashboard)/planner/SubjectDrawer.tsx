@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useToast } from "@/app/components/Toast"
 import { addSubject } from "@/app/actions/subjects/addSubject"
 import { deleteSubject } from "@/app/actions/subjects/deleteSubject"
+import { toggleArchiveSubject } from "@/app/actions/subjects/toggleArchiveSubject"
 import { updateSubject } from "@/app/actions/subjects/updateSubject"
 import { getSubjectById } from "@/app/actions/subjects/getSubjectById"
 
@@ -21,6 +22,23 @@ interface Props {
   onSaved: () => void
 }
 
+function isLikelyNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+
+  const message = `${error.name} ${error.message}`.toLowerCase()
+  return (
+    message.includes("network")
+    || message.includes("failed to fetch")
+    || message.includes("fetch failed")
+    || message.includes("load failed")
+    || message.includes("connection")
+    || message.includes("timeout")
+    || message.includes("socket")
+    || message.includes("econn")
+    || message.includes("enotfound")
+  )
+}
+
 export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, onClose, onSaved }: Props) {
   const { addToast } = useToast()
 
@@ -30,7 +48,31 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
   const [, setRestAfterDays] = useState("0")
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [archiving, setArchiving] = useState(false)
   const [shouldRender, setShouldRender] = useState(open)
+  const actionLockRef = useRef(false)
+
+  function showMutationError(error: unknown, fallbackMessage: string) {
+    console.error(error)
+    addToast(
+      isLikelyNetworkError(error)
+        ? "Network issue. Check connection."
+        : fallbackMessage,
+      "error"
+    )
+  }
+
+  function beginAction(): boolean {
+    if (actionLockRef.current) return false
+    actionLockRef.current = true
+    return true
+  }
+
+  function endAction() {
+    actionLockRef.current = false
+  }
+
+  const busy = loading || deleting || archiving
 
   useEffect(() => {
     if (open) {
@@ -51,13 +93,14 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (busy) return
         onClose()
       }
     }
 
     document.addEventListener("keydown", onKeyDown)
     return () => document.removeEventListener("keydown", onKeyDown)
-  }, [open, onClose])
+  }, [busy, onClose, open])
 
   useEffect(() => {
     if (!open) return
@@ -105,10 +148,14 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
   async function handleSaveSubject(e: React.FormEvent) {
     e.preventDefault()
 
+    if (busy) return
+
     if (startDate && deadline && startDate > deadline) {
       addToast("Subject start date must be on or before subject deadline.", "error")
       return
     }
+
+    if (!beginAction()) return
 
     setLoading(true)
 
@@ -142,29 +189,71 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
           addToast("Unauthorized", "error")
         }
       }
+    } catch (error) {
+      showMutationError(error, "Failed to save subject.")
     } finally {
       setLoading(false)
+      endAction()
     }
   }
 
   async function handleDeleteSubject() {
     if (mode !== "edit" || !subjectId) return
+    if (busy || !beginAction()) return
 
     if (!window.confirm("Delete this subject and all related planner links?")) {
+      endAction()
       return
     }
 
     setDeleting(true)
+    try {
+      const result = await deleteSubject(subjectId)
+      if (result.status === "SUCCESS") {
+        addToast("Subject deleted", "success")
+        onSaved()
+      } else {
+        addToast(result.status === "ERROR" ? result.message : "Unauthorized", "error")
+      }
+    } catch (error) {
+      showMutationError(error, "Failed to delete subject.")
+    } finally {
+      setDeleting(false)
+      endAction()
+    }
+  }
 
-    const result = await deleteSubject(subjectId)
-    if (result.status === "SUCCESS") {
-      addToast("Subject deleted", "success")
-      onSaved()
-    } else {
-      addToast(result.status === "ERROR" ? result.message : "Unauthorized", "error")
+  async function handleArchiveSubject() {
+    if (mode !== "edit" || !subjectId) return
+    if (busy || !beginAction()) return
+
+    if (!window.confirm("Archive this subject? It will be removed from active lists.")) {
+      endAction()
+      return
     }
 
-    setDeleting(false)
+    setArchiving(true)
+    try {
+      const result = await toggleArchiveSubject(subjectId)
+
+      if (result.status !== "SUCCESS") {
+        addToast(result.status === "ERROR" ? result.message : "Unauthorized", "error")
+        return
+      }
+
+      if (!result.archived) {
+        addToast("Could not archive subject right now.", "error")
+        return
+      }
+
+      addToast("Subject archived", "success")
+      onSaved()
+    } catch (error) {
+      showMutationError(error, "Failed to archive subject.")
+    } finally {
+      setArchiving(false)
+      endAction()
+    }
   }
 
   return (
@@ -174,7 +263,11 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
         type="button"
         className={`fixed inset-0 z-40 transition-opacity duration-200 ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         style={{ background: "rgba(0,0,0,0.52)", backdropFilter: "blur(3px)" }}
-        onClick={onClose}
+        onClick={() => {
+          if (busy) return
+          onClose()
+        }}
+        disabled={busy}
         aria-label="Close drawer"
       />
 
@@ -194,7 +287,11 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
             {mode === "create" ? "Add New Subject" : "Edit Subject"}
           </h2>
           <button
-            onClick={onClose}
+            onClick={() => {
+              if (busy) return
+              onClose()
+            }}
+            disabled={busy}
             className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors focus-ring"
             style={{ color: "var(--sh-text-muted)" }}
             aria-label="Close"
@@ -221,6 +318,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
                 onChange={(event) => setName(event.target.value)}
                 placeholder="e.g. System Design, Calculus"
                 className="ui-input"
+                disabled={busy}
               />
             </div>
 
@@ -237,6 +335,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
                   value={deadline}
                   onChange={(event) => setDeadline(event.target.value)}
                   className="ui-input"
+                  disabled={busy}
                 />
               </div>
             </div>
@@ -256,7 +355,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
                   onClick={() => {
                     void handleDeleteSubject()
                   }}
-                  disabled={deleting || loading}
+                  disabled={busy}
                   className="ui-btn ui-btn-danger ui-btn-sm mt-2"
                 >
                   {deleting ? "Deleting..." : "Delete Subject"}
@@ -270,14 +369,37 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
           className="p-6 shrink-0"
           style={{ borderTop: "1px solid var(--sh-border)", background: "var(--sh-card)" }}
         >
-          <button
-            form="subject-form"
-            type="submit"
-            disabled={loading}
-            className="ui-btn ui-btn-primary ui-btn-md w-full justify-center disabled:opacity-50"
-          >
-            {loading ? "Saving…" : mode === "create" ? "Create Subject" : "Save Changes"}
-          </button>
+          {mode === "create" ? (
+            <button
+              form="subject-form"
+              type="submit"
+              disabled={busy}
+              className="ui-btn ui-btn-primary ui-btn-md w-full justify-center disabled:opacity-50"
+            >
+              {loading ? "Saving…" : "Create Subject"}
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                form="subject-form"
+                type="submit"
+                disabled={busy}
+                className="ui-btn ui-btn-primary ui-btn-md flex-1 justify-center disabled:opacity-50"
+              >
+                {loading ? "Saving..." : "Save Changes"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleArchiveSubject()
+                }}
+                disabled={busy}
+                className="ui-btn ui-btn-danger ui-btn-md flex-1 justify-center disabled:opacity-50"
+              >
+                {archiving ? "Archiving..." : "Archive Subject"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </>

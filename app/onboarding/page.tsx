@@ -5,32 +5,21 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/app/components/Toast";
 import { addSubject } from "@/app/actions/subjects/addSubject";
-import { addOffDay } from "@/app/actions/offdays/addOffDay";
-import { deleteOffDay } from "@/app/actions/offdays/deleteOffDay";
 
 interface SubjectDraft {
   name: string;
-}
-
-interface OffDayDraft {
-  id: string;
-  date: string;
-  reason: string;
 }
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { addToast } = useToast();
 
-  // Wizard step: 1 = profile, 2 = subjects, 3 = off-days, 4 = done
+  // Wizard step: 1 = profile, 2 = subjects, 3 = done
   const [step, setStep] = useState(1);
-  const totalSteps = 4;
+  const totalSteps = 3;
 
   // Step 1 — Profile
   const [fullName, setFullName] = useState("");
-  const [primaryExam, setPrimaryExam] = useState("");
-  const [dailyHours, setDailyHours] = useState("");
-  const [examDate, setExamDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
 
@@ -38,12 +27,6 @@ export default function OnboardingPage() {
   const [subjects, setSubjects] = useState<SubjectDraft[]>([]);
   const [subName, setSubName] = useState("");
   const [subSaving, setSubSaving] = useState(false);
-
-  // Step 3 — Off-days
-  const [offDays, setOffDays] = useState<OffDayDraft[]>([]);
-  const [offDate, setOffDate] = useState("");
-  const [offReason, setOffReason] = useState("");
-  const [offSaving, setOffSaving] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -57,7 +40,7 @@ export default function OnboardingPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("id, full_name, primary_exam, qualification, phone, daily_available_minutes, exam_date, created_at")
+        .select("id")
         .eq("id", user.id)
         .single();
 
@@ -81,15 +64,9 @@ export default function OnboardingPage() {
       const user = data.user;
       if (!user) return;
 
-      const parsed = parseInt(dailyHours);
-      const dailyMinutes = isNaN(parsed) || parsed <= 0 ? 60 : parsed * 60;
-
       const { error } = await supabase.from("profiles").insert({
         id: user.id,
         full_name: fullName,
-        primary_exam: primaryExam,
-        daily_available_minutes: dailyMinutes,
-        exam_date: examDate || null,
       });
 
       if (error) {
@@ -133,47 +110,7 @@ export default function OnboardingPage() {
     }
   };
 
-  // Step 3 — Add off-day
-  const handleAddOffDay = async () => {
-    if (!offDate) return;
-    setOffSaving(true);
-
-    try {
-      const result = await addOffDay({
-        date: offDate,
-        reason: offReason || undefined,
-      });
-
-      if (result.status === "SUCCESS") {
-        setOffDays((prev) => [
-          ...prev,
-          { id: result.id, date: offDate, reason: offReason },
-        ]);
-        setOffDate("");
-        setOffReason("");
-      } else if (result.status === "ERROR") {
-        addToast(result.message, "error");
-      } else {
-        addToast("Session expired. Please log in again.", "error");
-        router.push("/auth/login");
-      }
-    } catch {
-      addToast("Network error — please try again.", "error");
-    } finally {
-      setOffSaving(false);
-    }
-  };
-
-  const handleRemoveOffDay = async (offDayId: string, index: number) => {
-    try {
-      await deleteOffDay(offDayId);
-      setOffDays((prev) => prev.filter((_, i) => i !== index));
-    } catch {
-      addToast("Failed to remove off day.", "error");
-    }
-  };
-
-  // Step 4 — Go to planner
+  // Step 3 — Go to planner
   const handleGoToPlanner = () => {
     router.push("/planner");
   };
@@ -207,57 +144,23 @@ export default function OnboardingPage() {
         {/* ======================== STEP 1: Profile ======================== */}
         {step === 1 && (
           <>
-            <h1 className="text-2xl font-semibold mb-6 text-center">
+            <h1 className="mb-2 text-center text-2xl font-semibold">
               Complete Your Profile
             </h1>
+            <p className="mb-6 text-center text-sm text-white/50">
+              Tell us your name to finish setup.
+            </p>
 
             <form onSubmit={handleProfileSubmit} className="space-y-4">
-              <input
-                type="text"
-                placeholder="Full Name"
-                className={inputClass}
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-                aria-label="Full name"
-              />
-
-              <input
-                type="text"
-                placeholder="e.g. CPA, product launch, thesis…"
-                className={inputClass}
-                value={primaryExam}
-                onChange={(e) => setPrimaryExam(e.target.value)}
-                required
-                aria-label="Goal or exam name"
-              />
-
-              <input
-                type="number"
-                placeholder="Daily Available Hours (e.g. 3)"
-                className={inputClass}
-                value={dailyHours}
-                onChange={(e) => setDailyHours(e.target.value)}
-                min={1}
-                max={16}
-                required
-                aria-label="Daily available hours"
-              />
-
-              <div className="space-y-1">
-                <label className="text-sm text-white/60">
-                  Goal deadline{" "}
-                  <span className="text-white/40">
-                    (used to schedule your plan)
-                  </span>
-                </label>
+              <div className="mx-auto max-w-md">
                 <input
-                  type="date"
+                  type="text"
+                  placeholder="Full Name"
                   className={inputClass}
-                  value={examDate}
-                  onChange={(e) => setExamDate(e.target.value)}
-                  min={new Date().toISOString().split("T")[0]}
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                   required
+                  aria-label="Full name"
                 />
               </div>
 
@@ -318,7 +221,7 @@ export default function OnboardingPage() {
               />
 
               <p className="text-xs text-white/30">
-                Topics, deadlines, and workload details can be configured later in the Planner wizard.
+                Topics and workload details can be configured later in the Planner wizard.
               </p>
 
               <button
@@ -348,122 +251,31 @@ export default function OnboardingPage() {
                   : `Next with ${subjects.length} subject${subjects.length > 1 ? "s" : ""} →`}
               </button>
             </div>
+            <button
+              type="button"
+              onClick={handleGoToDashboard}
+              className="mt-3 w-full rounded-xl btn-ghost p-3 text-sm"
+            >
+              Skip to Dashboard
+            </button>
           </>
         )}
 
-        {/* ======================== STEP 3: Off-days ======================== */}
+        {/* ======================== STEP 3: All Set ======================== */}
         {step === 3 && (
-          <>
-            <h1 className="text-2xl font-semibold mb-2 text-center">
-              Set Off Days
-            </h1>
-            <p className="text-sm text-white/50 text-center mb-6">
-              Mark dates when you can&apos;t study (holidays, events, rest days).
-              The planner will skip these dates. This is optional.
-            </p>
-
-            {/* Added off-days list */}
-            {offDays.length > 0 && (
-              <div className="mb-6 space-y-2">
-                {offDays.map((d, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between bg-white/5 rounded-xl px-4 py-3"
-                  >
-                    <div>
-                      <div className="text-sm font-medium">{d.date}</div>
-                      {d.reason && (
-                        <div className="text-xs text-white/40">{d.reason}</div>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => handleRemoveOffDay(d.id, i)}
-                      className="text-xs text-red-400 hover:text-red-300"
-                      aria-label={`Remove off day ${d.date}`}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Off-day form */}
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-xs text-white/50">Date</label>
-                <input
-                  type="date"
-                  value={offDate}
-                  onChange={(e) => setOffDate(e.target.value)}
-                  min={new Date().toISOString().split("T")[0]}
-                  className={inputClass}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-white/50">
-                  Reason <span className="text-white/30">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Family event, Holiday…"
-                  value={offReason}
-                  onChange={(e) => setOffReason(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={handleAddOffDay}
-                disabled={offSaving || !offDate}
-                className="w-full p-3 rounded-xl bg-neutral-700 text-white font-medium hover:bg-neutral-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {offSaving ? "Adding…" : "+ Add Off Day"}
-              </button>
-            </div>
-
-            {/* Navigation */}
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={() => setStep(2)}
-                className="flex-1 p-3 rounded-xl btn-ghost"
-              >
-                ← Back
-              </button>
-              <button
-                onClick={() => setStep(4)}
-                className="flex-1 p-3 rounded-xl btn-primary"
-              >
-                {offDays.length === 0 ? "Skip →" : "Next →"}
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* ======================== STEP 4: All Set ======================== */}
-        {step === 4 && (
           <>
             <h1 className="text-2xl font-semibold mb-2 text-center">
               You&apos;re All Set!
             </h1>
             <p className="text-sm text-white/50 text-center mb-6">
               Your profile and subjects are saved. Head to the Planner to
-              configure topics, set deadlines, and generate your study schedule.
+              configure topics and generate your study schedule.
             </p>
 
             <div className="space-y-3 mb-6">
               <div className="bg-white/5 rounded-xl px-4 py-3 flex items-center justify-between">
                 <span className="text-sm text-white/70">Subjects</span>
                 <span className="text-sm font-semibold">{subjects.length}</span>
-              </div>
-              <div className="bg-white/5 rounded-xl px-4 py-3 flex items-center justify-between">
-                <span className="text-sm text-white/70">Off days</span>
-                <span className="text-sm font-semibold">{offDays.length}</span>
-              </div>
-              <div className="bg-white/5 rounded-xl px-4 py-3 flex items-center justify-between">
-                <span className="text-sm text-white/70">Daily hours</span>
-                <span className="text-sm font-semibold">{dailyHours}h</span>
               </div>
             </div>
 
@@ -485,7 +297,7 @@ export default function OnboardingPage() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setStep(3)}
+                onClick={() => setStep(2)}
                 className="flex-1 p-3 rounded-xl btn-ghost"
               >
                 ← Back

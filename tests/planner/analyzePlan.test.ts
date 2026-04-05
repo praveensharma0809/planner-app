@@ -10,7 +10,6 @@ function buildUnit(overrides: Partial<PlannableUnit> = {}): PlannableUnit {
     topic_name: "Kinematics",
     estimated_minutes: 120,
     session_length_minutes: 60,
-    priority: 2,
     deadline: "2024-01-05",
     depends_on: [],
     ...overrides,
@@ -111,7 +110,6 @@ describe("generatePlan", () => {
         weekday_capacity_minutes: 50,
         weekend_capacity_minutes: 50,
         flexibility_minutes: 10,
-        max_daily_minutes: 120,
       },
       offDays: new Set<string>(),
     })

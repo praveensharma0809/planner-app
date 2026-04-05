@@ -10,7 +10,6 @@ function buildUnit(overrides: Partial<PlannableUnit> = {}): PlannableUnit {
     topic_name: "Genetics",
     estimated_minutes: 120,
     session_length_minutes: 60,
-    priority: 2,
     deadline: "2024-01-03",
     depends_on: [],
     ...overrides,

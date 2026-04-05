@@ -36,6 +36,8 @@ export async function getSubjectProgress(): Promise<GetSubjectProgressResponse> 
     .select("id, name")
     .eq("user_id", user.id)
     .eq("archived", false)
+    .not("name", "ilike", "others")
+      .not("name", "ilike", "__deprecated_others__")
     .order("sort_order", { ascending: true })
 
   if (!subjects || subjects.length === 0) {
@@ -66,7 +68,7 @@ export async function getSubjectProgress(): Promise<GetSubjectProgressResponse> 
 
   // Count tasks per subject
   const { data: tasks } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .select("subject_id, completed")
     .eq("user_id", user.id)
     .in("subject_id", subjectIds)

@@ -8,7 +8,6 @@ export interface UpcomingDeadline {
   subject_id: string
   subject_name: string
   deadline: string
-  priority: number
   estimated_hours: number
 }
 
@@ -28,7 +27,7 @@ export async function getUpcomingDeadlines(): Promise<GetUpcomingDeadlinesRespon
 
   const { data: topics } = await supabase
     .from("topics")
-    .select("id, name, subject_id, deadline, priority, estimated_hours")
+    .select("id, name, subject_id, deadline, estimated_hours")
     .eq("user_id", user.id)
     .not("deadline", "is", null)
 
@@ -49,6 +48,8 @@ export async function getUpcomingDeadlines(): Promise<GetUpcomingDeadlinesRespon
       .from("subjects")
       .select("id, name")
       .eq("archived", false)
+      .not("name", "ilike", "others")
+      .not("name", "ilike", "__deprecated_others__")
       .in("id", subjectIds)
     subjects = (subjectRows ?? []) as Array<{ id: string; name: string }>
   }
@@ -68,7 +69,6 @@ export async function getUpcomingDeadlines(): Promise<GetUpcomingDeadlinesRespon
         subject_id: mapped.subject_id,
         subject_name: subjectNameMap.get(mapped.subject_id) ?? "Unknown",
         deadline: topic.deadline,
-        priority: topic.priority,
         estimated_hours: topic.estimated_hours,
       }
     })

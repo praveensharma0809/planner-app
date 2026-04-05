@@ -6,6 +6,7 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, KeyboardSensor, 
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import type { Task } from "@/lib/types/db"
 import { WEEKDAY_LABELS } from "@/lib/constants"
+import { getTasksForDate, normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
 import { rescheduleTask } from "@/app/actions/plan/rescheduleTask"
 import { DayColumn } from "./DayColumn"
 import { TaskBlock } from "./TaskBlock"
@@ -21,12 +22,8 @@ type TasksByDate = Record<string, Task[]>
 
 function buildTasksByDate(weekDays: string[], tasks: Task[]): TasksByDate {
   const map: TasksByDate = {}
-  weekDays.forEach(date => {
-    map[date] = []
-  })
-  tasks.forEach(task => {
-    if (!map[task.scheduled_date]) return
-    map[task.scheduled_date].push(task)
+  weekDays.forEach((date) => {
+    map[date] = getTasksForDate(tasks, date)
   })
   return map
 }
@@ -90,7 +87,8 @@ export function WeeklyTimetable({ tasks, weekDays, dailyAvailableMinutes, today 
     const overContainer = findContainer(itemsByDate, overId)
 
     if (!activeContainer || !overContainer) return
-    const droppedIntoToday = today && overContainer === today
+    const droppedIntoToday = Boolean(today)
+      && normalizeLocalDate(overContainer) === normalizeLocalDate(today)
 
     if (activeContainer === overContainer) {
       const items = itemsByDate[activeContainer]
@@ -131,7 +129,7 @@ export function WeeklyTimetable({ tasks, weekDays, dailyAvailableMinutes, today 
       [overContainer]: nextOverItems,
     }))
 
-    if (movedTask.scheduled_date !== overContainer) {
+    if (normalizeLocalDate(movedTask.scheduled_date) !== normalizeLocalDate(overContainer)) {
       try {
         await rescheduleTask(movedTask.id, overContainer)
       } catch (error) {
@@ -191,9 +189,9 @@ export function WeeklyTimetable({ tasks, weekDays, dailyAvailableMinutes, today 
                 totalMinutes={totalsByDate[date] ?? 0}
                 dailyAvailableMinutes={dailyAvailableMinutes}
                 isOverloaded={(totalsByDate[date] ?? 0) > dailyAvailableMinutes}
-                isToday={date === today}
+                isToday={normalizeLocalDate(date) === normalizeLocalDate(today ?? null)}
                 isDragging={Boolean(activeId)}
-                pulse={todayPulse && date === today}
+                pulse={todayPulse && normalizeLocalDate(date) === normalizeLocalDate(today ?? null)}
               >
                 <SortableContext
                   items={itemsByDate[date]?.map(task => task.id) ?? []}
@@ -227,15 +225,6 @@ export function WeeklyTimetable({ tasks, weekDays, dailyAvailableMinutes, today 
               <div className="flex items-center justify-between mt-1">
                 <span className="text-[10px]" style={{ color: "var(--tt-muted)" }}>
                   {activeTask.duration_minutes} min
-                </span>
-                <span
-                  className="text-[10px] px-1.5 py-0.5 rounded"
-                  style={{
-                    backgroundColor: "color-mix(in srgb, var(--tt-track) 60%, transparent)",
-                    color: "var(--tt-muted)",
-                  }}
-                >
-                  P{activeTask.priority}
                 </span>
               </div>
             </div>

@@ -65,16 +65,19 @@ type BulkUpdateTaskDurationResponse =
   | { status: "ERROR"; message: string }
   | { status: "SUCCESS"; updatedCount: number }
 
-const DEFAULT_DURATION_MINUTES = 60
-const DEFAULT_PRIORITY = 3
+export type CompleteSubjectTaskResponse =
+  | { status: "SUCCESS" }
+  | { status: "UNAUTHORIZED" }
+  | { status: "NOT_FOUND" }
+  | { status: "ERROR"; message: string }
 
-function todayISODate(): string {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, "0")
-  const day = String(now.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
-}
+export type UncompleteSubjectTaskResponse =
+  | { status: "SUCCESS" }
+  | { status: "UNAUTHORIZED" }
+  | { status: "NOT_FOUND" }
+  | { status: "ERROR"; message: string }
+
+const DEFAULT_DURATION_MINUTES = 60
 
 function revalidateTaskViews() {
   revalidatePath("/dashboard/subjects")
@@ -147,7 +150,7 @@ async function getNextTaskSortOrder(
   const supabase = await createServerSupabaseClient()
 
   const { data: lastTask, error: lastTaskError } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .select("sort_order")
     .eq("user_id", userId)
     .eq("topic_id", chapterId)
@@ -194,22 +197,15 @@ export async function createSubjectTask(
   }
 
   const { data: inserted, error: insertError } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .insert({
       user_id: user.id,
       subject_id: chapter.subjectId,
       topic_id: input.chapterId,
       title,
-      scheduled_date: todayISODate(),
       duration_minutes: DEFAULT_DURATION_MINUTES,
-      session_type: "core",
-      priority: DEFAULT_PRIORITY,
       completed: false,
-      task_source: "manual",
-      session_number: 0,
-      total_sessions: 1,
       sort_order: nextSortOrder.nextSortOrder,
-      plan_snapshot_id: null,
     })
     .select("id")
     .single()
@@ -255,7 +251,6 @@ export async function bulkCreateSubjectTasks(
     return { status: "ERROR", message: nextSortOrder.message }
   }
 
-  const scheduledDate = todayISODate()
   const rows = Array.from({ length: count }, (_, offset) => {
     const index = startAt + offset
     return {
@@ -263,21 +258,14 @@ export async function bulkCreateSubjectTasks(
       subject_id: chapter.subjectId,
       topic_id: input.chapterId,
       title: composeTaskName(baseName, index, placement, separator, numberPadding),
-      scheduled_date: scheduledDate,
       duration_minutes: DEFAULT_DURATION_MINUTES,
-      session_type: "core" as const,
-      priority: DEFAULT_PRIORITY,
       completed: false,
-      task_source: "manual" as const,
-      session_number: 0,
-      total_sessions: 1,
       sort_order: nextSortOrder.nextSortOrder + offset,
-      plan_snapshot_id: null,
     }
   })
 
   const { data: inserted, error: insertError } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .insert(rows)
     .select("id")
 
@@ -305,7 +293,7 @@ export async function updateSubjectTaskTitle(taskId: string, title: string): Pro
   }
 
   const { data: existing, error: existingError } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .select("id")
     .eq("id", taskId)
     .eq("user_id", user.id)
@@ -320,7 +308,7 @@ export async function updateSubjectTaskTitle(taskId: string, title: string): Pro
   }
 
   const { error } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .update({ title: trimmedTitle })
     .eq("id", taskId)
     .eq("user_id", user.id)
@@ -353,7 +341,7 @@ export async function updateSubjectTaskDuration(
   const durationMinutes = normalizeDurationMinutes(input.durationMinutes)
 
   const { data: existing, error: existingError } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .select("id")
     .eq("id", input.taskId)
     .eq("user_id", user.id)
@@ -368,7 +356,7 @@ export async function updateSubjectTaskDuration(
   }
 
   const { error: updateError } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .update({ duration_minutes: durationMinutes })
     .eq("id", input.taskId)
     .eq("user_id", user.id)
@@ -406,7 +394,7 @@ export async function bulkUpdateSubjectTaskDuration(
   const durationMinutes = normalizeDurationMinutes(input.durationMinutes)
 
   const { data: existingTasks, error: existingTasksError } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .select("id")
     .eq("user_id", user.id)
     .eq("topic_id", input.chapterId)
@@ -421,7 +409,7 @@ export async function bulkUpdateSubjectTaskDuration(
   }
 
   const { data: updatedRows, error: updateError } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .update({ duration_minutes: durationMinutes })
     .eq("user_id", user.id)
     .eq("topic_id", input.chapterId)
@@ -447,7 +435,7 @@ export async function deleteSubjectTask(taskId: string): Promise<TaskActionRespo
   }
 
   const { data: existing, error: existingError } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .select("id")
     .eq("id", taskId)
     .eq("user_id", user.id)
@@ -462,7 +450,7 @@ export async function deleteSubjectTask(taskId: string): Promise<TaskActionRespo
   }
 
   const { error } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .delete()
     .eq("id", taskId)
     .eq("user_id", user.id)
@@ -499,7 +487,7 @@ export async function deleteSubjectTasks(
   }
 
   const { data: deletedRows, error: deleteError } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .delete()
     .eq("user_id", user.id)
     .eq("topic_id", input.chapterId)
@@ -541,7 +529,7 @@ export async function reorderTasks(input: ReorderTasksInput): Promise<TaskAction
   }
 
   const { data: existingTasks, error: existingTasksError } = await supabase
-    .from("tasks")
+    .from("topic_tasks")
     .select("id")
     .eq("user_id", user.id)
     .eq("topic_id", input.chapterId)
@@ -557,7 +545,7 @@ export async function reorderTasks(input: ReorderTasksInput): Promise<TaskAction
 
   for (let index = 0; index < uniqueTaskIds.length; index += 1) {
     const { error: updateError } = await supabase
-      .from("tasks")
+      .from("topic_tasks")
       .update({ sort_order: index })
       .eq("id", uniqueTaskIds[index])
       .eq("user_id", user.id)
@@ -566,6 +554,76 @@ export async function reorderTasks(input: ReorderTasksInput): Promise<TaskAction
     if (updateError) {
       return { status: "ERROR", message: updateError.message }
     }
+  }
+
+  revalidateTaskViews()
+  return { status: "SUCCESS" }
+}
+
+export async function completeSubjectTask(taskId: string): Promise<CompleteSubjectTaskResponse> {
+  if (!taskId || typeof taskId !== "string") {
+    return { status: "NOT_FOUND" }
+  }
+
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { status: "UNAUTHORIZED" }
+  }
+
+  const { data: updatedTask, error: updateError } = await supabase
+    .from("topic_tasks")
+    .update({ completed: true })
+    .eq("id", taskId)
+    .eq("user_id", user.id)
+    .eq("completed", false)
+    .select("id")
+    .maybeSingle()
+
+  if (updateError) {
+    return { status: "ERROR", message: updateError.message }
+  }
+
+  if (!updatedTask) {
+    return { status: "NOT_FOUND" }
+  }
+
+  revalidateTaskViews()
+  return { status: "SUCCESS" }
+}
+
+export async function uncompleteSubjectTask(taskId: string): Promise<UncompleteSubjectTaskResponse> {
+  if (!taskId || typeof taskId !== "string") {
+    return { status: "NOT_FOUND" }
+  }
+
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { status: "UNAUTHORIZED" }
+  }
+
+  const { data: updatedTask, error: updateError } = await supabase
+    .from("topic_tasks")
+    .update({ completed: false })
+    .eq("id", taskId)
+    .eq("user_id", user.id)
+    .eq("completed", true)
+    .select("id")
+    .maybeSingle()
+
+  if (updateError) {
+    return { status: "ERROR", message: updateError.message }
+  }
+
+  if (!updatedTask) {
+    return { status: "NOT_FOUND" }
   }
 
   revalidateTaskViews()

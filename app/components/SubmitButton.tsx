@@ -7,6 +7,7 @@ interface Props {
   pendingText?: string
   className?: string
   "aria-label"?: string
+  title?: string
 }
 
 export function SubmitButton({
@@ -14,6 +15,7 @@ export function SubmitButton({
   pendingText,
   className,
   "aria-label": ariaLabel,
+  title,
 }: Props) {
   const { pending } = useFormStatus()
 
@@ -24,6 +26,7 @@ export function SubmitButton({
       className={className}
       aria-label={ariaLabel}
       aria-disabled={pending}
+      title={title}
     >
       {pending && pendingText ? pendingText : children}
     </button>

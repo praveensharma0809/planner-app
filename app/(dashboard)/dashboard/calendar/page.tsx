@@ -1,5 +1,6 @@
 import { getMonthTasks } from "@/app/actions/dashboard/getMonthTasks"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getTodayLocalDate } from "@/lib/tasks/getTasksForDate"
 import { MonthView } from "./MonthView"
 
 interface Props {
@@ -10,7 +11,7 @@ export default async function CalendarPage({ searchParams }: Props) {
   const params = await searchParams
   const monthParam = params.month
 
-  const today = new Date().toISOString().split("T")[0]
+  const today = getTodayLocalDate()
   const now = new Date()
   let calYear: number
   let calMonth: number
@@ -31,7 +32,14 @@ export default async function CalendarPage({ searchParams }: Props) {
   const [monthRes, subjectsData] = await Promise.all([
     getMonthTasks(monthStr),
     user
-      ? supabase.from("subjects").select("id, name").eq("user_id", user.id).order("sort_order")
+      ? supabase
+        .from("subjects")
+        .select("id, name")
+        .eq("user_id", user.id)
+        .eq("archived", false)
+        .not("name", "ilike", "others")
+        .not("name", "ilike", "__deprecated_others__")
+        .order("sort_order")
       : Promise.resolve({ data: [] }),
   ])
 
@@ -43,7 +51,7 @@ export default async function CalendarPage({ searchParams }: Props) {
   const isCurrentMonth = calYear === now.getFullYear() && calMonth === now.getMonth() + 1
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden">
       <MonthView
         tasks={monthTasks}
         subjects={subjects}
@@ -53,6 +61,7 @@ export default async function CalendarPage({ searchParams }: Props) {
         prevMonth={prevDate}
         nextMonth={nextDate}
         isCurrentMonth={isCurrentMonth}
+        className="flex w-full min-h-0 flex-1 flex-col"
       />
     </div>
   )

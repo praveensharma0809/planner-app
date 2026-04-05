@@ -6,8 +6,6 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { completeTask } from "@/app/actions/plan/completeTask"
-import { uncompleteTask } from "@/app/actions/plan/uncompleteTask"
 import {
   addChapter,
   archiveChapter,
@@ -23,6 +21,7 @@ import {
   reorderTasks,
   updateSubjectTaskTitle,
 } from "@/app/actions/subjects/tasks"
+import { setSubjectTaskCompletion } from "@/app/actions/subjects/setSubjectTaskCompletion"
 import { deleteSubject } from "@/app/actions/subjects/deleteSubject"
 import { toggleArchiveSubject } from "@/app/actions/subjects/toggleArchiveSubject"
 import { useSidebar } from "@/app/components/layout/AppShell"
@@ -899,8 +898,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     if (pendingTaskIds.has(taskId)) return
 
     const chapterId = selectedChapter.id
-    const currentTask = (tasksByChapter[chapterId] ?? []).find((task) => task.id === taskId)
-    if (!currentTask) return
+    if (!(tasksByChapter[chapterId] ?? []).some((task) => task.id === taskId)) return
 
     setPendingTaskIds((current) => {
       const next = new Set(current)
@@ -908,27 +906,21 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       return next
     })
 
-    setTasksByChapter((previous) => ({
-      ...previous,
-      [chapterId]: (previous[chapterId] ?? []).map((task) =>
-        task.id === taskId ? { ...task, completed: nextCompleted } : task
-      ),
-    }))
-
     try {
-      if (nextCompleted) {
-        await completeTask(taskId)
-      } else {
-        await uncompleteTask(taskId)
+      const result = await setSubjectTaskCompletion(taskId, nextCompleted)
+      if (result.status !== "SUCCESS") {
+        if (result.status === "UNAUTHORIZED") {
+          addToast("Unauthorized", "error")
+        } else if (result.status === "NOT_FOUND") {
+          addToast("Task not found.", "error")
+        } else {
+          addToast(result.message || "Could not update task status.", "error")
+        }
+        return
       }
+
       router.refresh()
     } catch {
-      setTasksByChapter((previous) => ({
-        ...previous,
-        [chapterId]: (previous[chapterId] ?? []).map((task) =>
-          task.id === taskId ? { ...task, completed: currentTask.completed } : task
-        ),
-      }))
       addToast("Could not update task status.", "error")
     } finally {
       setPendingTaskIds((current) => {
@@ -940,7 +932,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   }
 
   return (
-    <div className="page-root fade-in max-w-none" style={{ paddingTop: 12, paddingBottom: 16 }}>
+    <div className="page-root fade-in flex h-full min-h-0 w-full max-w-none flex-col overflow-hidden" style={{ paddingTop: 12, paddingBottom: 16 }}>
       <PageHeader title="Subjects" />
 
       {displaySubjects.length === 0 ? (
@@ -971,7 +963,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         </div>
       ) : (
         <div
-          className="rounded-2xl border p-3 sm:p-4 overflow-hidden"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border p-3 sm:p-4"
           style={{
             borderColor: "var(--sh-border)",
             background:
@@ -984,10 +976,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
           </p>
 
           <div
-            className="flex min-h-[520px] items-stretch gap-3 overflow-x-auto pb-1 snap-x snap-mandatory"
-            style={{
-              height: "clamp(520px, calc(100dvh - var(--topbar-height) - 170px), 760px)",
-            }}
+            className="flex h-full min-h-0 flex-1 items-stretch gap-3 overflow-x-auto pb-1 snap-x snap-mandatory"
           >
             <NavigationColumn
               title="Subjects"
@@ -1010,6 +999,15 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                     variant="ghost"
                     size="sm"
                     className="w-full justify-center"
+                    onClick={handleArchiveSelected}
+                    disabled={!selectedSubject || pendingSubjectId === selectedSubject.id}
+                  >
+                    {selectedSubject?.archived ? "Restore Subject" : "Archive Subject"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-center"
                     onClick={() => setShowArchived((value) => !value)}
                   >
                     {showArchived
@@ -1027,15 +1025,26 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
               emptyMessage="No chapters in this subject."
               onSelect={setSelectedChapterId}
               footer={
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="w-full justify-center"
-                  onClick={openCreateChapter}
-                  disabled={!selectedSubject || showArchived}
-                >
-                  Add Chapter
-                </Button>
+                <>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="w-full justify-center"
+                    onClick={openCreateChapter}
+                    disabled={!selectedSubject || showArchived}
+                  >
+                    Add Chapter
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-center"
+                    onClick={selectedChapter?.archived ? handleUnarchiveChapter : handleArchiveChapter}
+                    disabled={!selectedChapter || pendingChapterId === selectedChapter.id}
+                  >
+                    {selectedChapter?.archived ? "Restore Chapter" : "Archive Chapter"}
+                  </Button>
+                </>
               }
             />
 
@@ -1089,22 +1098,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                         disabled={showArchived || chapterTasks.length === 0}
                       >
                         {manageMode ? "Done" : "Manage"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={selectedChapter.archived ? handleUnarchiveChapter : handleArchiveChapter}
-                        disabled={pendingChapterId === selectedChapter.id}
-                      >
-                        {selectedChapter.archived ? "Restore Chapter" : "Archive Chapter"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleArchiveSelected}
-                        disabled={pendingSubjectId === selectedSubject.id}
-                      >
-                        {selectedSubject.archived ? "Restore Subject" : "Archive Subject"}
                       </Button>
                     </div>
                   </div>

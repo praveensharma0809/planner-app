@@ -1,8 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { SettingsForm } from "./SettingsForm"
-import { OffDaysManager } from "./OffDaysManager"
-import { getOffDays } from "@/app/actions/offdays/getOffDays"
 import { ThemeToggle } from "@/app/components/ThemeToggle"
 import Link from "next/link"
 
@@ -14,66 +12,63 @@ export default async function SettingsPage() {
 
   if (!user) redirect("/auth/login")
 
-  const [profileResult, offDaysResult] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("full_name, primary_exam, exam_date, daily_available_minutes")
-      .eq("id", user.id)
-      .single(),
-    getOffDays(),
-  ])
+  const profileResult = await supabase
+    .from("profiles")
+    .select("full_name, phone")
+    .eq("id", user.id)
+    .single()
 
   const profile = profileResult.data
   if (!profile) redirect("/onboarding")
 
-  const offDays = offDaysResult.status === "SUCCESS" ? offDaysResult.offDays : []
-
   return (
-    <div className="p-4 sm:p-8 max-w-2xl mx-auto space-y-10">
-      <h1 className="text-2xl sm:text-3xl font-bold gradient-text">Settings</h1>
-      <SettingsForm profile={profile} />
+    <div className="page-root flex h-full min-h-0 w-full flex-col overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="w-full space-y-6 pb-8 pt-6 sm:pt-8">
+          <header className="space-y-2">
+            <h1 className="text-3xl font-bold tracking-tight gradient-text sm:text-4xl">Settings</h1>
+            <p className="text-sm text-white/45">Manage your profile and preferences.</p>
+          </header>
 
-      <hr className="border-white/[0.06]" />
+          <div className="grid min-h-0 gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(300px,1fr)]">
+            <section className="space-y-5 rounded-2xl border border-white/[0.09] bg-[linear-gradient(180deg,rgba(255,255,255,0.05)_0%,rgba(255,255,255,0.025)_100%)] p-5 shadow-[0_12px_28px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:p-6">
+              <header className="space-y-1">
+                <h2 className="text-lg font-semibold text-white/90">Profile</h2>
+                <p className="text-sm text-white/45">Manage your basic identity details.</p>
+              </header>
+              <SettingsForm
+                profile={{
+                  full_name: profile.full_name,
+                  email: user.email ?? null,
+                  phone_number: profile.phone,
+                }}
+              />
+            </section>
 
-      <OffDaysManager initialOffDays={offDays} />
+            <div className="space-y-6">
+              <section className="space-y-4 overflow-x-hidden rounded-2xl border border-white/[0.09] bg-[linear-gradient(180deg,rgba(255,255,255,0.05)_0%,rgba(255,255,255,0.025)_100%)] p-5 shadow-[0_12px_28px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:p-6">
+                <header className="space-y-1">
+                  <h2 className="text-lg font-semibold text-white/90">Appearance</h2>
+                </header>
+                <ThemeToggle />
+              </section>
 
-      <hr className="border-white/[0.06]" />
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Appearance</h2>
-        <ThemeToggle />
-      </section>
-
-      <hr className="border-white/[0.06]" />
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Operations</h2>
-        <p className="text-sm text-white/40">
-          View planner reliability telemetry, error rates, and latency stats from
-          the <code className="text-white/60">ops_events</code> stream.
-        </p>
-        <Link
-          href="/dashboard/settings/operations"
-          className="inline-block px-4 py-2 text-sm bg-white/[0.04] border border-white/[0.06] rounded-xl hover:bg-white/[0.08] transition-all text-white/60"
-        >
-          Open Operations Dashboard
-        </Link>
-      </section>
-
-      <hr className="border-white/[0.06]" />
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Onboarding</h2>
-        <p className="text-sm text-white/40">
-          Re-run the setup wizard to update your profile, subjects, and study preferences from scratch.
-        </p>
-        <Link
-          href="/onboarding"
-          className="inline-block px-4 py-2 text-sm bg-white/[0.04] border border-white/[0.06] rounded-xl hover:bg-white/[0.08] transition-all text-white/60"
-        >
-          Re-run Onboarding Wizard
-        </Link>
-      </section>
+              <section className="space-y-4 rounded-2xl border border-white/[0.09] bg-[linear-gradient(180deg,rgba(255,255,255,0.05)_0%,rgba(255,255,255,0.025)_100%)] p-5 shadow-[0_12px_28px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:p-6">
+                <header className="space-y-1">
+                  <h2 className="text-lg font-semibold text-white/90">Onboarding</h2>
+                  <p className="text-sm text-white/45">Reconfigure your subjects, plan, and preferences.</p>
+                </header>
+                <Link
+                  href="/onboarding"
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/[0.05] px-4 text-sm font-medium text-white/85 transition-colors hover:bg-white/[0.1]"
+                >
+                  Re-run onboarding
+                </Link>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

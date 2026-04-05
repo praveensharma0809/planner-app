@@ -1,7 +1,29 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
+function isServerActionRequest(request: NextRequest) {
+  return request.method === "POST" && request.headers.has("next-action")
+}
+
 export async function proxy(request: NextRequest) {
+  const path = request.nextUrl.pathname
+
+  const isProtectedRoute =
+    path.startsWith("/dashboard") ||
+    path.startsWith("/planner") ||
+    path.startsWith("/schedule") ||
+    path.startsWith("/onboarding")
+
+  if (!isProtectedRoute) {
+    return NextResponse.next({
+      request: {
+        headers: request.headers
+      }
+    })
+  }
+
+  const isServerAction = isServerActionRequest(request)
+
   const response = NextResponse.next({
     request: {
       headers: request.headers
@@ -25,22 +47,24 @@ export async function proxy(request: NextRequest) {
     }
   })
 
-  // Refresh session if expired - required for Server Actions/RSC auth
-  const {
-    data: { user }
-  } = await supabase.auth.getUser()
-
-  const path = request.nextUrl.pathname
-
-  const isProtectedRoute =
-    path.startsWith("/dashboard") ||
-    path.startsWith("/planner") ||
-    path.startsWith("/schedule") ||
-    path.startsWith("/onboarding")
-
   const isAuthRoute = path.startsWith("/auth/login") || path.startsWith("/auth/signup")
+  let user: { id: string } | null = null
 
-  if (!isProtectedRoute) {
+  // Refresh session if expired - required for Server Actions/RSC auth.
+  // Never let auth-refresh failures crash middleware or server action responses.
+  try {
+    const {
+      data: { user: resolvedUser }
+    } = await supabase.auth.getUser()
+    user = resolvedUser
+  } catch {
+    user = null
+  }
+
+  // Server Actions must never be redirected by middleware.
+  // Redirect responses break the action protocol and surface as
+  // "An unexpected response was received from the server." in the client.
+  if (isServerAction) {
     return response
   }
 
@@ -51,12 +75,19 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  // For protected routes, ensure profile exists; otherwise send to onboarding
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("id", user.id)
-    .maybeSingle()
+  // For protected routes, ensure profile exists; otherwise send to onboarding.
+  // Never allow profile-fetch failures to crash middleware and surface 500s.
+  let profile: { id: string } | null = null
+  try {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", user.id)
+      .maybeSingle()
+    profile = data as { id: string } | null
+  } catch {
+    return response
+  }
 
   if (!profile && !path.startsWith("/onboarding")) {
     const redirectUrl = new URL("/onboarding", request.url)

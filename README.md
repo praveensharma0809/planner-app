@@ -46,7 +46,6 @@ npm run dev
 ```bash
 npm run typecheck
 npm run lint
-npm run test:contracts
 npm run test
 npm run build
 ```
@@ -59,11 +58,12 @@ npm run ci:check
 
 ## Source-of-truth docs
 
-- `information/Current_db_Schema.md`
-- `information/db-v2-contract-matrix.md`
-- `information/backend-rewrite-master-plan.md`
+- `db_schema.md`
+
+## Migration baseline
+
+- `supabase/migrations/20260410_final_schema.sql`
 
 ## Notes
 
 - Runtime is aligned to DB v2 contracts.
-- Contract guard tests prevent reintroduction of removed legacy fields/concepts.

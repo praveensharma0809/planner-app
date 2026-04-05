@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isCanonicalIntakeManualTask } from "@/lib/planner/contracts"
+import { getTodayLocalDate } from "@/lib/tasks/getTasksForDate"
 import type { Task } from "@/lib/types/db"
 
 export type GetBacklogResponse =
@@ -18,11 +19,11 @@ export async function getBacklog(): Promise<GetBacklogResponse> {
     return { status: "UNAUTHORIZED" }
   }
 
-  const todayISO = new Date().toISOString().split("T")[0]
+  const todayISO = getTodayLocalDate()
 
   const { data } = await supabase
     .from("tasks")
-    .select("id, user_id, subject_id, topic_id, title, scheduled_date, duration_minutes, priority, completed, task_source, session_type, plan_snapshot_id, session_number, total_sessions, sort_order, created_at, updated_at")
+    .select("id, user_id, task_type, subject_id, topic_id, title, scheduled_date, duration_minutes, completed, task_source, session_type, plan_snapshot_id, session_number, total_sessions, sort_order, created_at, updated_at")
     .eq("user_id", user.id)
     .lt("scheduled_date", todayISO)
     .eq("completed", false)

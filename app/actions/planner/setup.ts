@@ -16,6 +16,7 @@ import {
   normalizeStudyFrequency,
   validateDateWindow,
 } from "@/lib/planner/contracts"
+import { getTodayLocalDate, normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
 import {
   checkFeasibility,
   type FeasibilityResult,
@@ -23,9 +24,10 @@ import {
   type PlannableUnit,
 } from "@/lib/planner/engine"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { isReservedSubjectName } from "@/lib/constants"
 import type {
   Subject,
-  Task,
+  TopicTask,
   Topic,
 } from "@/lib/types/db"
 
@@ -46,6 +48,7 @@ export interface StructureTree {
 export interface GetStructureOptions {
   onlyUndoneTasks?: boolean
   dropTopicsWithoutTasks?: boolean
+  selectedTaskIds?: string[]
 }
 
 interface SubjectInput {
@@ -66,7 +69,6 @@ interface TopicInput {
 interface TopicParams {
   topic_id: string
   estimated_hours: number
-  priority: number
   deadline: string | null
   earliest_start: string | null
   depends_on: string[]
@@ -90,17 +92,18 @@ interface PlanConfig {
   custom_day_capacity?: Record<string, number> | null
   plan_order_stack?: string[] | null
   flexibility_minutes?: number
-  max_daily_minutes?: number
   max_topics_per_subject_per_day?: number
   min_subject_gap_days?: number
   subject_ordering?: Record<string, string> | null
   flexible_threshold?: Record<string, number> | null
+  intake_import_mode?: IntakeImportMode
 }
+
+export type IntakeImportMode = "all" | "undone"
 
 interface TopicParamInput {
   topic_id: string
   estimated_hours: number
-  priority: number
   deadline: string | null
   earliest_start: string | null
   depends_on: string[]
@@ -119,7 +122,6 @@ interface PlanConfigInput {
   day_of_week_capacity?: (number | null)[] | null
   custom_day_capacity?: Record<string, number> | null
   flexibility_minutes?: number
-  max_daily_minutes?: number
   // Legacy runtime options retained for engine compatibility.
   plan_order?: string
   final_revision_days?: number
@@ -152,9 +154,20 @@ export type SaveTopicParamsResponse =
 
 export type GetPlanConfigResponse =
   | { status: "UNAUTHORIZED" }
+  | { status: "ERROR"; message: string }
   | { status: "SUCCESS"; config: PlanConfig | null }
 
 export type SavePlanConfigResponse =
+  | { status: "UNAUTHORIZED" }
+  | { status: "ERROR"; message: string }
+  | { status: "SUCCESS" }
+
+export type GetIntakeImportModeResponse =
+  | { status: "UNAUTHORIZED" }
+  | { status: "ERROR"; message: string }
+  | { status: "SUCCESS"; mode: IntakeImportMode }
+
+export type SaveIntakeImportModeResponse =
   | { status: "UNAUTHORIZED" }
   | { status: "ERROR"; message: string }
   | { status: "SUCCESS" }
@@ -182,6 +195,10 @@ function validateStructure(subjects: SubjectInput[]): string | null {
   for (const subject of subjects) {
     if (!subject.name.trim()) {
       return "Subject name is required."
+    }
+
+    if (isReservedSubjectName(subject.name)) {
+      return '"Others" is reserved for standalone tasks.'
     }
 
     const topicNames = new Map<string, string>()
@@ -214,6 +231,44 @@ function emptyFeasibility(): FeasibilityResult {
   }
 }
 
+function normalizeSelectedTaskIds(input: unknown): string[] {
+  if (!Array.isArray(input)) return []
+
+  const seen = new Set<string>()
+  const normalized: string[] = []
+
+  for (const raw of input) {
+    if (typeof raw !== "string") continue
+    const value = raw.trim()
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    normalized.push(value)
+
+    if (normalized.length >= 5000) break
+  }
+
+  return normalized
+}
+
+function normalizeIntakeImportMode(input: unknown): IntakeImportMode {
+  return input === "undone" ? "undone" : "all"
+}
+
+function todayIsoDate(): string {
+  return getTodayLocalDate()
+}
+
+function addDaysIsoDate(isoDate: string, days: number): string {
+  const normalized = normalizeLocalDate(isoDate)
+  if (!normalized) return isoDate
+
+  const date = new Date(`${normalized}T12:00:00`)
+  if (Number.isNaN(date.getTime())) return isoDate
+
+  date.setDate(date.getDate() + days)
+  return normalizeLocalDate(date) ?? normalized
+}
+
 function buildDraftConstraints(
   config: PlannerConstraintValues
 ): GlobalConstraints {
@@ -230,7 +285,6 @@ function buildDraftConstraints(
     custom_day_capacity: config.custom_day_capacity,
     plan_order_stack: config.plan_order_stack,
     flexibility_minutes: config.flexibility_minutes,
-    max_daily_minutes: config.max_daily_minutes,
     max_topics_per_subject_per_day: config.max_topics_per_subject_per_day,
     min_subject_gap_days: config.min_subject_gap_days,
     subject_ordering: config.subject_ordering,
@@ -245,25 +299,20 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
   } = await supabase.auth.getUser()
   if (!user) return { status: "UNAUTHORIZED" }
 
-  // Safety cleanup for legacy leakage where planner rows were written as manual.
-  await supabase
-    .from("tasks")
-    .update({ task_source: "plan" })
-    .eq("user_id", user.id)
-    .eq("task_source", "manual")
-    .not("plan_snapshot_id", "is", null)
-
   const { data: subjectRows, error: subjectError } = await supabase
     .from("subjects")
     .select("id, user_id, name, sort_order, archived, created_at")
     .eq("user_id", user.id)
+    .eq("archived", false)
+    .not("name", "ilike", "others")
+    .not("name", "ilike", "__deprecated_others__")
     .order("sort_order", { ascending: true })
 
   if (subjectError) {
     return { status: "ERROR", message: subjectError.message }
   }
 
-  const subjects = ((subjectRows ?? []) as Subject[]).filter((subject) => subject.archived !== true)
+  const subjects = (subjectRows ?? []) as Subject[]
   if (subjects.length === 0) {
     return { status: "SUCCESS", tree: { subjects: [] } }
   }
@@ -275,6 +324,7 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
       .from("topics")
       .select("id, user_id, subject_id, name, sort_order, archived, created_at")
       .eq("user_id", user.id)
+      .eq("archived", false)
       .in("subject_id", subjectIds)
       .order("sort_order", { ascending: true })
 
@@ -286,21 +336,22 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
   }
 
   const topicIds = topics.map((topic) => topic.id)
+  const selectedTaskIds = normalizeSelectedTaskIds(options.selectedTaskIds)
 
-  let tasks: Task[] = []
+  let tasks: TopicTask[] = []
   if (topicIds.length > 0) {
     let query = supabase
-      .from("tasks")
+      .from("topic_tasks")
       .select("id, topic_id, title, completed, duration_minutes, sort_order, created_at")
       .eq("user_id", user.id)
-      .eq("task_source", "manual")
-      .eq("session_number", 0)
-      .eq("total_sessions", 1)
-      .is("plan_snapshot_id", null)
       .in("topic_id", topicIds)
 
     if (options.onlyUndoneTasks) {
       query = query.eq("completed", false)
+    }
+
+    if (selectedTaskIds.length > 0) {
+      query = query.in("id", selectedTaskIds)
     }
 
     const { data: taskRows, error: taskError } = await query
@@ -311,7 +362,7 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
       return { status: "ERROR", message: taskError.message }
     }
 
-    tasks = (taskRows ?? []) as Task[]
+    tasks = (taskRows ?? []) as TopicTask[]
   }
 
   const tasksByTopic = new Map<string, StructureTask[]>()
@@ -385,6 +436,8 @@ export async function saveStructure(
     .select("id")
     .eq("user_id", user.id)
     .eq("archived", false)
+    .not("name", "ilike", "others")
+    .not("name", "ilike", "__deprecated_others__")
 
   for (const subject of existingSubjects ?? []) {
     if (!keepSubjectIds.has(subject.id)) {
@@ -509,9 +562,10 @@ export async function getTopicParams(): Promise<GetTopicParamsResponse> {
   const { data, error } = await supabase
     .from("topics")
     .select(
-      "id, subject_id, estimated_hours, priority, deadline, earliest_start, depends_on, session_length_minutes, rest_after_days, max_sessions_per_day, study_frequency"
+      "id, subject_id, estimated_hours, deadline, earliest_start, depends_on, session_length_minutes, rest_after_days, max_sessions_per_day, study_frequency"
     )
     .eq("user_id", user.id)
+    .eq("archived", false)
 
   if (error) return { status: "SUCCESS", params: [] }
 
@@ -519,7 +573,6 @@ export async function getTopicParams(): Promise<GetTopicParamsResponse> {
     id: string
     subject_id: string
     estimated_hours: number | null
-    priority: number | null
     deadline: string | null
     earliest_start: string | null
     depends_on: string[] | null
@@ -537,6 +590,7 @@ export async function getTopicParams(): Promise<GetTopicParamsResponse> {
       .from("subjects")
       .select("id, deadline")
       .eq("user_id", user.id)
+      .eq("archived", false)
       .in("id", subjectIds)
 
     for (const row of (subjectRows ?? []) as Array<{ id: string; deadline: string | null }>) {
@@ -579,7 +633,6 @@ export async function getTopicParams(): Promise<GetTopicParamsResponse> {
     params: topicRows.map((row) => ({
       topic_id: row.id,
       estimated_hours: row.estimated_hours ?? 0,
-      priority: row.priority ?? 3,
       deadline: sanitizedDeadlineByTopic.get(row.id) ?? null,
       earliest_start: row.earliest_start,
       depends_on: row.depends_on ?? [],
@@ -736,7 +789,6 @@ export async function saveTopicParams(
       .from("topics")
       .update({
         estimated_hours: param.estimated_hours,
-        priority: 3,
         deadline: param.deadline,
         earliest_start: param.earliest_start,
         depends_on: param.depends_on,
@@ -762,36 +814,65 @@ export async function getPlanConfig(): Promise<GetPlanConfigResponse> {
   } = await supabase.auth.getUser()
   if (!user) return { status: "UNAUTHORIZED" }
 
-  const { data, error } = await supabase
+  type PlannerSettingsRow = {
+    id: string
+    user_id: string
+    study_start_date: string
+    exam_date: string
+    weekday_capacity_minutes: number
+    weekend_capacity_minutes: number
+    max_active_subjects: number
+    day_of_week_capacity?: (number | null)[] | null
+    custom_day_capacity?: Record<string, number> | null
+    flexibility_minutes?: number
+    intake_import_mode?: IntakeImportMode | null
+  }
+
+  const primarySelect =
+    "id, user_id, study_start_date, exam_date, weekday_capacity_minutes, weekend_capacity_minutes, max_active_subjects, day_of_week_capacity, custom_day_capacity, flexibility_minutes, intake_import_mode"
+  const legacySelect =
+    "id, user_id, study_start_date, exam_date, weekday_capacity_minutes, weekend_capacity_minutes, max_active_subjects, day_of_week_capacity, custom_day_capacity, flexibility_minutes"
+
+  const { data: primaryData, error: primaryError } = await supabase
     .from("planner_settings")
-    .select(
-      "id, user_id, study_start_date, exam_date, weekday_capacity_minutes, weekend_capacity_minutes, max_active_subjects, day_of_week_capacity, custom_day_capacity, flexibility_minutes, max_daily_minutes"
-    )
+    .select(primarySelect)
     .eq("user_id", user.id)
     .maybeSingle()
 
-  if (error) return { status: "SUCCESS", config: null }
+  let data: PlannerSettingsRow | null = primaryData as PlannerSettingsRow | null
+
+  if (primaryError) {
+    // Backward-compatible retry when intake_import_mode column is not yet available.
+    if (/intake_import_mode/i.test(primaryError.message)) {
+      const { data: legacyData, error: legacyError } = await supabase
+        .from("planner_settings")
+        .select(legacySelect)
+        .eq("user_id", user.id)
+        .maybeSingle()
+
+      if (legacyError) {
+        return { status: "ERROR", message: legacyError.message }
+      }
+
+      data = legacyData as PlannerSettingsRow | null
+    } else {
+      return { status: "ERROR", message: primaryError.message }
+    }
+  }
 
   if (!data) return { status: "SUCCESS", config: null }
 
-  const now = new Date()
-  const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-    now.getDate()
-  ).padStart(2, "0")}`
+  const todayISO = getTodayLocalDate()
 
-  let normalizedStudyStart = data.study_start_date
-  let normalizedExamDate = data.exam_date
+  let normalizedStudyStart = normalizeLocalDate(data.study_start_date) ?? todayISO
+  let normalizedExamDate = normalizeLocalDate(data.exam_date)
 
-  if (!normalizedStudyStart || normalizedStudyStart < todayISO) {
+  if (normalizedStudyStart < todayISO) {
     normalizedStudyStart = todayISO
   }
 
   if (!normalizedExamDate || normalizedExamDate <= normalizedStudyStart) {
-    const exam = new Date(`${normalizedStudyStart}T12:00:00`)
-    exam.setDate(exam.getDate() + 90)
-    normalizedExamDate = `${exam.getFullYear()}-${String(exam.getMonth() + 1).padStart(2, "0")}-${String(
-      exam.getDate()
-    ).padStart(2, "0")}`
+    normalizedExamDate = addDaysIsoDate(normalizedStudyStart, 90)
   }
 
   if (
@@ -822,8 +903,95 @@ export async function getPlanConfig(): Promise<GetPlanConfigResponse> {
       min_subject_gap_days: 0,
       subject_ordering: null,
       flexible_threshold: null,
+      intake_import_mode: normalizeIntakeImportMode(data.intake_import_mode),
     },
   }
+}
+
+export async function getIntakeImportMode(): Promise<GetIntakeImportModeResponse> {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return { status: "UNAUTHORIZED" }
+
+  const { data, error } = await supabase
+    .from("planner_settings")
+    .select("intake_import_mode")
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (error) {
+    return { status: "ERROR", message: error.message }
+  }
+
+  return {
+    status: "SUCCESS",
+    mode: normalizeIntakeImportMode(data?.intake_import_mode),
+  }
+}
+
+export async function saveIntakeImportMode(
+  mode: IntakeImportMode
+): Promise<SaveIntakeImportModeResponse> {
+  const normalizedMode = normalizeIntakeImportMode(mode)
+
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return { status: "UNAUTHORIZED" }
+
+  const { data: existingSettings, error: existingError } = await supabase
+    .from("planner_settings")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (existingError) {
+    return { status: "ERROR", message: existingError.message }
+  }
+
+  if (existingSettings?.id) {
+    const { error: updateError } = await supabase
+      .from("planner_settings")
+      .update({
+        intake_import_mode: normalizedMode,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id)
+
+    if (updateError) {
+      return { status: "ERROR", message: updateError.message }
+    }
+  } else {
+    const studyStart = todayIsoDate()
+    const examDate = addDaysIsoDate(studyStart, 90)
+
+    const { error: insertError } = await supabase
+      .from("planner_settings")
+      .insert({
+        user_id: user.id,
+        study_start_date: studyStart,
+        exam_date: examDate,
+        weekday_capacity_minutes: 180,
+        weekend_capacity_minutes: 240,
+        max_active_subjects: 0,
+        day_of_week_capacity: [null, null, null, null, null, null, null],
+        custom_day_capacity: {},
+        flexibility_minutes: 0,
+        intake_import_mode: normalizedMode,
+      })
+
+    if (insertError) {
+      return { status: "ERROR", message: insertError.message }
+    }
+  }
+
+  revalidatePath("/planner")
+  return { status: "SUCCESS" }
 }
 
 export async function savePlanConfig(
@@ -879,15 +1047,21 @@ export async function savePlanConfig(
       config.day_of_week_capacity ?? [null, null, null, null, null, null, null],
     custom_day_capacity: config.custom_day_capacity ?? {},
     flexibility_minutes: Math.max(0, config.flexibility_minutes ?? 0),
-    max_daily_minutes: Math.min(720, Math.max(30, config.max_daily_minutes ?? 480)),
     updated_at: new Date().toISOString(),
   }
+
+  console.log("Saving Step-2:", upsertData)
 
   const { error } = await supabase
     .from("planner_settings")
     .upsert(upsertData, { onConflict: "user_id" })
 
-  if (error) return { status: "ERROR", message: error.message }
+  if (error) {
+    console.log("DB response:", { status: "ERROR", message: error.message })
+    return { status: "ERROR", message: error.message }
+  }
+
+  console.log("DB response:", { status: "SUCCESS" })
 
   // Topic deadlines matching the previous global deadline are treated as inherited.
   // Clear them so topics continue inheriting from the latest global deadline.
@@ -949,6 +1123,7 @@ export async function getDraftFeasibility(
       .from("subjects")
       .select("id, name, deadline")
       .eq("user_id", user.id)
+      .eq("archived", false)
       .in("id", subjectIds)
 
     subjectRows = (data ?? []) as Array<{
@@ -958,18 +1133,13 @@ export async function getDraftFeasibility(
     }>
   }
 
-  const { data: offDayRows } = await supabase
-    .from("off_days")
-    .select("date")
-    .eq("user_id", user.id)
-
   const paramMap = new Map(activeParams.map((param) => [param.topic_id, param]))
   const subjectMap = new Map(subjectRows.map((subject) => [subject.id, subject]))
 
   const units: PlannableUnit[] = topics.flatMap((topic) => {
     const param = paramMap.get(topic.id)
     const subject = subjectMap.get(topic.subject_id)
-    if (!param || param.estimated_hours <= 0) {
+    if (!param || !subject || param.estimated_hours <= 0) {
       return []
     }
 
@@ -984,7 +1154,6 @@ export async function getDraftFeasibility(
         topic_name: topic.name,
         estimated_minutes: Math.round(param.estimated_hours * 60),
         session_length_minutes: param.session_length_minutes,
-        priority: 3,
         deadline: topicDeadline || normalizeOptionalDate(subject?.deadline) || config.exam_date,
         earliest_start: topicStart || undefined,
         depends_on: param.depends_on,
@@ -996,7 +1165,7 @@ export async function getDraftFeasibility(
     ]
   })
 
-  const offDays = new Set<string>((offDayRows ?? []).map((row) => row.date))
+  const offDays = new Set<string>()
 
   return {
     status: "SUCCESS",

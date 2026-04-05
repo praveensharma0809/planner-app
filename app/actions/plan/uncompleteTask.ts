@@ -35,7 +35,7 @@ export async function uncompleteTask(taskId: string) {
     .eq("id", taskId)
     .eq("user_id", user.id)
     .eq("completed", true)
-    .select("subject_id")
+    .select("subject_id, task_source, source_topic_task_id")
     .maybeSingle()
 
   if (taskError) {
@@ -49,8 +49,29 @@ export async function uncompleteTask(taskId: string) {
     return { status: "NOT_FOUND" } satisfies UncompleteTaskResponse
   }
 
+  if (
+    updatedTask.task_source === "plan"
+    && typeof updatedTask.source_topic_task_id === "string"
+    && updatedTask.source_topic_task_id.length > 0
+  ) {
+    const { error: topicTaskError } = await supabase
+      .from("topic_tasks")
+      .update({ completed: false })
+      .eq("id", updatedTask.source_topic_task_id)
+      .eq("user_id", user.id)
+
+    if (topicTaskError) {
+      return {
+        status: "ERROR",
+        message: topicTaskError.message,
+      } satisfies UncompleteTaskResponse
+    }
+  }
+
   revalidatePath("/dashboard/calendar")
   revalidatePath("/dashboard")
   revalidatePath("/schedule")
+  revalidatePath("/dashboard/subjects")
+  revalidatePath("/planner")
   return { status: "SUCCESS" } satisfies UncompleteTaskResponse
 }

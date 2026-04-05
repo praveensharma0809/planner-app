@@ -24,10 +24,18 @@ export const APP_LOCALE = "en-US"
 
 export const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 
-export const PRIORITY_OPTIONS = [
-  { value: 1, label: "High" },
-  { value: 2, label: "Medium-High" },
-  { value: 3, label: "Medium" },
-  { value: 4, label: "Low" },
-  { value: 5, label: "Very Low" },
-] as const
+export const STANDALONE_SUBJECT_ID = "others"
+export const STANDALONE_SUBJECT_LABEL = "Others (Standalone)"
+
+const RESERVED_SUBJECT_KEYWORD = "others"
+
+export function isReservedSubjectName(name: string): boolean {
+  return name.trim().toLowerCase() === RESERVED_SUBJECT_KEYWORD
+}
+
+export function assertValidSubjectAssignment(subjectName?: string | null): void {
+  if (subjectName?.toLowerCase() === "others") {
+    throw new Error("Invalid subject assignment")
+  }
+}
+

@@ -42,15 +42,6 @@ export function TaskBlock({ task }: TaskBlockProps) {
         <span className="text-[10px]" style={{ color: "var(--tt-muted)" }}>
           {task.duration_minutes} min
         </span>
-        <span
-          className="text-[10px] px-1.5 py-0.5 rounded"
-          style={{
-            backgroundColor: "color-mix(in srgb, var(--tt-track) 60%, transparent)",
-            color: "var(--tt-muted)",
-          }}
-        >
-          P{task.priority}
-        </span>
       </div>
     </div>
   )

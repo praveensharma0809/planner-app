@@ -1,12 +1,13 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
-import type { Subject, Task, Topic } from "@/lib/types/db"
+import type { Subject, Topic, TopicTask } from "@/lib/types/db"
 import { redirect } from "next/navigation"
+import type { IntakeImportMode } from "@/app/actions/planner/setup"
 import type { SubjectNavItem, TopicTaskItem } from "./subjects-data-table"
 import PlannerWizardClient from "./PlannerWizardClient"
 
 type SubjectRow = Pick<Subject, "id" | "name" | "archived" | "sort_order">
 type TopicRow = Pick<Topic, "id" | "subject_id" | "name" | "sort_order" | "archived" | "earliest_start" | "rest_after_days">
-type TaskRow = Pick<Task, "id" | "topic_id" | "title" | "completed" | "duration_minutes" | "sort_order" | "created_at">
+type TaskRow = Pick<TopicTask, "id" | "topic_id" | "title" | "completed" | "duration_minutes" | "sort_order" | "created_at">
 
 export default async function PlannerPage() {
   const supabase = await createServerSupabaseClient()
@@ -16,10 +17,22 @@ export default async function PlannerPage() {
 
   if (!user) redirect("/auth/login")
 
+  const { data: settingsRow } = await supabase
+    .from("planner_settings")
+    .select("intake_import_mode")
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  const intakeImportMode: IntakeImportMode =
+    settingsRow?.intake_import_mode === "undone" ? "undone" : "all"
+
   const { data: subjectRows } = await supabase
     .from("subjects")
     .select("id, name, archived, sort_order")
     .eq("user_id", user.id)
+    .eq("archived", false)
+    .not("name", "ilike", "others")
+    .not("name", "ilike", "__deprecated_others__")
     .order("sort_order", { ascending: true })
 
   const subjects = (subjectRows ?? []) as SubjectRow[]
@@ -33,6 +46,7 @@ export default async function PlannerPage() {
       .select("id, subject_id, name, sort_order, archived, earliest_start, rest_after_days")
       .eq("user_id", user.id)
       .in("subject_id", subjectIds)
+      .eq("archived", false)
       .order("sort_order", { ascending: true })
 
     topics = (topicRows ?? []) as TopicRow[]
@@ -43,15 +57,17 @@ export default async function PlannerPage() {
   let tasks: TaskRow[] = []
 
   if (topicIds.length > 0) {
-    const { data: taskRows } = await supabase
-      .from("tasks")
+    let taskQuery = supabase
+      .from("topic_tasks")
       .select("id, topic_id, title, completed, duration_minutes, sort_order, created_at")
       .eq("user_id", user.id)
-      .eq("task_source", "manual")
-      .eq("session_number", 0)
-      .eq("total_sessions", 1)
-      .is("plan_snapshot_id", null)
       .in("topic_id", topicIds)
+
+    if (intakeImportMode === "undone") {
+      taskQuery = taskQuery.eq("completed", false)
+    }
+
+    const { data: taskRows } = await taskQuery
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true })
 
@@ -59,7 +75,13 @@ export default async function PlannerPage() {
   }
 
   const chaptersBySubject = new Map<string, SubjectNavItem["chapters"]>()
+  const topicHasTasks = new Set(tasks.map((task) => task.topic_id).filter(Boolean))
+
   for (const topic of topics) {
+    if (intakeImportMode === "undone" && !topicHasTasks.has(topic.id)) {
+      continue
+    }
+
     const list = chaptersBySubject.get(topic.subject_id) ?? []
     list.push({
       id: topic.id,
@@ -73,12 +95,14 @@ export default async function PlannerPage() {
     chaptersBySubject.set(topic.subject_id, list)
   }
 
-  const initialSubjects: SubjectNavItem[] = subjects.map((subject) => ({
-    id: subject.id,
-    name: subject.name,
-    archived: subject.archived,
-    chapters: chaptersBySubject.get(subject.id) ?? [],
-  }))
+  const initialSubjects: SubjectNavItem[] = subjects
+    .map((subject) => ({
+      id: subject.id,
+      name: subject.name,
+      archived: subject.archived,
+      chapters: chaptersBySubject.get(subject.id) ?? [],
+    }))
+    .filter((subject) => intakeImportMode !== "undone" || subject.chapters.length > 0)
 
   const initialTasksByChapter: Record<string, TopicTaskItem[]> = {}
   for (const task of tasks) {
@@ -99,6 +123,7 @@ export default async function PlannerPage() {
     <PlannerWizardClient
       initialSubjects={initialSubjects}
       initialTasksByChapter={initialTasksByChapter}
+      initialImportMode={intakeImportMode}
     />
   )
 }

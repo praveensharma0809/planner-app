@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isCanonicalIntakeManualTask } from "@/lib/planner/contracts"
+import { normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
 
 export interface DayTaskCount {
   date: string
@@ -55,15 +56,18 @@ export async function getMonthTaskCounts(
     if (isCanonicalIntakeManualTask(task)) {
       continue
     }
-    const entry = map.get(task.scheduled_date) ?? { count: 0, completed: 0 }
+    const dayKey = normalizeLocalDate(task.scheduled_date)
+    if (!dayKey) continue
+
+    const entry = map.get(dayKey) ?? { count: 0, completed: 0 }
     entry.count++
     if (task.completed) entry.completed++
-    map.set(task.scheduled_date, entry)
+    map.set(dayKey, entry)
   }
 
   const days: DayTaskCount[] = Array.from(map.entries())
     .map(([date, val]) => ({ date, ...val }))
-    .sort((a, b) => (a.date > b.date ? 1 : -1))
+    .sort((a, b) => a.date.localeCompare(b.date))
 
   return { status: "SUCCESS", days }
 }

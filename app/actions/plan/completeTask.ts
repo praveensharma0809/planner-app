@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getTodayLocalDate, normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
 
 export type CompleteTaskResponse =
   | { status: "SUCCESS" }
@@ -10,8 +11,10 @@ export type CompleteTaskResponse =
   | { status: "ERROR"; message: string }
 
 function getTodayAndYesterdayISO() {
-  const today = new Date().toISOString().split("T")[0]
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().split("T")[0]
+  const today = getTodayLocalDate()
+  const yesterdayDate = new Date()
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1)
+  const yesterday = normalizeLocalDate(yesterdayDate) ?? today
   return { today, yesterday }
 }
 
@@ -80,6 +83,40 @@ async function updateStreakOncePerDay(
   }
 }
 
+async function maybeMarkSourceTopicTaskCompleted(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  userId: string,
+  sourceTopicTaskId: string
+) {
+  const { data: remainingIncomplete, error: remainingError } = await supabase
+    .from("tasks")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("task_source", "plan")
+    .eq("source_topic_task_id", sourceTopicTaskId)
+    .eq("completed", false)
+    .limit(1)
+
+  if (remainingError) {
+    console.error("completeTask: source completion check error:", remainingError.message)
+    return
+  }
+
+  if ((remainingIncomplete?.length ?? 0) > 0) {
+    return
+  }
+
+  const { error: topicTaskUpdateError } = await supabase
+    .from("topic_tasks")
+    .update({ completed: true })
+    .eq("id", sourceTopicTaskId)
+    .eq("user_id", userId)
+
+  if (topicTaskUpdateError) {
+    console.error("completeTask: topic task update error:", topicTaskUpdateError.message)
+  }
+}
+
 export async function completeTask(taskId: string) {
   if (!taskId || typeof taskId !== "string") {
     return { status: "NOT_FOUND" } satisfies CompleteTaskResponse
@@ -102,7 +139,7 @@ export async function completeTask(taskId: string) {
     .eq("id", taskId)
     .eq("user_id", user.id)
     .eq("completed", false)
-    .select("subject_id")
+    .select("subject_id, task_source, source_topic_task_id")
     .maybeSingle()
 
   if (taskError) {
@@ -119,8 +156,23 @@ export async function completeTask(taskId: string) {
   // Step 2: Update streak with compare-and-set protection.
   await updateStreakOncePerDay(supabase, user.id)
 
+  // Step 3: Mark linked intake task complete only when all linked plan sessions are done.
+  if (
+    updatedTask.task_source === "plan"
+    && typeof updatedTask.source_topic_task_id === "string"
+    && updatedTask.source_topic_task_id.length > 0
+  ) {
+    await maybeMarkSourceTopicTaskCompleted(
+      supabase,
+      user.id,
+      updatedTask.source_topic_task_id
+    )
+  }
+
   revalidatePath("/dashboard/calendar")
   revalidatePath("/dashboard")
   revalidatePath("/schedule")
+  revalidatePath("/dashboard/subjects")
+  revalidatePath("/planner")
   return { status: "SUCCESS" } satisfies CompleteTaskResponse
 }

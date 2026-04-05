@@ -5,7 +5,6 @@ import type { Topic } from "@/lib/types/db"
 export interface TopicParams {
   topic_id: string
   estimated_hours: number
-  priority: number
   deadline: string | null
   earliest_start: string | null
   depends_on: string[]
@@ -16,6 +15,7 @@ export interface TopicParams {
 }
 
 export interface PlannerTaskSourceRow {
+  id: string
   topic_id: string | null
   title: string
   duration_minutes: number
@@ -24,6 +24,7 @@ export interface PlannerTaskSourceRow {
 }
 
 export interface PlannerTaskSourceItem {
+  id: string
   title: string
   durationMinutes: number
   sortOrder: number
@@ -39,15 +40,16 @@ export interface SubjectRow {
 }
 
 export interface TaskToMove {
+  id?: string
   subject_id: string
   topic_id: string | null
   title: string
   duration_minutes: number
   session_type: "core" | "revision" | "practice"
-  priority: number
   session_number: number | null
   total_sessions: number | null
   scheduled_date: string
+  source_topic_task_id?: string | null
 }
 
 export interface PendingUnitMeta {
@@ -58,9 +60,12 @@ export interface PendingUnitMeta {
   topicName: string
   titleFallback: string
   sessionType: "core" | "revision" | "practice"
+  remainingSessionTitles: string[]
+  remainingSessionTypes: Array<"core" | "revision" | "practice">
   expectedSessions: number
   originalTotalSessions: number
   remainingSessionNumbers: number[]
+  sourceTaskIds: Array<string | null>
   sessionLengthMinutes: number
   dependsOn: string[]
 }
@@ -72,9 +77,9 @@ export interface SnapshotTask {
   scheduled_date: string
   duration_minutes: number
   session_type: "core" | "revision" | "practice"
-  priority: number
   session_number: number
   total_sessions: number
+  source_topic_task_id: string | null
 }
 
 export interface DroppedReason {
@@ -133,7 +138,6 @@ export function buildTopicParamMap(rows: Array<Record<string, unknown>>): Map<st
     paramMap.set(id, {
       topic_id: id,
       estimated_hours: Number(row.estimated_hours ?? 0),
-      priority: Number(row.priority ?? 3),
       deadline: (row.deadline as string | null) ?? null,
       earliest_start: (row.earliest_start as string | null) ?? null,
       depends_on: (row.depends_on as string[] | null) ?? [],
@@ -154,6 +158,7 @@ export function buildTaskSourceByTopic(
 
   for (const task of tasks) {
     if (!task.topic_id) continue
+    if (!task.id) continue
     const title = task.title?.trim() ?? ""
     if (!title) continue
 
@@ -162,6 +167,7 @@ export function buildTaskSourceByTopic(
 
     const list = byTopic.get(task.topic_id) ?? []
     list.push({
+      id: task.id,
       title,
       durationMinutes,
       sortOrder: task.sort_order ?? Number.MAX_SAFE_INTEGER,
@@ -191,21 +197,19 @@ function formatPlannedSessionTitle(topicName: string, taskTitle: string): string
   return `${cleanTopic} - ${cleanTask}`
 }
 
-export function resolveSessionTaskTitle(
-  topicName: string,
+export function resolveSessionSourceTask(
   sourceTasks: PlannerTaskSourceItem[],
   sessionNumber: number,
   totalSessions: number
-): string {
-  if (sourceTasks.length === 0) return topicName
+): PlannerTaskSourceItem | null {
+  if (sourceTasks.length === 0) return null
 
   const normalizedTotal = Math.max(1, totalSessions)
   const normalizedNumber = Math.min(normalizedTotal, Math.max(1, sessionNumber))
   const totalMinutes = sourceTasks.reduce((sum, task) => sum + Math.max(1, task.durationMinutes), 0)
 
   if (totalMinutes <= 0) {
-    const fallbackTask = sourceTasks[(normalizedNumber - 1) % sourceTasks.length]
-    return formatPlannedSessionTitle(topicName, fallbackTask.title)
+    return sourceTasks[(normalizedNumber - 1) % sourceTasks.length] ?? sourceTasks[0]
   }
 
   const target = ((normalizedNumber - 0.5) / normalizedTotal) * totalMinutes
@@ -213,11 +217,22 @@ export function resolveSessionTaskTitle(
   for (const task of sourceTasks) {
     cursor += Math.max(1, task.durationMinutes)
     if (target <= cursor) {
-      return formatPlannedSessionTitle(topicName, task.title)
+      return task
     }
   }
 
-  return formatPlannedSessionTitle(topicName, sourceTasks[sourceTasks.length - 1].title)
+  return sourceTasks[sourceTasks.length - 1] ?? null
+}
+
+export function resolveSessionTaskTitle(
+  topicName: string,
+  sourceTasks: PlannerTaskSourceItem[],
+  sessionNumber: number,
+  totalSessions: number
+): string {
+  const sourceTask = resolveSessionSourceTask(sourceTasks, sessionNumber, totalSessions)
+  if (!sourceTask) return topicName
+  return formatPlannedSessionTitle(topicName, sourceTask.title)
 }
 
 export function buildUnitsFromActiveTopics(args: {
@@ -248,7 +263,6 @@ export function buildUnitsFromActiveTopics(args: {
       topic_name: topic.name,
       estimated_minutes: estimatedMinutes,
       session_length_minutes: sessionLength,
-      priority: 3,
       deadline: param?.deadline ?? subjectDeadlineMap.get(topic.subject_id) ?? examDate,
       depends_on: param?.depends_on ?? [],
     }
@@ -308,7 +322,6 @@ export function buildReoptimizeUnits(args: {
       topic_name: topic.name,
       estimated_minutes: remainingMinutes,
       session_length_minutes: sessionLength,
-      priority: 3,
       deadline: param?.deadline ?? subjectDeadlineMap.get(topic.subject_id) ?? examDate,
       depends_on: param?.depends_on ?? [],
     }
@@ -355,13 +368,35 @@ export function buildPendingUnitsAndMeta(args: {
     const paramsForTopic = topicParamMap.get(topicId)
     if (!topic || !paramsForTopic) continue
 
+    const orderedTasks = [...tasks].sort((left, right) => {
+      const leftNumber = left.session_number ?? 0
+      const rightNumber = right.session_number ?? 0
+      if (leftNumber !== rightNumber) return leftNumber - rightNumber
+      if (left.scheduled_date !== right.scheduled_date) {
+        return left.scheduled_date.localeCompare(right.scheduled_date)
+      }
+      const leftSourceTaskId = left.source_topic_task_id ?? ""
+      const rightSourceTaskId = right.source_topic_task_id ?? ""
+      if (leftSourceTaskId !== rightSourceTaskId) {
+        return leftSourceTaskId.localeCompare(rightSourceTaskId)
+      }
+
+      const leftId = left.id ?? ""
+      const rightId = right.id ?? ""
+      if (leftId !== rightId) {
+        return leftId.localeCompare(rightId)
+      }
+
+      return left.title.localeCompare(right.title)
+    })
+
     const sessionLength = inferSessionLengthMinutes(
-      tasks.map((task) => task.duration_minutes),
+      orderedTasks.map((task) => task.duration_minutes),
       paramsForTopic.session_length_minutes
     )
-    const expectedSessions = tasks.length
+    const expectedSessions = orderedTasks.length
     const totalSessions = Math.max(
-      ...tasks.map((task) => task.total_sessions ?? 0),
+      ...orderedTasks.map((task) => task.total_sessions ?? 0),
       Math.ceil(Math.round(paramsForTopic.estimated_hours * 60) / sessionLength)
     )
 
@@ -370,9 +405,8 @@ export function buildPendingUnitsAndMeta(args: {
       subject_id: topic.subject_id,
       subject_name: subjectNameMap.get(topic.subject_id) ?? "Unknown",
       topic_name: topic.name,
-      estimated_minutes: tasks.reduce((sum, task) => sum + task.duration_minutes, 0),
+      estimated_minutes: orderedTasks.reduce((sum, task) => sum + task.duration_minutes, 0),
       session_length_minutes: sessionLength,
-      priority: paramsForTopic.priority,
       deadline: paramsForTopic.deadline ?? subjectDeadlineMap.get(topic.subject_id) ?? examDate,
       earliest_start: today,
       depends_on: paramsForTopic.depends_on ?? [],
@@ -387,14 +421,17 @@ export function buildPendingUnitsAndMeta(args: {
       subjectId: topic.subject_id,
       subjectName: subjectNameMap.get(topic.subject_id) ?? "Unknown",
       topicName: topic.name,
-      titleFallback: tasks[0]?.title ?? topic.name,
-      sessionType: tasks[0]?.session_type ?? "core",
+      titleFallback: orderedTasks[0]?.title ?? topic.name,
+      sessionType: orderedTasks[0]?.session_type ?? "core",
+      remainingSessionTitles: orderedTasks.map((task) => task.title.trim() || topic.name),
+      remainingSessionTypes: orderedTasks.map((task) => task.session_type),
       expectedSessions,
       originalTotalSessions: totalSessions,
-      remainingSessionNumbers: tasks
+      remainingSessionNumbers: orderedTasks
         .map((task) => task.session_number ?? 0)
         .filter((num) => num > 0)
         .sort((aNum, bNum) => aNum - bNum),
+      sourceTaskIds: orderedTasks.map((task) => task.source_topic_task_id ?? null),
       sessionLengthMinutes: sessionLength,
       dependsOn: paramsForTopic.depends_on ?? [],
     })
@@ -410,7 +447,6 @@ export function buildPendingUnitsAndMeta(args: {
       topic_name: task.title,
       estimated_minutes: task.duration_minutes,
       session_length_minutes: task.duration_minutes,
-      priority: task.priority,
       deadline: examDate,
       earliest_start: today,
       depends_on: [],
@@ -424,10 +460,13 @@ export function buildPendingUnitsAndMeta(args: {
       topicName: task.title,
       titleFallback: task.title,
       sessionType: task.session_type,
+      remainingSessionTitles: [task.title],
+      remainingSessionTypes: [task.session_type],
       expectedSessions: 1,
       originalTotalSessions: Math.max(1, task.total_sessions ?? 1),
       remainingSessionNumbers:
         task.session_number && task.session_number > 0 ? [task.session_number] : [],
+      sourceTaskIds: [task.source_topic_task_id ?? null],
       sessionLengthMinutes: task.duration_minutes,
       dependsOn: [],
     })
@@ -458,26 +497,36 @@ export function mapScheduledToSnapshotTasks(
         scheduled_date: session.scheduled_date,
         duration_minutes: session.duration_minutes,
         session_type: session.session_type,
-        priority: session.priority,
         session_number: session.session_number,
         total_sessions: session.total_sessions,
+        source_topic_task_id: session.source_topic_task_id ?? null,
       }
     }
 
     const sessionNumber = meta.remainingSessionNumbers[scheduledCount] ?? session.session_number
     const totalSessions =
       meta.originalTotalSessions > 0 ? meta.originalTotalSessions : session.total_sessions
+    const sourceTaskId =
+      meta.sourceTaskIds[scheduledCount] ?? session.source_topic_task_id ?? null
+    const title =
+      meta.remainingSessionTitles[scheduledCount]
+      ?? session.title
+      ?? meta.titleFallback
+    const sessionType =
+      meta.remainingSessionTypes[scheduledCount]
+      ?? session.session_type
+      ?? meta.sessionType
 
     return {
       subject_id: meta.subjectId,
       topic_id: meta.topicId,
-      title: meta.titleFallback,
+      title,
       scheduled_date: session.scheduled_date,
       duration_minutes: session.duration_minutes,
-      session_type: meta.sessionType,
-      priority: session.priority,
+      session_type: sessionType,
       session_number: sessionNumber,
       total_sessions: totalSessions,
+      source_topic_task_id: sourceTaskId,
     }
   })
 

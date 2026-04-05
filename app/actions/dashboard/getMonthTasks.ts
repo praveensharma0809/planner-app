@@ -34,12 +34,12 @@ export async function getMonthTasks(
 
   const { data } = await supabase
     .from("tasks")
-    .select("id, user_id, subject_id, topic_id, title, scheduled_date, duration_minutes, priority, completed, task_source, session_type, plan_snapshot_id, session_number, total_sessions, sort_order, created_at, updated_at")
+    .select("id, user_id, task_type, subject_id, topic_id, title, scheduled_date, duration_minutes, completed, task_source, session_type, plan_snapshot_id, session_number, total_sessions, sort_order, created_at, updated_at")
     .eq("user_id", user.id)
     .gte("scheduled_date", firstDay)
     .lte("scheduled_date", lastDayStr)
     .order("scheduled_date", { ascending: true })
-    .order("priority", { ascending: true })
+    .order("created_at", { ascending: true })
 
   const tasks = (data ?? []).filter((task) => !isCanonicalIntakeManualTask(task))
 

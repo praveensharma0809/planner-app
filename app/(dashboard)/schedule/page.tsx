@@ -8,19 +8,31 @@ import {
   useState,
   type CSSProperties,
   type FormEvent,
+  type MutableRefObject,
   type ReactNode,
 } from "react"
 import {
+  type CollisionDetection,
   DndContext,
   DragOverlay,
+  KeyboardSensor,
+  closestCenter,
   PointerSensor,
-  useDraggable,
+  pointerWithin,
+  rectIntersection,
   useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core"
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { useToast } from "@/app/components/Toast"
 import {
@@ -31,26 +43,27 @@ import {
   type ScheduleSubjectOption,
   type ScheduleWeekTask,
 } from "@/app/actions/schedule/getWeekSchedule"
-import { upsertScheduleTask } from "@/app/actions/schedule/upsertScheduleTask"
 import { deleteScheduleTask } from "@/app/actions/schedule/deleteScheduleTask"
-import { completeTask } from "@/app/actions/plan/completeTask"
-import { uncompleteTask } from "@/app/actions/plan/uncompleteTask"
+import { setTaskCompletion } from "@/app/actions/plan/setTaskCompletion"
 import { rescheduleTask } from "@/app/actions/plan/rescheduleTask"
+import {
+  useScheduleTopbar,
+  type ScheduleTopbarStatusFilter,
+} from "@/app/components/layout/ScheduleTopbarContext"
+import { saveTaskViaUnifiedFlow } from "@/app/components/tasks/taskWriteGateway"
+import { STANDALONE_SUBJECT_ID, STANDALONE_SUBJECT_LABEL } from "@/lib/constants"
+import {
+  getTasksForDate,
+  getTodayLocalDate,
+  normalizeLocalDate,
+} from "@/lib/tasks/getTasksForDate"
 
-const ROW_HEIGHT = 44
-const START_HOUR = 6
-const END_HOUR = 22
-const TIME_SLOTS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => {
-  const hour = START_HOUR + index
-  return `${String(hour).padStart(2, "0")}:00`
-})
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
-const OTHERS_SUBJECT_ID = "others"
-const OTHERS_SUBJECT_LABEL = "Others"
-const SLOT_OVERRIDES_KEY = "schedule-slot-overrides-v2"
 const SUBJECT_ACCENTS = ["#3B82F6", "#A855F7", "#22C55E", "#F97316", "#06B6D4", "#EC4899", "#EAB308"] as const
+const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120, 180, 240] as const
+const DAY_ORDER_STORAGE_KEY = "schedule-day-order-v1"
 
-type StatusFilter = "all" | "pending" | "completed"
+type StatusFilter = ScheduleTopbarStatusFilter
 
 type WeekRangeMeta = {
   weekStartISO: string
@@ -64,13 +77,6 @@ type FilterChip = {
   subjectId: string | "all"
 }
 
-type SlotOverride = {
-  day: number
-  startSlot: number
-}
-
-type SlotOverrides = Record<string, SlotOverride>
-
 type CalendarEvent = {
   id: string
   title: string
@@ -78,30 +84,25 @@ type CalendarEvent = {
   subjectName: string
   day: number
   dateISO: string
-  startSlot: number
-  durationSlots: number
+  durationMinutes: number
   completed: boolean
-  priority: number
-  isPlanGenerated: boolean
 }
 
 type EventDraft = {
   title: string
   subjectId: string
   day: number
-  startSlot: number
-  durationSlots: number
+  durationMinutes: number
 }
 
-function toISODateLocal(date: Date) {
-  const year = date.getUTCFullYear()
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0")
-  const day = String(date.getUTCDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
-}
+type DayOrderMap = Record<number, string[]>
+type DayOrderStorage = Record<string, DayOrderMap>
 
 function parseISODate(iso: string) {
-  const parts = iso.split("-")
+  const normalized = normalizeLocalDate(iso)
+  if (!normalized) return new Date(Number.NaN)
+
+  const parts = normalized.split("-")
   if (parts.length !== 3) return new Date(Number.NaN)
 
   const year = Number(parts[0])
@@ -112,32 +113,34 @@ function parseISODate(iso: string) {
     return new Date(Number.NaN)
   }
 
-  return new Date(Date.UTC(year, month - 1, day))
+  return new Date(year, month - 1, day, 12, 0, 0, 0)
 }
 
 function addDaysISO(iso: string, days: number) {
   const date = parseISODate(iso)
-  date.setUTCDate(date.getUTCDate() + days)
-  return toISODateLocal(date)
+  if (Number.isNaN(date.getTime())) return getTodayLocalDate()
+  date.setDate(date.getDate() + days)
+  return normalizeLocalDate(date) ?? getTodayLocalDate()
 }
 
 function addMonthsISO(iso: string, months: number) {
   const date = parseISODate(iso)
-  date.setUTCMonth(date.getUTCMonth() + months)
-  return toISODateLocal(date)
+  if (Number.isNaN(date.getTime())) return getTodayLocalDate()
+  date.setMonth(date.getMonth() + months)
+  return normalizeLocalDate(date) ?? getTodayLocalDate()
 }
 
 function formatWeekRangeTitle(startISO: string, endISO: string) {
   const start = parseISODate(startISO)
   const end = parseISODate(endISO)
 
-  const startDay = String(start.getUTCDate()).padStart(2, "0")
-  const endDay = String(end.getUTCDate()).padStart(2, "0")
-  const startMonth = start.toLocaleString("en-US", { month: "long", timeZone: "UTC" })
-  const endMonth = end.toLocaleString("en-US", { month: "long", timeZone: "UTC" })
+  const startDay = String(start.getDate()).padStart(2, "0")
+  const endDay = String(end.getDate()).padStart(2, "0")
+  const startMonth = start.toLocaleString("en-US", { month: "long" })
+  const endMonth = end.toLocaleString("en-US", { month: "long" })
 
-  const startYear = start.getUTCFullYear()
-  const endYear = end.getUTCFullYear()
+  const startYear = start.getFullYear()
+  const endYear = end.getFullYear()
 
   if (startMonth === endMonth && startYear === endYear) {
     return `${startDay}-${endDay} ${startMonth} ${startYear}`
@@ -154,23 +157,22 @@ function formatDayDateLabel(iso: string) {
   return parseISODate(iso).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
-    timeZone: "UTC",
   })
 }
 
 function getWeekRangeMeta(baseDate: Date): WeekRangeMeta {
   const start = new Date(baseDate)
-  start.setUTCHours(12, 0, 0, 0)
+  start.setHours(12, 0, 0, 0)
 
-  const weekday = start.getUTCDay()
+  const weekday = start.getDay()
   const diffToMonday = (weekday + 6) % 7
-  start.setUTCDate(start.getUTCDate() - diffToMonday)
+  start.setDate(start.getDate() - diffToMonday)
 
   const end = new Date(start)
-  end.setUTCDate(end.getUTCDate() + 6)
+  end.setDate(end.getDate() + 6)
 
-  const weekStartISO = toISODateLocal(start)
-  const weekEndISO = toISODateLocal(end)
+  const weekStartISO = normalizeLocalDate(start) ?? getTodayLocalDate()
+  const weekEndISO = normalizeLocalDate(end) ?? weekStartISO
 
   return {
     weekStartISO,
@@ -210,82 +212,73 @@ function resolveSubjectAccent(subject: string) {
   return SUBJECT_ACCENTS[hashString(normalized) % SUBJECT_ACCENTS.length]
 }
 
-function readSlotOverrides(): SlotOverrides {
+function formatDuration(minutes: number) {
+  if (minutes < 60) return `${minutes}m`
+
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  if (rest === 0) return `${hours}h`
+  return `${hours}h ${rest}m`
+}
+
+function emptyDayOrderMap(): DayOrderMap {
+  return { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }
+}
+
+function readDayOrderStorage(): DayOrderStorage {
   if (typeof window === "undefined") return {}
 
   try {
-    const raw = window.localStorage.getItem(SLOT_OVERRIDES_KEY)
+    const raw = window.localStorage.getItem(DAY_ORDER_STORAGE_KEY)
     if (!raw) return {}
-    const parsed = JSON.parse(raw) as SlotOverrides
+    const parsed = JSON.parse(raw) as DayOrderStorage
     return parsed ?? {}
   } catch {
     return {}
   }
 }
 
+function writeDayOrderStorage(next: DayOrderStorage) {
+  if (typeof window === "undefined") return
+  window.localStorage.setItem(DAY_ORDER_STORAGE_KEY, JSON.stringify(next))
+}
+
 function mapTasksToEvents(
   tasks: ScheduleWeekTask[],
-  weekStartISO: string,
-  subjectNameById: Map<string, string>,
-  activeSubjectIds: Set<string>,
-  slotOverrides: SlotOverrides
+  weekDates: string[],
+  subjectNameById: Map<string, string>
 ) {
-  const cursorByDay = Array.from({ length: 7 }, () => 0)
-
-  const sortedTasks = [...tasks].sort((a, b) => {
-    const dateCompare = a.scheduled_date.localeCompare(b.scheduled_date)
-    if (dateCompare !== 0) return dateCompare
-
-    const completedCompare = Number(a.completed) - Number(b.completed)
-    if (completedCompare !== 0) return completedCompare
-
-    const priorityCompare = a.priority - b.priority
-    if (priorityCompare !== 0) return priorityCompare
-
-    return a.created_at.localeCompare(b.created_at)
-  })
-
   const mapped: CalendarEvent[] = []
 
-  for (const task of sortedTasks) {
-    const day = dayIndexFromWeekStart(task.scheduled_date, weekStartISO)
-    if (day < 0 || day >= 7) continue
-
-    const normalizedSubjectId =
-      task.subject_id && activeSubjectIds.has(task.subject_id)
-        ? task.subject_id
-        : OTHERS_SUBJECT_ID
-
-    const subjectName =
-      normalizedSubjectId === OTHERS_SUBJECT_ID
-        ? OTHERS_SUBJECT_LABEL
-        : subjectNameById.get(normalizedSubjectId) ?? task.subject_name ?? OTHERS_SUBJECT_LABEL
-
-    const durationSlots = clamp(Math.ceil(task.duration_minutes / 60), 1, TIME_SLOTS.length)
-    const maxStartSlot = Math.max(0, TIME_SLOTS.length - durationSlots)
-    const override = slotOverrides[task.id]
-    const fallbackStart = clamp(cursorByDay[day], 0, maxStartSlot)
-
-    const startSlot =
-      override && override.day === day
-        ? clamp(override.startSlot, 0, maxStartSlot)
-        : fallbackStart
-
-    cursorByDay[day] = Math.max(cursorByDay[day], startSlot + durationSlots)
-
-    mapped.push({
-      id: task.id,
-      title: task.title,
-      subjectId: normalizedSubjectId,
-      subjectName,
-      day,
-      dateISO: task.scheduled_date,
-      startSlot,
-      durationSlots,
-      completed: task.completed,
-      priority: task.priority,
-      isPlanGenerated: task.is_planner_task,
+  for (const [day, dayISO] of weekDates.entries()) {
+    const dayTasks = [...getTasksForDate(tasks, dayISO)].sort((a, b) => {
+      const completedCompare = Number(a.completed) - Number(b.completed)
+      if (completedCompare !== 0) return completedCompare
+      return a.created_at.localeCompare(b.created_at)
     })
+
+    for (const task of dayTasks) {
+      const isStandalone = task.task_type === "standalone" || !task.subject_id
+
+      const normalizedSubjectId = isStandalone
+        ? STANDALONE_SUBJECT_ID
+        : task.subject_id!
+
+      const subjectName = isStandalone
+        ? STANDALONE_SUBJECT_LABEL
+        : subjectNameById.get(normalizedSubjectId) ?? task.subject_name ?? "Unknown subject"
+
+      mapped.push({
+        id: task.id,
+        title: task.title,
+        subjectId: normalizedSubjectId,
+        subjectName,
+        day,
+        dateISO: normalizeLocalDate(task.scheduled_date) ?? task.scheduled_date,
+        durationMinutes: Math.max(15, task.duration_minutes),
+        completed: task.completed,
+      })
+    }
   }
 
   return mapped
@@ -293,37 +286,34 @@ function mapTasksToEvents(
 
 export default function SchedulePage() {
   const { addToast } = useToast()
+  const { setState: setTopbarState, resetState: resetTopbarState } = useScheduleTopbar()
 
   const [tasks, setTasks] = useState<ScheduleWeekTask[]>([])
   const [subjects, setSubjects] = useState<ScheduleSubjectOption[]>([])
-  const [weekAnchorISO, setWeekAnchorISO] = useState(() => toISODateLocal(new Date()))
+  const [weekAnchorISO, setWeekAnchorISO] = useState(() => getTodayLocalDate())
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [activeChipId, setActiveChipId] = useState("all")
   const [isLoadingWeek, setIsLoadingWeek] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editEventId, setEditEventId] = useState<string | null>(null)
   const [quickAddDay, setQuickAddDay] = useState(0)
+  const [mobileDay, setMobileDay] = useState(0)
+  const [dayOrderMap, setDayOrderMap] = useState<DayOrderMap>(emptyDayOrderMap)
+  const [didHydrateDayOrder, setDidHydrateDayOrder] = useState(false)
   const [activeDragEventId, setActiveDragEventId] = useState<string | null>(null)
   const [busyTaskIds, setBusyTaskIds] = useState<Set<string>>(new Set())
-  const [slotOverrides, setSlotOverrides] = useState<SlotOverrides>({})
   const [isSavingEvent, setIsSavingEvent] = useState(false)
   const [isImportingPlanner, setIsImportingPlanner] = useState(false)
+  const eventElementMapRef = useRef<Map<string, HTMLDivElement>>(new Map())
 
   const weekMeta = useMemo(() => getWeekRangeMeta(parseISODate(weekAnchorISO)), [weekAnchorISO])
+  const currentWeekStartISO = useMemo(() => getWeekRangeMeta(new Date()).weekStartISO, [])
+  const isCurrentWeek = weekMeta.weekStartISO === currentWeekStartISO
 
   const weekDates = useMemo(
     () => Array.from({ length: 7 }, (_, day) => addDaysISO(weekMeta.weekStartISO, day)),
     [weekMeta.weekStartISO]
   )
-
-  useEffect(() => {
-    setSlotOverrides(readSlotOverrides())
-  }, [])
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    window.localStorage.setItem(SLOT_OVERRIDES_KEY, JSON.stringify(slotOverrides))
-  }, [slotOverrides])
 
   const loadWeekData = useCallback(async (weekStartISO: string) => {
     setIsLoadingWeek(true)
@@ -361,13 +351,29 @@ export default function SchedulePage() {
     void loadWeekData(weekMeta.weekStartISO)
   }, [loadWeekData, weekMeta.weekStartISO])
 
+  useEffect(() => {
+    const todayISO = getTodayLocalDate()
+    const nextDay = dayIndexFromWeekStart(todayISO, weekMeta.weekStartISO)
+    setMobileDay(clamp(nextDay, 0, 6))
+  }, [weekMeta.weekStartISO])
+
+  useEffect(() => {
+    const storage = readDayOrderStorage()
+    setDayOrderMap(storage[weekMeta.weekStartISO] ?? emptyDayOrderMap())
+    setDidHydrateDayOrder(true)
+  }, [weekMeta.weekStartISO])
+
+  useEffect(() => {
+    if (!didHydrateDayOrder) return
+    const storage = readDayOrderStorage()
+    writeDayOrderStorage({
+      ...storage,
+      [weekMeta.weekStartISO]: dayOrderMap,
+    })
+  }, [dayOrderMap, didHydrateDayOrder, weekMeta.weekStartISO])
+
   const subjectNameById = useMemo(
     () => new Map(subjects.map((subject) => [subject.id, subject.name])),
-    [subjects]
-  )
-
-  const activeSubjectIds = useMemo(
-    () => new Set(subjects.map((subject) => subject.id)),
     [subjects]
   )
 
@@ -379,7 +385,11 @@ export default function SchedulePage() {
         label: subject.name,
         subjectId: subject.id,
       })),
-      { id: `subject-${OTHERS_SUBJECT_ID}`, label: OTHERS_SUBJECT_LABEL, subjectId: OTHERS_SUBJECT_ID },
+      {
+        id: `subject-${STANDALONE_SUBJECT_ID}`,
+        label: STANDALONE_SUBJECT_LABEL,
+        subjectId: STANDALONE_SUBJECT_ID,
+      },
     ]
   }, [subjects])
 
@@ -394,9 +404,25 @@ export default function SchedulePage() {
   )
 
   const events = useMemo(
-    () => mapTasksToEvents(tasks, weekMeta.weekStartISO, subjectNameById, activeSubjectIds, slotOverrides),
-    [tasks, weekMeta.weekStartISO, subjectNameById, activeSubjectIds, slotOverrides]
+    () => mapTasksToEvents(tasks, weekDates, subjectNameById),
+    [tasks, weekDates, subjectNameById]
   )
+
+  useEffect(() => {
+    setDayOrderMap((previous) => {
+      const next: DayOrderMap = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }
+
+      for (let day = 0; day < 7; day++) {
+        const dayIds = events.filter((event) => event.day === day).map((event) => event.id)
+        const previousForDay = previous[day] ?? []
+        const kept = previousForDay.filter((id) => dayIds.includes(id))
+        const missing = dayIds.filter((id) => !kept.includes(id))
+        next[day] = [...kept, ...missing]
+      }
+
+      return next
+    })
+  }, [events])
 
   const filteredEvents = useMemo(() => {
     return events.filter((event) => {
@@ -423,8 +449,10 @@ export default function SchedulePage() {
     [events, activeDragEventId]
   )
 
+  const eventById = useMemo(() => new Map(events.map((event) => [event.id, event])), [events])
+
   const subjectOptionsForModal = useMemo(
-    () => [...subjects, { id: OTHERS_SUBJECT_ID, name: OTHERS_SUBJECT_LABEL }],
+    () => [...subjects, { id: STANDALONE_SUBJECT_ID, name: STANDALONE_SUBJECT_LABEL }],
     [subjects]
   )
 
@@ -459,61 +487,30 @@ export default function SchedulePage() {
   const handleToggleComplete = useCallback(async (taskId: string, nextCompleted: boolean) => {
     if (busyTaskIds.has(taskId)) return
 
-    const targetTask = tasks.find((task) => task.id === taskId)
-    if (!targetTask) return
+    if (!tasks.some((task) => task.id === taskId)) return
 
     setTaskBusy(taskId, true)
-    setTasks((previous) =>
-      previous.map((task) => (task.id === taskId ? { ...task, completed: nextCompleted } : task))
-    )
 
     try {
-      if (nextCompleted) {
-        const result = await completeTask(taskId)
-        if (result.status !== "SUCCESS") {
-          setTasks((previous) =>
-            previous.map((task) =>
-              task.id === taskId ? { ...task, completed: targetTask.completed } : task
-            )
-          )
-          if (result.status === "UNAUTHORIZED") {
-            addToast("Please sign in again.", "error")
-          } else if (result.status === "NOT_FOUND") {
-            addToast("Task not found.", "error")
-          } else {
-            addToast(result.message || "Could not update task status.", "error")
-          }
-          return
+      const result = await setTaskCompletion(taskId, nextCompleted)
+      if (result.status !== "SUCCESS") {
+        if (result.status === "UNAUTHORIZED") {
+          addToast("Please sign in again.", "error")
+        } else if (result.status === "NOT_FOUND") {
+          addToast("Task not found.", "error")
+        } else {
+          addToast(result.message || "Could not update task status.", "error")
         }
-      } else {
-        const result = await uncompleteTask(taskId)
-        if (result.status !== "SUCCESS") {
-          setTasks((previous) =>
-            previous.map((task) =>
-              task.id === taskId ? { ...task, completed: targetTask.completed } : task
-            )
-          )
-          if (result.status === "UNAUTHORIZED") {
-            addToast("Please sign in again.", "error")
-          } else if (result.status === "NOT_FOUND") {
-            addToast("Task not found.", "error")
-          } else {
-            addToast(result.message || "Could not update task status.", "error")
-          }
-          return
-        }
+        return
       }
+
+      await loadWeekData(weekMeta.weekStartISO)
     } catch {
-      setTasks((previous) =>
-        previous.map((task) =>
-          task.id === taskId ? { ...task, completed: targetTask.completed } : task
-        )
-      )
       addToast("Could not update task status.", "error")
     } finally {
       setTaskBusy(taskId, false)
     }
-  }, [addToast, busyTaskIds, setTaskBusy, tasks])
+  }, [addToast, busyTaskIds, loadWeekData, setTaskBusy, tasks, weekMeta.weekStartISO])
 
   const handleDeleteEvent = useCallback(async (eventId: string) => {
     if (busyTaskIds.has(eventId)) return
@@ -524,11 +521,6 @@ export default function SchedulePage() {
 
       if (result.status === "SUCCESS") {
         setTasks((previous) => previous.filter((task) => task.id !== eventId))
-        setSlotOverrides((previous) => {
-          const next = { ...previous }
-          delete next[eventId]
-          return next
-        })
         addToast("Event deleted.", "success")
         return
       }
@@ -558,10 +550,10 @@ export default function SchedulePage() {
     setIsSavingEvent(true)
 
     const scheduledDate = weekDates[draft.day] ?? weekMeta.weekStartISO
-    const durationMinutes = Math.max(15, draft.durationSlots * 60)
+    const durationMinutes = Math.max(15, draft.durationMinutes)
 
     try {
-      const result = await upsertScheduleTask({
+      const result = await saveTaskViaUnifiedFlow({
         taskId: eventId,
         title: draft.title,
         subjectId: draft.subjectId,
@@ -589,14 +581,6 @@ export default function SchedulePage() {
         addToast(`Could not save event: ${result.message}`, "error")
         return false
       }
-
-      setSlotOverrides((previous) => ({
-        ...previous,
-        [result.taskId]: {
-          day: draft.day,
-          startSlot: draft.startSlot,
-        },
-      }))
 
       await loadWeekData(weekMeta.weekStartISO)
       setActiveChipId("all")
@@ -665,8 +649,47 @@ export default function SchedulePage() {
   }, [weekMeta.weekStartISO])
 
   const handleGoCurrentWeek = useCallback(() => {
-    setWeekAnchorISO(toISODateLocal(new Date()))
+    setWeekAnchorISO(getTodayLocalDate())
   }, [])
+
+  useEffect(() => {
+    setTopbarState({
+      enabled: true,
+      weekRangeTitle: weekMeta.title,
+      isCurrentWeek,
+      chips: filterChips.map((chip) => ({ id: chip.id, label: chip.label })),
+      activeChipId,
+      statusFilter,
+      isImportingPlanner,
+      onChipClick: setActiveChipId,
+      onStatusFilterChange: setStatusFilter,
+      onAddEvent: () => openCreateModal(mobileDay),
+      onImportPlanner: handleImportFromPlanner,
+      onPrevWeek: handleGoPrevWeek,
+      onNextWeek: handleGoNextWeek,
+      onPrevMonth: handleGoPrevMonth,
+      onNextMonth: handleGoNextMonth,
+      onCurrentWeek: handleGoCurrentWeek,
+    })
+  }, [
+    activeChipId,
+    filterChips,
+    handleGoCurrentWeek,
+    handleGoNextMonth,
+    handleGoNextWeek,
+    handleGoPrevMonth,
+    handleGoPrevWeek,
+    handleImportFromPlanner,
+    isImportingPlanner,
+    isCurrentWeek,
+    mobileDay,
+    openCreateModal,
+    setTopbarState,
+    statusFilter,
+    weekMeta.title,
+  ])
+
+  useEffect(() => () => resetTopbarState(), [resetTopbarState])
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveDragEventId(String(event.active.id))
@@ -682,33 +705,82 @@ export default function SchedulePage() {
 
     const eventId = String(event.active.id)
     const dropTarget = String(event.over.id)
-    const match = /^slot-(\d+)-(\d+)$/.exec(dropTarget)
-    if (!match) return
 
-    const targetDay = Number(match[1])
-    const targetSlot = Number(match[2])
+    const activeEvent = eventById.get(eventId)
+    if (!activeEvent) return
+
+    const dayMatch = /^day-(\d+)$/.exec(dropTarget)
+    const targetEvent = dayMatch ? null : eventById.get(dropTarget)
+    const targetDay = dayMatch ? Number(dayMatch[1]) : targetEvent?.day
+
+    if (typeof targetDay !== "number") return
+
     const targetDate = weekDates[targetDay]
     if (!targetDate) return
 
-    const activeEvent = events.find((item) => item.id === eventId)
-    if (!activeEvent) return
-
-    const nextStartSlot = clamp(targetSlot, 0, Math.max(0, TIME_SLOTS.length - activeEvent.durationSlots))
-    setSlotOverrides((previous) => ({
-      ...previous,
-      [eventId]: {
-        day: targetDay,
-        startSlot: nextStartSlot,
-      },
-    }))
-
-    if (activeEvent.dateISO === targetDate) {
-      return
+    const isCrossDayMove =
+      activeEvent.day !== targetDay
+      && normalizeLocalDate(activeEvent.dateISO) !== normalizeLocalDate(targetDate)
+    if (isCrossDayMove) {
+      const todayISO = getTodayLocalDate()
+      if ((normalizeLocalDate(targetDate) ?? targetDate) < (normalizeLocalDate(todayISO) ?? todayISO)) {
+        addToast("You cannot move tasks to a past date.", "error")
+        return
+      }
     }
 
-    const todayISO = toISODateLocal(new Date())
-    if (targetDate < todayISO) {
-      addToast("You cannot move tasks to a past date.", "error")
+    setDayOrderMap((previous) => {
+      const sourceDay = activeEvent.day
+      const sourceList = [...(previous[sourceDay] ?? [])]
+      const targetList = sourceDay === targetDay ? sourceList : [...(previous[targetDay] ?? [])]
+
+      const fromIndex = sourceList.indexOf(eventId)
+      if (fromIndex === -1) return previous
+
+
+      if (sourceDay === targetDay) {
+        const toIndex = targetEvent
+          ? targetList.indexOf(targetEvent.id)
+          : Math.max(0, targetList.length - 1)
+        if (toIndex < 0 || toIndex === fromIndex) return previous
+
+        return {
+          ...previous,
+          [sourceDay]: arrayMove(sourceList, fromIndex, toIndex),
+        }
+      }
+
+      sourceList.splice(fromIndex, 1)
+      const pointerY = event.activatorEvent && "clientY" in event.activatorEvent
+        ? Number(event.activatorEvent.clientY)
+        : null
+
+      let insertionIndex = targetEvent ? targetList.indexOf(targetEvent.id) : targetList.length
+      if (!targetEvent && pointerY !== null && targetList.length > 0) {
+        for (let index = 0; index < targetList.length; index++) {
+          const targetId = targetList[index]
+          const element = eventElementMapRef.current.get(targetId)
+          if (!element) continue
+          const rect = element.getBoundingClientRect()
+          const midpoint = rect.top + rect.height / 2
+          if (pointerY < midpoint) {
+            insertionIndex = index
+            break
+          }
+        }
+      }
+
+      const safeInsertionIndex = insertionIndex < 0 ? targetList.length : insertionIndex
+      targetList.splice(safeInsertionIndex, 0, eventId)
+
+      return {
+        ...previous,
+        [sourceDay]: sourceList,
+        [targetDay]: targetList,
+      }
+    })
+
+    if (!isCrossDayMove) {
       return
     }
 
@@ -733,6 +805,7 @@ export default function SchedulePage() {
               : task
           )
         )
+        void loadWeekData(weekMeta.weekStartISO)
 
         if (result.status === "UNAUTHORIZED") {
           addToast("Sign in required to move tasks.", "error")
@@ -751,35 +824,19 @@ export default function SchedulePage() {
               : task
           )
         )
+        void loadWeekData(weekMeta.weekStartISO)
         addToast("Could not move task right now.", "error")
       } finally {
         setTaskBusy(eventId, false)
       }
     })()
-  }, [addToast, events, setTaskBusy, weekDates])
+  }, [addToast, eventById, loadWeekData, setTaskBusy, weekDates, weekMeta.weekStartISO])
 
   return (
-    <div className="page-root animate-fade-in space-y-3">
-      <ScheduleHeader
-        weekRangeTitle={weekMeta.title}
-        filterChips={filterChips}
-        activeChipId={activeChipId}
-        onChipClick={setActiveChipId}
-        onAddEvent={() => openCreateModal(0)}
-        onImportPlanner={handleImportFromPlanner}
-        isImportingPlanner={isImportingPlanner}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        onPrevWeek={handleGoPrevWeek}
-        onNextWeek={handleGoNextWeek}
-        onPrevMonth={handleGoPrevMonth}
-        onNextMonth={handleGoNextMonth}
-        onCurrentWeek={handleGoCurrentWeek}
-      />
-
+    <div className="page-root animate-fade-in flex h-full min-h-0 flex-col overflow-hidden">
       {isLoadingWeek ? (
         <section
-          className="flex h-[66vh] items-center justify-center rounded-2xl border"
+          className="flex min-h-0 flex-1 items-center justify-center rounded-2xl border"
           style={{
             borderColor: "var(--sh-border)",
             background: "var(--sh-card)",
@@ -794,8 +851,12 @@ export default function SchedulePage() {
         <WeeklyCalendarGrid
           weekDates={weekDates}
           events={filteredEvents}
+          dayOrderMap={dayOrderMap}
+          eventElementMapRef={eventElementMapRef}
           activeDragEvent={activeDragEvent}
           busyTaskIds={busyTaskIds}
+          mobileDay={mobileDay}
+          onMobileDayChange={setMobileDay}
           onDragStart={handleDragStart}
           onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
@@ -822,163 +883,15 @@ export default function SchedulePage() {
   )
 }
 
-type ScheduleHeaderProps = {
-  weekRangeTitle: string
-  filterChips: FilterChip[]
-  activeChipId: string
-  onChipClick: (chipId: string) => void
-  onAddEvent: () => void
-  onImportPlanner: () => void
-  isImportingPlanner: boolean
-  statusFilter: StatusFilter
-  onStatusFilterChange: (value: StatusFilter) => void
-  onPrevWeek: () => void
-  onNextWeek: () => void
-  onPrevMonth: () => void
-  onNextMonth: () => void
-  onCurrentWeek: () => void
-}
-
-function ScheduleHeader({
-  weekRangeTitle,
-  filterChips,
-  activeChipId,
-  onChipClick,
-  onAddEvent,
-  onImportPlanner,
-  isImportingPlanner,
-  statusFilter,
-  onStatusFilterChange,
-  onPrevWeek,
-  onNextWeek,
-  onPrevMonth,
-  onNextMonth,
-  onCurrentWeek,
-}: ScheduleHeaderProps) {
-  return (
-    <header
-      className="space-y-3 rounded-xl border p-4"
-      style={{
-        background: "var(--sh-card)",
-        borderColor: "var(--sh-border)",
-        boxShadow: "var(--sh-shadow-sm)",
-      }}
-    >
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <h1 className="text-2xl font-bold" style={{ color: "var(--sh-text-primary)" }}>
-          {weekRangeTitle}
-        </h1>
-
-        <div className="flex flex-wrap gap-1.5">
-          <HeaderNavButton label="- Month" onClick={onPrevMonth} />
-          <HeaderNavButton label="- Week" onClick={onPrevWeek} />
-          <HeaderNavButton label="Current" onClick={onCurrentWeek} />
-          <HeaderNavButton label="Week +" onClick={onNextWeek} />
-          <HeaderNavButton label="Month +" onClick={onNextMonth} />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-wrap gap-2">
-          {filterChips.map((chip) => {
-            const active = chip.id === activeChipId
-            return (
-              <button
-                key={chip.id}
-                type="button"
-                onClick={() => onChipClick(chip.id)}
-                className="cursor-pointer rounded-full border px-3 py-1.5 text-xs transition"
-                style={
-                  active
-                    ? {
-                        background: "var(--sh-text-primary)",
-                        color: "var(--background)",
-                        borderColor: "transparent",
-                      }
-                    : {
-                        background: "var(--sh-card)",
-                        borderColor: "var(--sh-border)",
-                        color: "var(--sh-text-secondary)",
-                      }
-                }
-              >
-                {chip.label}
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={statusFilter}
-            onChange={(event) => onStatusFilterChange(event.target.value as StatusFilter)}
-            className="rounded border px-3 py-1.5 text-xs"
-            style={{
-              borderColor: "var(--sh-border)",
-              color: "var(--sh-text-secondary)",
-              background: "var(--sh-card)",
-            }}
-            aria-label="Filter by completion status"
-          >
-            <option value="all">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="completed">Completed</option>
-          </select>
-
-          <button
-            type="button"
-            onClick={onImportPlanner}
-            disabled={isImportingPlanner}
-            className="rounded border px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60"
-            style={{
-              borderColor: "var(--sh-border)",
-              color: "var(--sh-text-secondary)",
-              background: "var(--sh-card)",
-            }}
-          >
-            {isImportingPlanner ? "Syncing..." : "Import schedule from planner"}
-          </button>
-
-          <button
-            type="button"
-            onClick={onAddEvent}
-            className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-700"
-          >
-            + Add Event
-          </button>
-        </div>
-      </div>
-    </header>
-  )
-}
-
-type HeaderNavButtonProps = {
-  label: string
-  onClick: () => void
-}
-
-function HeaderNavButton({ label, onClick }: HeaderNavButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded border px-2.5 py-1.5 text-xs transition"
-      style={{
-        borderColor: "var(--sh-border)",
-        color: "var(--sh-text-secondary)",
-        background: "var(--sh-card)",
-      }}
-    >
-      {label}
-    </button>
-  )
-}
-
 type WeeklyCalendarGridProps = {
   weekDates: string[]
   events: CalendarEvent[]
+  dayOrderMap: DayOrderMap
+  eventElementMapRef: MutableRefObject<Map<string, HTMLDivElement>>
   activeDragEvent: CalendarEvent | null
   busyTaskIds: Set<string>
+  mobileDay: number
+  onMobileDayChange: (day: number) => void
   onDragStart: (event: DragStartEvent) => void
   onDragEnd: (event: DragEndEvent) => void
   onDragCancel: () => void
@@ -991,8 +904,12 @@ type WeeklyCalendarGridProps = {
 function WeeklyCalendarGrid({
   weekDates,
   events,
+  dayOrderMap,
+  eventElementMapRef,
   activeDragEvent,
   busyTaskIds,
+  mobileDay,
+  onMobileDayChange,
   onDragStart,
   onDragEnd,
   onDragCancel,
@@ -1002,8 +919,31 @@ function WeeklyCalendarGrid({
   onToggleComplete,
 }: WeeklyCalendarGridProps) {
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
+
+  const collisionDetectionStrategy = useMemo<CollisionDetection>(() => {
+    return (args) => {
+      const pointerCollisions = pointerWithin(args)
+      if (pointerCollisions.length > 0) {
+        const itemCollisions = pointerCollisions.filter(
+          (entry) => !String(entry.id).startsWith("day-")
+        )
+        if (itemCollisions.length > 0) {
+          return itemCollisions
+        }
+        return pointerCollisions
+      }
+
+      const rectCollisions = rectIntersection(args)
+      if (rectCollisions.length > 0) {
+        return rectCollisions
+      }
+
+      return closestCenter(args)
+    }
+  }, [])
 
   const eventsByDay = useMemo(() => {
     const grouped: Record<number, CalendarEvent[]> = {
@@ -1021,19 +961,24 @@ function WeeklyCalendarGrid({
     }
 
     for (const day of Object.keys(grouped)) {
+      const order = dayOrderMap[Number(day)] ?? []
       grouped[Number(day)].sort((a, b) => {
-        if (a.startSlot !== b.startSlot) return a.startSlot - b.startSlot
+        const leftIndex = order.indexOf(a.id)
+        const rightIndex = order.indexOf(b.id)
+        if (leftIndex >= 0 && rightIndex >= 0 && leftIndex !== rightIndex) {
+          return leftIndex - rightIndex
+        }
         if (a.completed !== b.completed) return Number(a.completed) - Number(b.completed)
-        return a.priority - b.priority
+        return a.title.localeCompare(b.title)
       })
     }
 
     return grouped
-  }, [events])
+  }, [dayOrderMap, events])
 
   return (
     <section
-      className="overflow-hidden rounded-2xl border"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border"
       style={{
         borderColor: "var(--sh-border)",
         background: "var(--sh-card)",
@@ -1041,25 +986,16 @@ function WeeklyCalendarGrid({
       }}
     >
       <DndContext
+        collisionDetection={collisionDetectionStrategy}
         sensors={sensors}
         onDragStart={onDragStart}
         onDragCancel={onDragCancel}
         onDragEnd={onDragEnd}
       >
         <div
-          className="grid border-b"
-          style={{
-            borderColor: "var(--sh-border)",
-            gridTemplateColumns: "68px repeat(7, minmax(0, 1fr))",
-          }}
+            className="hidden border-b md:grid md:grid-cols-7"
+            style={{ borderColor: "var(--sh-border)" }}
         >
-          <div
-            className="border-r"
-            style={{
-              borderColor: "var(--sh-border)",
-              background: "color-mix(in srgb, var(--sh-card) 88%, var(--foreground) 12%)",
-            }}
-          />
           {DAY_LABELS.map((label, index) => (
             <div
               key={label}
@@ -1077,27 +1013,66 @@ function WeeklyCalendarGrid({
           ))}
         </div>
 
-        <div className="max-h-[72vh] overflow-y-auto">
-          <div
-            className="grid"
-            style={{ gridTemplateColumns: "68px repeat(7, minmax(0, 1fr))" }}
-          >
-            <TimeColumn />
-
-            {DAY_LABELS.map((_, day) => (
-              <DayColumn
-                key={day}
-                day={day}
-                events={eventsByDay[day]}
-                isLast={day === DAY_LABELS.length - 1}
-                busyTaskIds={busyTaskIds}
-                onQuickAdd={onQuickAdd}
-                onEditEvent={onEditEvent}
-                onDeleteEvent={onDeleteEvent}
-                onToggleComplete={onToggleComplete}
-              />
-            ))}
+        <div className="border-b p-2 md:hidden" style={{ borderColor: "var(--sh-border)" }}>
+          <div className="flex gap-1 overflow-x-auto pb-1">
+            {DAY_LABELS.map((label, index) => {
+              const isActive = index === mobileDay
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => onMobileDayChange(index)}
+                  className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                  style={
+                    isActive
+                      ? {
+                          color: "#fff",
+                          background: "var(--sh-primary)",
+                          borderColor: "transparent",
+                        }
+                      : {
+                          color: "var(--sh-text-secondary)",
+                          background: "var(--sh-card)",
+                          borderColor: "var(--sh-border)",
+                        }
+                  }
+                >
+                  {label} {formatDayDateLabel(weekDates[index])}
+                </button>
+              )
+            })}
           </div>
+        </div>
+
+        <div className="hidden min-h-0 flex-1 md:grid md:grid-cols-7">
+          {DAY_LABELS.map((_, day) => (
+            <DayColumn
+              key={day}
+              day={day}
+              events={eventsByDay[day]}
+              eventElementMapRef={eventElementMapRef}
+              isLast={day === DAY_LABELS.length - 1}
+              busyTaskIds={busyTaskIds}
+              onQuickAdd={onQuickAdd}
+              onEditEvent={onEditEvent}
+              onDeleteEvent={onDeleteEvent}
+              onToggleComplete={onToggleComplete}
+            />
+          ))}
+        </div>
+
+        <div className="min-h-0 flex-1 md:hidden">
+          <DayColumn
+            day={mobileDay}
+            events={eventsByDay[mobileDay]}
+            eventElementMapRef={eventElementMapRef}
+            isLast
+            busyTaskIds={busyTaskIds}
+            onQuickAdd={onQuickAdd}
+            onEditEvent={onEditEvent}
+            onDeleteEvent={onDeleteEvent}
+            onToggleComplete={onToggleComplete}
+          />
         </div>
 
         <DragOverlay>
@@ -1108,36 +1083,10 @@ function WeeklyCalendarGrid({
   )
 }
 
-function TimeColumn() {
-  return (
-    <div
-      className="border-r"
-      style={{
-        borderColor: "var(--sh-border)",
-        background: "color-mix(in srgb, var(--sh-card) 88%, var(--foreground) 12%)",
-      }}
-    >
-      {TIME_SLOTS.map((time) => (
-        <div
-          key={time}
-          className="border-b pr-2 pt-1 text-right text-[11px]"
-          style={{
-            height: ROW_HEIGHT,
-            color: "var(--sh-text-muted)",
-            borderColor: "var(--sh-border)",
-          }}
-        >
-          {time}
-        </div>
-      ))}
-      <div className="h-10 border-b" style={{ borderColor: "var(--sh-border)" }} />
-    </div>
-  )
-}
-
 type DayColumnProps = {
   day: number
   events: CalendarEvent[]
+  eventElementMapRef: MutableRefObject<Map<string, HTMLDivElement>>
   isLast: boolean
   busyTaskIds: Set<string>
   onQuickAdd: (day: number) => void
@@ -1149,6 +1098,7 @@ type DayColumnProps = {
 function DayColumn({
   day,
   events,
+  eventElementMapRef,
   isLast,
   busyTaskIds,
   onQuickAdd,
@@ -1156,23 +1106,57 @@ function DayColumn({
   onDeleteEvent,
   onToggleComplete,
 }: DayColumnProps) {
-  return (
-    <div className={isLast ? "" : "border-r"} style={{ borderColor: "var(--sh-border)" }}>
-      <div className="relative" style={{ height: TIME_SLOTS.length * ROW_HEIGHT }}>
-        {TIME_SLOTS.map((_, slotIndex) => (
-          <DroppableSlot key={`slot-${day}-${slotIndex}`} day={day} slot={slotIndex} />
-        ))}
+  const { setNodeRef, isOver } = useDroppable({ id: `day-${day}` })
 
-        {events.map((event) => (
-          <EventCard
-            key={event.id}
-            event={event}
-            busy={busyTaskIds.has(event.id)}
-            onEdit={() => onEditEvent(event.id)}
-            onDelete={() => onDeleteEvent(event.id)}
-            onToggleComplete={() => onToggleComplete(event.id, !event.completed)}
-          />
-        ))}
+  return (
+    <div
+      ref={setNodeRef}
+      className={isLast ? "flex h-full min-h-0 flex-col" : "flex h-full min-h-0 flex-col border-r"}
+      style={{
+        borderColor: "var(--sh-border)",
+        background: isOver ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent",
+      }}
+    >
+      <div
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2"
+        style={{
+          height: "100%",
+        }}
+      >
+        {events.length === 0 ? (
+          <div
+            className="flex h-full min-h-[180px] items-center justify-center rounded-lg border border-dashed text-xs"
+            style={{
+              borderColor: isOver ? "var(--sh-primary)" : "var(--sh-border)",
+              color: isOver ? "var(--sh-text-primary)" : "var(--sh-text-muted)",
+            }}
+          >
+            {isOver ? "Release to move task" : "No tasks for this day"}
+          </div>
+        ) : (
+          <SortableContext
+            items={events.map((event) => event.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {events.map((event) => (
+              <EventCard
+                key={event.id}
+                event={event}
+                registerElement={(element) => {
+                  if (element) {
+                    eventElementMapRef.current.set(event.id, element)
+                  } else {
+                    eventElementMapRef.current.delete(event.id)
+                  }
+                }}
+                busy={busyTaskIds.has(event.id)}
+                onEdit={() => onEditEvent(event.id)}
+                onDelete={() => onDeleteEvent(event.id)}
+                onToggleComplete={() => onToggleComplete(event.id, !event.completed)}
+              />
+            ))}
+          </SortableContext>
+        )}
       </div>
 
       <div className="flex h-10 items-center justify-center border-t" style={{ borderColor: "var(--sh-border)" }}>
@@ -1182,35 +1166,17 @@ function DayColumn({
   )
 }
 
-function DroppableSlot({ day, slot }: { day: number; slot: number }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `slot-${day}-${slot}` })
-
-  return (
-    <div
-      ref={setNodeRef}
-      className="border-b transition-colors"
-      style={{
-        height: ROW_HEIGHT,
-        borderColor: "var(--sh-border)",
-        background: isOver
-          ? "color-mix(in srgb, var(--accent) 22%, transparent)"
-          : "transparent",
-      }}
-      aria-label={`${DAY_LABELS[day]} ${TIME_SLOTS[slot]} slot`}
-    />
-  )
-}
-
 type EventCardProps = {
   event: CalendarEvent
+  registerElement: (element: HTMLDivElement | null) => void
   busy: boolean
   onEdit: () => void
   onDelete: () => void
   onToggleComplete: () => void
 }
 
-function EventCard({ event, busy, onEdit, onDelete, onToggleComplete }: EventCardProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+function EventCard({ event, registerElement, busy, onEdit, onDelete, onToggleComplete }: EventCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: event.id,
   })
 
@@ -1219,80 +1185,121 @@ function EventCard({ event, busy, onEdit, onDelete, onToggleComplete }: EventCar
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(element) => {
+        setNodeRef(element)
+        registerElement(element)
+      }}
       style={{
-        top: event.startSlot * ROW_HEIGHT,
-        height: event.durationSlots * ROW_HEIGHT,
         transform: dragTransform,
-        transition: "transform 180ms ease-out, box-shadow 180ms ease-out",
+        transition: transition ?? "transform 180ms ease-out, box-shadow 180ms ease-out",
         zIndex: isDragging ? 50 : 20,
       }}
-      className="absolute left-1 right-1"
+      className="relative"
     >
       <div
         {...attributes}
         {...listeners}
-        className={`h-full cursor-grab rounded-md border p-2 text-xs shadow-sm transition duration-200 ${
+        className={`cursor-grab rounded-lg border p-1.5 text-xs shadow-sm transition duration-200 ${
           isDragging
             ? "scale-[1.02] cursor-grabbing shadow-xl"
             : "hover:-translate-y-0.5 hover:shadow-md"
         }`}
+        onPointerDownCapture={(event) => {
+          const target = event.target as HTMLElement
+          if (target.closest("button, input, select, textarea, a, [data-no-drag='true']")) {
+            event.stopPropagation()
+          }
+        }}
         style={palette.containerStyle}
       >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={(clickEvent) => {
-                  clickEvent.stopPropagation()
-                  onToggleComplete()
-                }}
-                disabled={busy}
-                className="mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded border text-[10px] disabled:opacity-50"
-                style={{
-                  borderColor: event.completed ? "#34D399" : "var(--sh-border)",
-                  background: event.completed ? "rgba(52, 211, 153, 0.18)" : "transparent",
-                  color: event.completed ? "#34D399" : "var(--sh-text-muted)",
-                }}
-                aria-label={event.completed ? "Mark as pending" : "Mark as completed"}
-              >
-                {event.completed ? "\u2713" : ""}
-              </button>
+        <div className="flex items-start gap-1.5">
+          <div className="min-w-0 flex flex-1 items-start gap-1">
+            <button
+              type="button"
+              onClick={(clickEvent) => {
+                clickEvent.stopPropagation()
+                onToggleComplete()
+              }}
+              onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
+              disabled={busy}
+              className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] disabled:opacity-50"
+              style={{
+                borderColor: event.completed ? "#34D399" : "var(--sh-border)",
+                background: event.completed ? "rgba(52, 211, 153, 0.18)" : "transparent",
+                color: event.completed ? "#34D399" : "var(--sh-text-muted)",
+              }}
+              aria-label={event.completed ? "Mark as pending" : "Mark as completed"}
+            >
+              {event.completed ? "\u2713" : ""}
+            </button>
 
+            <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-1">
               <div className="min-w-0">
-                <div
-                  className="truncate font-semibold"
+                <p
+                  className="text-[12.5px] font-semibold leading-snug break-words"
+                  title={event.title}
                   style={{
                     color: "var(--sh-text-primary)",
                     textDecoration: event.completed ? "line-through" : "none",
-                    opacity: event.completed ? 0.7 : 1,
+                    opacity: event.completed ? 0.72 : 1,
                   }}
                 >
                   {event.title}
-                </div>
-                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
+                </p>
+
+                <div className="mt-0.5 flex items-center gap-1.5 text-[10.5px]">
                   <span
-                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium"
+                    className="shrink-0 rounded px-1.5 py-px font-medium"
                     style={event.completed ? COMPLETED_BADGE_STYLE : PENDING_BADGE_STYLE}
                   >
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: palette.accent }} />
                     {event.completed ? "Completed" : "Pending"}
                   </span>
-                  <span style={{ color: "var(--sh-text-muted)" }}>{event.subjectName}</span>
-                  <span style={{ color: "var(--sh-text-muted)" }}>
-                    {event.durationSlots}h
+                  <span className="shrink-0" style={{ color: "var(--sh-text-muted)" }}>
+                    {formatDuration(event.durationMinutes)}
                   </span>
-                  {event.isPlanGenerated && (
-                    <span style={{ color: "var(--sh-text-muted)" }}>Planner</span>
-                  )}
                 </div>
               </div>
-            </div>
-          </div>
 
-          <div onClick={(clickEvent) => clickEvent.stopPropagation()}>
-            <EventMenu onEdit={onEdit} onDelete={onDelete} />
+              <div className="flex shrink-0 flex-col items-center gap-0.5 pt-0.5" onClick={(clickEvent) => clickEvent.stopPropagation()}>
+                <button
+                  type="button"
+                  className="task-icon-edit-button"
+                  onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
+                  onClick={(clickEvent) => {
+                    clickEvent.stopPropagation()
+                    onEdit()
+                  }}
+                  aria-label="Edit task"
+                  title="Edit"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.5 5.5l3 3" />
+                  </svg>
+                  <span className="sr-only">Edit</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="task-icon-delete-button"
+                  onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
+                  onClick={(clickEvent) => {
+                    clickEvent.stopPropagation()
+                    onDelete()
+                  }}
+                  aria-label="Delete task"
+                  title="Delete"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 6V4.8A1.8 1.8 0 0 1 9.8 3h4.4A1.8 1.8 0 0 1 16 4.8V6" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 6l-1 13a2 2 0 0 1-2 1.8H8a2 2 0 0 1-2-1.8L5 6" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 10v7M14 10v7" />
+                  </svg>
+                  <span className="sr-only">Delete</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1324,7 +1331,6 @@ function DragPreviewCard({ event }: { event: CalendarEvent }) {
             {event.completed ? "Completed" : "Pending"}
           </span>
         </div>
-        <span style={{ color: "var(--sh-text-muted)" }}>...</span>
       </div>
     </div>
   )
@@ -1339,10 +1345,10 @@ function QuickAddButton({ onClick }: QuickAddButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border shadow transition hover:shadow-md"
+      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition"
       style={{
-        background: "var(--sh-card)",
-        borderColor: "var(--sh-border)",
+        background: "color-mix(in srgb, var(--sh-card) 70%, var(--sh-primary) 30%)",
+        border: "1px solid color-mix(in srgb, var(--sh-primary) 24%, var(--sh-border) 76%)",
         color: "var(--sh-text-secondary)",
       }}
       aria-label="Quick add event"
@@ -1358,78 +1364,6 @@ function QuickAddButton({ onClick }: QuickAddButtonProps) {
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
       </svg>
     </button>
-  )
-}
-
-type EventMenuProps = {
-  onEdit: () => void
-  onDelete: () => void
-}
-
-function EventMenu({ onEdit, onDelete }: EventMenuProps) {
-  const [open, setOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!open) return
-
-    const closeOnOutsideClick = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) {
-        setOpen(false)
-      }
-    }
-
-    document.addEventListener("mousedown", closeOnOutsideClick)
-    return () => {
-      document.removeEventListener("mousedown", closeOnOutsideClick)
-    }
-  }, [open])
-
-  return (
-    <div ref={menuRef} className="relative" onPointerDown={(event) => event.stopPropagation()}>
-      <button
-        type="button"
-        className="rounded p-1 transition"
-        style={{ color: "var(--sh-text-muted)" }}
-        onClick={() => setOpen((previous) => !previous)}
-        aria-label="Event menu"
-      >
-        ...
-      </button>
-
-      {open && (
-        <div
-          className="absolute right-0 top-7 z-50 min-w-[110px] rounded-md border p-1"
-          style={{
-            background: "var(--sh-card)",
-            borderColor: "var(--sh-border)",
-            boxShadow: "var(--sh-shadow)",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false)
-              onEdit()
-            }}
-            className="w-full rounded px-3 py-1.5 text-left text-xs transition"
-            style={{ color: "var(--sh-text-secondary)" }}
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false)
-              onDelete()
-            }}
-            className="w-full rounded px-3 py-1.5 text-left text-xs text-red-500 transition"
-          >
-            Delete
-          </button>
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -1452,14 +1386,13 @@ function AddEventModal({
   onClose,
   onSubmit,
 }: AddEventModalProps) {
-  const firstSubject = subjectOptions[0]?.id ?? OTHERS_SUBJECT_ID
+  const firstSubject = subjectOptions[0]?.id ?? STANDALONE_SUBJECT_ID
 
   const [title, setTitle] = useState(() => initialEvent?.title ?? "")
   const [subjectId, setSubjectId] = useState<string>(() => initialEvent?.subjectId ?? firstSubject)
   const [day, setDay] = useState<number>(() => initialEvent?.day ?? presetDay)
-  const [startSlot, setStartSlot] = useState<number>(() => initialEvent?.startSlot ?? 0)
-  const [durationSlots, setDurationSlots] = useState<number>(
-    () => initialEvent?.durationSlots ?? 1
+  const [durationMinutes, setDurationMinutes] = useState<number>(
+    () => initialEvent?.durationMinutes ?? 60
   )
 
   useEffect(() => {
@@ -1476,7 +1409,11 @@ function AddEventModal({
     }
   }, [isSaving, onClose])
 
-  const maxDuration = Math.max(1, TIME_SLOTS.length - startSlot)
+  const durationOptions = useMemo(() => {
+    const values = new Set<number>(DURATION_OPTIONS)
+    values.add(Math.max(15, durationMinutes))
+    return [...values].sort((a, b) => a - b)
+  }, [durationMinutes])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1489,8 +1426,7 @@ function AddEventModal({
         title: trimmedTitle,
         subjectId,
         day,
-        startSlot,
-        durationSlots,
+        durationMinutes,
       },
       initialEvent?.id
     )
@@ -1570,46 +1506,21 @@ function AddEventModal({
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Start time">
-              <select
-                value={startSlot}
-                onChange={(event) => {
-                  const nextStartSlot = Number(event.target.value)
-                  setStartSlot(nextStartSlot)
-                  const nextMaxDuration = Math.max(1, TIME_SLOTS.length - nextStartSlot)
-                  setDurationSlots((previous) => Math.min(previous, nextMaxDuration))
-                }}
-                className={FIELD_INPUT_CLASS}
-                style={FIELD_INPUT_STYLE}
-                disabled={isSaving}
-              >
-                {TIME_SLOTS.map((time, index) => (
-                  <option key={time} value={index}>
-                    {time}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Duration">
-              <select
-                value={durationSlots}
-                onChange={(event) => setDurationSlots(Number(event.target.value))}
-                className={FIELD_INPUT_CLASS}
-                style={FIELD_INPUT_STYLE}
-                disabled={isSaving}
-              >
-                {Array.from({ length: maxDuration }, (_, index) => index + 1).map(
-                  (value) => (
-                    <option key={value} value={value}>
-                      {value} hour{value > 1 ? "s" : ""}
-                    </option>
-                  )
-                )}
-              </select>
-            </Field>
-          </div>
+          <Field label="Duration">
+            <select
+              value={durationMinutes}
+              onChange={(event) => setDurationMinutes(Number(event.target.value))}
+              className={FIELD_INPUT_CLASS}
+              style={FIELD_INPUT_STYLE}
+              disabled={isSaving}
+            >
+              {durationOptions.map((value) => (
+                <option key={value} value={value}>
+                  {formatDuration(value)}
+                </option>
+              ))}
+            </select>
+          </Field>
 
           <button
             type="submit"

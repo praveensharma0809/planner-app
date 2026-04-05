@@ -2,18 +2,14 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { isReservedSubjectName } from "@/lib/constants"
+import { normalizeOptionalDate } from "@/lib/planner/contracts"
 
 interface UpdateSubjectInput {
   id: string
   name: string
   sort_order?: number
   deadline?: string | null
-}
-
-function normalizeOptionalDate(value: string | null | undefined): string | null {
-  if (typeof value !== "string") return null
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : null
 }
 
 export async function updateSubject(input: UpdateSubjectInput) {
@@ -26,8 +22,14 @@ export async function updateSubject(input: UpdateSubjectInput) {
     return { status: "UNAUTHORIZED" as const }
   }
 
-  if (!input.name.trim()) {
+  const subjectName = input.name.trim()
+
+  if (!subjectName) {
     return { status: "ERROR" as const, message: "Subject name is required." }
+  }
+
+  if (isReservedSubjectName(subjectName)) {
+    return { status: "ERROR" as const, message: "'Others' is reserved for standalone tasks." }
   }
 
   const deadline = normalizeOptionalDate(input.deadline)
@@ -35,7 +37,7 @@ export async function updateSubject(input: UpdateSubjectInput) {
   const { error } = await supabase
     .from("subjects")
     .update({
-      name: input.name.trim(),
+      name: subjectName,
       sort_order: input.sort_order,
       deadline,
     })

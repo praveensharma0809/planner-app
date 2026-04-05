@@ -3,6 +3,11 @@
 import { revalidatePath } from "next/cache"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isISODate } from "@/lib/planner/contracts"
+import {
+  STANDALONE_SUBJECT_ID,
+  assertValidSubjectAssignment,
+  isReservedSubjectName,
+} from "@/lib/constants"
 
 type UpsertTaskInput = {
   taskId?: string
@@ -22,63 +27,19 @@ export type UpsertScheduleTaskResponse =
 async function resolveSubjectId(
   userId: string,
   requestedSubjectId: string
-): Promise<{ ok: true; subjectId: string } | { ok: false; message: string }> {
+): Promise<
+  | { ok: true; subjectId: string | null; taskType: "subject" | "standalone" }
+  | { ok: false; message: string }
+> {
   const supabase = await createServerSupabaseClient()
 
-  if (requestedSubjectId === "others") {
-    const { data: existingRows, error: existingError } = await supabase
-      .from("subjects")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("archived", false)
-      .ilike("name", "others")
-      .order("sort_order", { ascending: true })
-      .limit(1)
-
-    if (existingError) {
-      return { ok: false, message: existingError.message }
-    }
-
-    const existing = existingRows?.[0]
-    if (existing?.id) {
-      return { ok: true, subjectId: existing.id }
-    }
-
-    const { data: lastSubject, error: lastSubjectError } = await supabase
-      .from("subjects")
-      .select("sort_order")
-      .eq("user_id", userId)
-      .order("sort_order", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (lastSubjectError) {
-      return { ok: false, message: lastSubjectError.message }
-    }
-
-    const nextSortOrder = (lastSubject?.sort_order ?? -1) + 1
-
-    const { data: createdSubject, error: createError } = await supabase
-      .from("subjects")
-      .insert({
-        user_id: userId,
-        name: "Others",
-        sort_order: nextSortOrder,
-        archived: false,
-      })
-      .select("id")
-      .single()
-
-    if (createError || !createdSubject) {
-      return { ok: false, message: createError?.message ?? "Could not create Others subject." }
-    }
-
-    return { ok: true, subjectId: createdSubject.id }
+  if (requestedSubjectId === STANDALONE_SUBJECT_ID) {
+    return { ok: true, subjectId: null, taskType: "standalone" }
   }
 
   const { data: subject, error: subjectError } = await supabase
     .from("subjects")
-    .select("id")
+    .select("id, name")
     .eq("id", requestedSubjectId)
     .eq("user_id", userId)
     .eq("archived", false)
@@ -92,7 +53,13 @@ async function resolveSubjectId(
     return { ok: false, message: "Subject not found." }
   }
 
-  return { ok: true, subjectId: subject.id }
+  assertValidSubjectAssignment(subject.name)
+
+  if (isReservedSubjectName(subject.name)) {
+    return { ok: false, message: "'Others' is reserved for standalone tasks." }
+  }
+
+  return { ok: true, subjectId: subject.id, taskType: "subject" }
 }
 
 export async function upsertScheduleTask(
@@ -126,14 +93,48 @@ export async function upsertScheduleTask(
     return { status: "ERROR", message: resolvedSubject.message }
   }
 
-  const payload = {
+  const payload: {
+    title: string
+    task_type: "subject" | "standalone"
+    subject_id: string | null
+    scheduled_date: string
+    duration_minutes: number
+    topic_id?: null
+  } = {
     title,
+    task_type: resolvedSubject.taskType,
     subject_id: resolvedSubject.subjectId,
     scheduled_date: input.scheduledDate,
     duration_minutes: Math.round(input.durationMinutes),
   }
 
+  if (resolvedSubject.taskType === "standalone") {
+    payload.topic_id = null
+  }
+
   if (input.taskId) {
+    const { data: existingTask, error: existingTaskError } = await supabase
+      .from("tasks")
+      .select("id, task_source")
+      .eq("id", input.taskId)
+      .eq("user_id", user.id)
+      .maybeSingle()
+
+    if (existingTaskError) {
+      return { status: "ERROR", message: existingTaskError.message }
+    }
+
+    if (!existingTask) {
+      return { status: "NOT_FOUND" }
+    }
+
+    if (existingTask.task_source === "plan" && resolvedSubject.taskType === "standalone") {
+      return {
+        status: "INVALID_INPUT",
+        message: "Planner-generated tasks must stay linked to a subject.",
+      }
+    }
+
     const { data: updated, error: updateError } = await supabase
       .from("tasks")
       .update(payload)
@@ -162,11 +163,12 @@ export async function upsertScheduleTask(
     .insert({
       user_id: user.id,
       title,
+      task_type: resolvedSubject.taskType,
       subject_id: resolvedSubject.subjectId,
+      topic_id: null,
       scheduled_date: input.scheduledDate,
       duration_minutes: Math.round(input.durationMinutes),
       session_type: "core",
-      priority: 3,
       completed: false,
       task_source: "manual",
       plan_snapshot_id: null,

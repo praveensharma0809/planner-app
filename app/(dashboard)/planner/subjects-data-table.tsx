@@ -1,7 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
-import { useRouter } from "next/navigation"
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
 import {
   DndContext,
   closestCenter,
@@ -16,19 +15,22 @@ import {
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { completeTask } from "@/app/actions/plan/completeTask"
-import { uncompleteTask } from "@/app/actions/plan/uncompleteTask"
 import {
   getPlanConfig,
+  getIntakeImportMode,
   getStructure,
   getTopicParams,
+  saveIntakeImportMode,
   savePlanConfig,
   saveTopicParams,
+  type IntakeImportMode,
 } from "@/app/actions/planner/setup"
 import {
   addChapter,
   archiveChapter,
   deleteChapter,
+  getArchivedChapters,
+  type ArchivedChapterListItem,
   unarchiveChapter,
   updateChapter,
 } from "@/app/actions/subjects/chapters"
@@ -42,10 +44,7 @@ import {
   updateSubjectTaskDuration,
   updateSubjectTaskTitle,
 } from "@/app/actions/subjects/tasks"
-import { addOffDay } from "@/app/actions/offdays/addOffDay"
-import { deleteOffDay } from "@/app/actions/offdays/deleteOffDay"
-import { getOffDays } from "@/app/actions/offdays/getOffDays"
-import { toggleArchiveSubject } from "@/app/actions/subjects/toggleArchiveSubject"
+import { setSubjectTaskCompletion } from "@/app/actions/subjects/setSubjectTaskCompletion"
 import { deleteSubject } from "@/app/actions/subjects/deleteSubject"
 import { reorderSubjects as reorderSubjectsAction } from "@/app/actions/subjects/reorderSubjects"
 import { reorderChapters as reorderChaptersAction } from "@/app/actions/subjects/reorderChapters"
@@ -98,14 +97,7 @@ interface IntakeConstraintsDraft {
   day_of_week_capacity: (number | null)[]
   custom_day_capacity: Record<string, number>
   flexibility_minutes: number
-  max_daily_minutes: number
   max_active_subjects: number
-}
-
-interface OffDayItem {
-  id: string
-  date: string
-  reason: string | null
 }
 
 type DependencyScope = "subject" | "chapter"
@@ -131,11 +123,13 @@ interface TopicParamDraft {
 interface Props {
   initialSubjects: SubjectNavItem[]
   initialTasksByChapter: Record<string, TopicTaskItem[]>
+  initialImportMode: IntakeImportMode
   embedded?: boolean
   showPageHeader?: boolean
   pageHeaderTitle?: string
   pageHeaderEyebrow?: string
   pageHeaderSubtitle?: string
+  onSelectedTaskIdsChange?: (taskIds: string[]) => void
 }
 
 interface ColumnItem {
@@ -188,7 +182,6 @@ function defaultIntakeConstraints(): IntakeConstraintsDraft {
     day_of_week_capacity: [null, null, null, null, null, null, null],
     custom_day_capacity: {},
     flexibility_minutes: 0,
-    max_daily_minutes: 480,
     max_active_subjects: 0,
   }
 }
@@ -212,6 +205,23 @@ function normalizeDayOfWeekCapacity(values: (number | null)[] | null | undefined
   })
 
   return next
+}
+
+function isLikelyNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+
+  const message = `${error.name} ${error.message}`.toLowerCase()
+  return (
+    message.includes("network")
+    || message.includes("failed to fetch")
+    || message.includes("fetch failed")
+    || message.includes("load failed")
+    || message.includes("connection")
+    || message.includes("timeout")
+    || message.includes("socket")
+    || message.includes("econn")
+    || message.includes("enotfound")
+  )
 }
 
 function toMonthCursor(input: Date): string {
@@ -364,13 +374,14 @@ function compareTasksNaturally(left: TopicTaskItem, right: TopicTaskItem): numbe
 export function SubjectsDataTable({
   initialSubjects,
   initialTasksByChapter,
+  initialImportMode,
   embedded = false,
   showPageHeader = true,
   pageHeaderTitle = "Subjects",
   pageHeaderEyebrow,
   pageHeaderSubtitle,
+  onSelectedTaskIdsChange,
 }: Props) {
-  const router = useRouter()
   const { addToast } = useToast()
   const { collapsed } = useSidebar()
   const sidebarExpanded = !collapsed
@@ -378,8 +389,6 @@ export function SubjectsDataTable({
   const [tasksByChapter, setTasksByChapter] =
     useState<Record<string, TopicTaskItem[]>>(initialTasksByChapter)
   const [showArchived, setShowArchived] = useState(false)
-  const [pendingSubjectId, setPendingSubjectId] = useState<string | null>(null)
-  const [pendingChapterId, setPendingChapterId] = useState<string | null>(null)
   const [pendingTaskIds, setPendingTaskIds] = useState<Set<string>>(new Set())
 
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -388,6 +397,7 @@ export function SubjectsDataTable({
 
   const [chapterDialog, setChapterDialog] = useState<NameDialogState>(CLOSED_DIALOG_STATE)
   const [chapterDialogSaving, setChapterDialogSaving] = useState(false)
+  const [chapterArchiveSaving, setChapterArchiveSaving] = useState(false)
 
   const [taskDialog, setTaskDialog] = useState<NameDialogState>(CLOSED_DIALOG_STATE)
   const [taskDialogSaving, setTaskDialogSaving] = useState(false)
@@ -407,9 +417,14 @@ export function SubjectsDataTable({
   const [bulkSeparator, setBulkSeparator] = useState("-")
   const [bulkPlacement, setBulkPlacement] = useState<NumberPlacement>("suffix")
 
-  const [manageMode, setManageMode] = useState(false)
+  const [isManageOpen, setIsManageOpen] = useState(false)
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
   const [deletingSelectedTasks, setDeletingSelectedTasks] = useState(false)
+
+  const [archivedChapterModalOpen, setArchivedChapterModalOpen] = useState(false)
+  const [archivedChapterRows, setArchivedChapterRows] = useState<ArchivedChapterListItem[]>([])
+  const [archivedChapterLoading, setArchivedChapterLoading] = useState(false)
+  const [archivedChapterPendingId, setArchivedChapterPendingId] = useState<string | null>(null)
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null)
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
@@ -421,6 +436,7 @@ export function SubjectsDataTable({
   const [importingAll, setImportingAll] = useState(false)
   const [importingUndone, setImportingUndone] = useState(false)
   const [resettingIntake, setResettingIntake] = useState(false)
+  const [intakeImportMode, setIntakeImportMode] = useState<IntakeImportMode>(initialImportMode)
 
   const [dependencyModalOpen, setDependencyModalOpen] = useState(false)
   const [dependencyScope, setDependencyScope] = useState<DependencyScope>("chapter")
@@ -443,18 +459,34 @@ export function SubjectsDataTable({
   const [constraintsLoading, setConstraintsLoading] = useState(true)
   const [constraintsSaving, setConstraintsSaving] = useState(false)
 
-  const [offDays, setOffDays] = useState<OffDayItem[]>([])
-  const [offDaysLoading, setOffDaysLoading] = useState(true)
-  const [offDayDateInput, setOffDayDateInput] = useState("")
-  const [offDayReasonInput, setOffDayReasonInput] = useState("")
-  const [offDaySaving, setOffDaySaving] = useState(false)
-
-  const [customCapacityDateInput, setCustomCapacityDateInput] = useState("")
   const [customCapacityMinutesInput, setCustomCapacityMinutesInput] = useState("")
   const [calendarMonthCursor, setCalendarMonthCursor] = useState(() => toMonthCursor(new Date()))
-  const [step2CalendarSelectionMode, setStep2CalendarSelectionMode] = useState<"custom" | "offday">("custom")
   const [selectedCustomDates, setSelectedCustomDates] = useState<Set<string>>(new Set())
-  const [selectedOffDayDates, setSelectedOffDayDates] = useState<Set<string>>(new Set())
+
+  const mutationLockRef = useRef(false)
+  const [isMutating, setIsMutating] = useState(false)
+
+  const beginMutation = useCallback(() => {
+    if (mutationLockRef.current) return false
+    mutationLockRef.current = true
+    setIsMutating(true)
+    return true
+  }, [])
+
+  const endMutation = useCallback(() => {
+    mutationLockRef.current = false
+    setIsMutating(false)
+  }, [])
+
+  const showMutationError = useCallback((error: unknown, fallbackMessage: string) => {
+    console.error(error)
+    addToast(
+      isLikelyNetworkError(error)
+        ? "Network issue. Check connection."
+        : fallbackMessage,
+      "error"
+    )
+  }, [addToast])
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -479,10 +511,10 @@ export function SubjectsDataTable({
     rest_after_days?: number
     max_sessions_per_day?: number
     study_frequency?: string
-  }>) => {
+  }>, sourceTasksByChapter: Record<string, TopicTaskItem[]> = tasksByChapter) => {
     const map = new Map<string, TopicParamDraft>()
     for (const row of rows) {
-      const chapterTaskDurations = (tasksByChapter[row.topic_id] ?? []).map((task) =>
+      const chapterTaskDurations = (sourceTasksByChapter[row.topic_id] ?? []).map((task) =>
         Math.max(0, task.durationMinutes)
       )
       map.set(row.topic_id, {
@@ -504,75 +536,81 @@ export function SubjectsDataTable({
   }, [tasksByChapter])
 
   const loadTopicParamsSnapshot = useCallback(async (showErrorToast = false) => {
-    const paramsRes = await getTopicParams()
-    if (paramsRes.status !== "SUCCESS") {
+    try {
+      const paramsRes = await getTopicParams()
+      if (paramsRes.status !== "SUCCESS") {
+        if (showErrorToast) {
+          addToast("Failed to load chapter dependency data.", "error")
+        }
+        return new Map<string, TopicParamDraft>()
+      }
+
+      const map = mapTopicParamsToDraftMap(paramsRes.params)
+      setTopicParamsByTopic(map)
+      setSubjects((previous) =>
+        previous.map((subject) => ({
+          ...subject,
+          chapters: subject.chapters.map((chapter) => {
+            const param = map.get(chapter.id)
+            if (!param) return chapter
+            return {
+              ...chapter,
+              earliestStart: param.earliest_start ?? null,
+              deadline: param.deadline ?? null,
+              restAfterDays: Math.max(0, param.rest_after_days ?? 0),
+            }
+          }),
+        }))
+      )
+      return map
+    } catch (error) {
       if (showErrorToast) {
-        addToast("Failed to load chapter dependency data.", "error")
+        showMutationError(error, "Failed to load chapter dependency data.")
+      } else {
+        console.error(error)
       }
       return new Map<string, TopicParamDraft>()
     }
-
-    const map = mapTopicParamsToDraftMap(paramsRes.params)
-    setTopicParamsByTopic(map)
-    setSubjects((previous) =>
-      previous.map((subject) => ({
-        ...subject,
-        chapters: subject.chapters.map((chapter) => {
-          const param = map.get(chapter.id)
-          if (!param) return chapter
-          return {
-            ...chapter,
-            earliestStart: param.earliest_start ?? null,
-            deadline: param.deadline ?? null,
-            restAfterDays: Math.max(0, param.rest_after_days ?? 0),
-          }
-        }),
-      }))
-    )
-    return map
-  }, [addToast, mapTopicParamsToDraftMap])
+  }, [addToast, mapTopicParamsToDraftMap, showMutationError])
 
   const loadStep2Snapshot = useCallback(async (showErrorToast = false) => {
     setConstraintsLoading(true)
-    setOffDaysLoading(true)
 
-    const [configRes, offDaysRes] = await Promise.all([
-      getPlanConfig(),
-      getOffDays(),
-    ])
+    try {
+      const configRes = await getPlanConfig()
 
-    if (configRes.status === "SUCCESS" && configRes.config) {
-      const cfg = configRes.config
-      setConstraintsDraft({
-        study_start_date: cfg.study_start_date,
-        exam_date: cfg.exam_date,
-        weekday_capacity_minutes: cfg.weekday_capacity_minutes,
-        weekend_capacity_minutes: cfg.weekend_capacity_minutes,
-        day_of_week_capacity: normalizeDayOfWeekCapacity(cfg.day_of_week_capacity),
-        custom_day_capacity: cfg.custom_day_capacity ?? {},
-        flexibility_minutes: Math.max(0, cfg.flexibility_minutes ?? 0),
-        max_daily_minutes: Math.max(30, cfg.max_daily_minutes ?? 480),
-        max_active_subjects: Math.max(0, cfg.max_active_subjects ?? 0),
-      })
-    } else if (showErrorToast) {
-      addToast("Could not load saved constraints.", "error")
+      if (configRes.status === "SUCCESS" && configRes.config) {
+        const cfg = configRes.config
+        setConstraintsDraft({
+          study_start_date: cfg.study_start_date,
+          exam_date: cfg.exam_date,
+          weekday_capacity_minutes: cfg.weekday_capacity_minutes,
+          weekend_capacity_minutes: cfg.weekend_capacity_minutes,
+          day_of_week_capacity: normalizeDayOfWeekCapacity(cfg.day_of_week_capacity),
+          custom_day_capacity: cfg.custom_day_capacity ?? {},
+          flexibility_minutes: Math.max(0, cfg.flexibility_minutes ?? 0),
+          max_active_subjects: Math.max(0, cfg.max_active_subjects ?? 0),
+        })
+      } else if (configRes.status === "ERROR") {
+        if (showErrorToast) {
+          addToast(configRes.message, "error")
+        } else {
+          console.error(configRes.message)
+        }
+      } else if (showErrorToast) {
+        addToast("Step-2 config missing. Save Step-2 constraints first.", "error")
+      }
+
+    } catch (error) {
+      if (showErrorToast) {
+        showMutationError(error, "Could not load saved planner data.")
+      } else {
+        console.error(error)
+      }
+    } finally {
+      setConstraintsLoading(false)
     }
-
-    if (offDaysRes.status === "SUCCESS") {
-      setOffDays(
-        offDaysRes.offDays.map((offDay) => ({
-          id: offDay.id,
-          date: offDay.date,
-          reason: offDay.reason,
-        }))
-      )
-    } else if (showErrorToast) {
-      addToast("Could not load off-days.", "error")
-    }
-
-    setConstraintsLoading(false)
-    setOffDaysLoading(false)
-  }, [addToast])
+  }, [addToast, showMutationError])
 
   useEffect(() => {
     void loadStep2Snapshot(false)
@@ -620,6 +658,47 @@ export function SubjectsDataTable({
   const selectedChapter =
     selectedSubject?.chapters.find((chapter) => chapter.id === selectedChapterId) ?? null
 
+  const resetManageModeState = useCallback(() => {
+    setSelectedTaskIds(new Set())
+    setBulkDurationInput("60")
+  }, [])
+
+  const closeManageMode = useCallback(() => {
+    setIsManageOpen(false)
+    resetManageModeState()
+  }, [resetManageModeState])
+
+  const resetTransientIntakeState = useCallback(() => {
+    closeManageMode()
+    setShowArchived(false)
+    setSubjects([])
+    setTasksByChapter({})
+    setSelectedSubjectId(null)
+    setSelectedChapterId(null)
+    setManualOrderChapterIds(new Set())
+    setReorderingTaskIds([])
+    setReorderingSubjects(false)
+    setReorderingChapters(false)
+    setPendingTaskIds(new Set())
+    setTaskDurationDrafts({})
+    setTaskDurationSavingIds(new Set())
+    setTaskDialog(CLOSED_DIALOG_STATE)
+    setChapterDialog(CLOSED_DIALOG_STATE)
+    setDrawerOpen(false)
+    setTaskComposerOpen(false)
+    setDependencyModalOpen(false)
+    setDependencySelectedIds(new Set())
+    setDependencySearch("")
+    setDependencyTargetChapterId("")
+    setArchivedChapterRows([])
+    setArchivedChapterModalOpen(false)
+    setArchivedChapterPendingId(null)
+    setSelectedCustomDates(new Set())
+    setCustomCapacityMinutesInput("")
+    setTopicParamsByTopic(new Map())
+    setConstraintsDraft(defaultIntakeConstraints())
+  }, [closeManageMode])
+
   const allActiveChapters = useMemo(
     () => activeSubjects.flatMap((subject) =>
       subject.chapters.map((chapter) => ({
@@ -637,9 +716,13 @@ export function SubjectsDataTable({
   )
 
   useEffect(() => {
-    setSelectedTaskIds(new Set())
-    setManageMode(false)
-  }, [selectedChapter?.id, showArchived])
+    closeManageMode()
+  }, [closeManageMode, selectedChapter?.id, showArchived])
+
+  useEffect(() => {
+    if (!onSelectedTaskIdsChange) return
+    onSelectedTaskIdsChange(Array.from(selectedTaskIds).sort())
+  }, [onSelectedTaskIdsChange, selectedTaskIds])
 
   useEffect(() => {
     if (!dependencyModalOpen || !dependencyTargetChapterId) return
@@ -656,30 +739,76 @@ export function SubjectsDataTable({
   )
   const visibleTasks = chapterTasks
 
+  const selectedVisibleTaskIds = useMemo(
+    () => visibleTasks.filter((task) => selectedTaskIds.has(task.id)).map((task) => task.id),
+    [selectedTaskIds, visibleTasks]
+  )
+
+  const loadArchivedChaptersForSubject = useCallback(async (
+    subjectId: string,
+    showErrorToast = false
+  ) => {
+    setArchivedChapterLoading(true)
+    try {
+      const result = await getArchivedChapters(subjectId)
+      if (result.status === "SUCCESS") {
+        setArchivedChapterRows(result.chapters)
+        return
+      }
+
+      setArchivedChapterRows([])
+      if (showErrorToast) {
+        addToast(
+          result.status === "ERROR" ? result.message : "Please sign in to view archived chapters.",
+          "error"
+        )
+      }
+    } catch (error) {
+      setArchivedChapterRows([])
+      if (showErrorToast) {
+        showMutationError(error, "Failed to load archived chapters.")
+      } else {
+        console.error(error)
+      }
+    } finally {
+      setArchivedChapterLoading(false)
+    }
+  }, [addToast, showMutationError])
+
+  useEffect(() => {
+    if (!selectedSubject?.id) {
+      setArchivedChapterRows([])
+      return
+    }
+
+    void loadArchivedChaptersForSubject(selectedSubject.id, false)
+  }, [loadArchivedChaptersForSubject, selectedSubject?.id])
+
   const subjectColumnItems: ColumnItem[] = displaySubjects.map((subject) => ({
     id: subject.id,
     label: subject.name,
     hint: `${subject.chapters.length} chapter${subject.chapters.length === 1 ? "" : "s"}`,
-    onEdit: showArchived ? undefined : () => openEditSubject(subject.id),
-    onDelete: () => {
-      void handleDeleteSubject(subject.id, subject.name)
-    },
+    onEdit: showArchived || isMutating ? undefined : () => openEditSubject(subject.id),
+    onDelete: isMutating
+      ? undefined
+      : () => {
+        void handleDeleteSubject(subject.id, subject.name)
+      },
   }))
 
   const chapterColumnItems: ColumnItem[] = (selectedSubject?.chapters ?? []).map((chapter) => ({
     id: chapter.id,
     label: chapter.name,
     hint: `${(tasksByChapter[chapter.id] ?? []).length} task${(tasksByChapter[chapter.id] ?? []).length === 1 ? "" : "s"}`,
-    onEdit: showArchived ? undefined : () => openEditChapter(chapter.id, chapter.name),
+    onEdit: showArchived || isMutating ? undefined : () => openEditChapter(chapter.id, chapter.name),
+    onDelete: isMutating
+      ? undefined
+      : () => {
+        void handleDeleteChapter(chapter.id, chapter.name)
+      },
   }))
 
-  const allVisibleSelected =
-    visibleTasks.length > 0 && visibleTasks.every((task) => selectedTaskIds.has(task.id))
-
   const selectedDetailTitle = selectedChapter?.name ?? "Overview"
-
-  const progressCompleted = completedCount
-  const progressTotal = chapterTasks.length
 
   const bulkPreview = useMemo(() => {
     const baseName = bulkBaseName.trim()
@@ -712,7 +841,7 @@ export function SubjectsDataTable({
   }
 
   function openCreateSubject() {
-    if (showArchived) return
+    if (showArchived || mutationLockRef.current) return
     setDrawerMode("create")
     setSelectedSubjectIdForDrawer(null)
     setSubjectSnapshotForDrawer(null)
@@ -720,6 +849,7 @@ export function SubjectsDataTable({
   }
 
   function openEditSubject(subjectId: string) {
+    if (mutationLockRef.current) return
     const target = subjects.find((subject) => subject.id === subjectId)
     setDrawerMode("edit")
     setSelectedSubjectIdForDrawer(subjectId)
@@ -737,7 +867,7 @@ export function SubjectsDataTable({
   }
 
   function openCreateChapter() {
-    if (!selectedSubject || showArchived) return
+    if (!selectedSubject || showArchived || mutationLockRef.current) return
     setChapterDialog({
       open: true,
       mode: "create",
@@ -750,6 +880,7 @@ export function SubjectsDataTable({
   }
 
   function openEditChapter(chapterId: string, chapterName: string) {
+    if (mutationLockRef.current) return
     const chapter = selectedSubject?.chapters.find((item) => item.id === chapterId)
     const param = topicParamsByTopic.get(chapterId)
     setChapterDialog({
@@ -764,6 +895,7 @@ export function SubjectsDataTable({
   }
 
   function openEditTask(taskId: string, taskTitle: string) {
+    if (mutationLockRef.current) return
     setTaskDialog({
       open: true,
       mode: "edit",
@@ -773,84 +905,9 @@ export function SubjectsDataTable({
   }
 
   function openTaskComposer() {
-    if (!selectedChapter || showArchived) return
+    if (!selectedChapter || showArchived || mutationLockRef.current) return
     resetTaskComposerFields()
     setTaskComposerOpen(true)
-  }
-
-  async function handleArchiveSelected() {
-    if (!selectedSubjectId || pendingSubjectId) return
-
-    setPendingSubjectId(selectedSubjectId)
-    try {
-      const result = await toggleArchiveSubject(selectedSubjectId)
-
-      if (result.status === "SUCCESS") {
-        setSubjects((previous) =>
-          previous.map((subject) =>
-            subject.id === selectedSubjectId ? { ...subject, archived: result.archived } : subject
-          )
-        )
-        addToast(result.archived ? "Subject archived." : "Subject restored.", "success")
-        router.refresh()
-      } else {
-        addToast(result.status === "ERROR" ? result.message : "Unauthorized", "error")
-      }
-    } catch {
-      addToast("Could not update subject archive state.", "error")
-    } finally {
-      setPendingSubjectId(null)
-    }
-  }
-
-  async function handleArchiveChapter() {
-    if (!selectedChapterId || pendingChapterId) return
-
-    setPendingChapterId(selectedChapterId)
-
-    try {
-      const result = await archiveChapter(selectedChapterId)
-
-      if (result.status === "SUCCESS") {
-        addToast("Chapter archived.", "success")
-        router.refresh()
-        return
-      }
-
-      if (result.status === "UNAUTHORIZED") {
-        addToast("Unauthorized", "error")
-        return
-      }
-
-      addToast(result.message, "error")
-    } finally {
-      setPendingChapterId(null)
-    }
-  }
-
-  async function handleUnarchiveChapter() {
-    if (!selectedChapterId || pendingChapterId) return
-
-    setPendingChapterId(selectedChapterId)
-
-    try {
-      const result = await unarchiveChapter(selectedChapterId)
-
-      if (result.status === "SUCCESS") {
-        addToast("Chapter restored.", "success")
-        router.refresh()
-        return
-      }
-
-      if (result.status === "UNAUTHORIZED") {
-        addToast("Unauthorized", "error")
-        return
-      }
-
-      addToast(result.message, "error")
-    } finally {
-      setPendingChapterId(null)
-    }
   }
 
   async function handleTasksDragEnd(event: DragEndEvent) {
@@ -860,70 +917,52 @@ export function SubjectsDataTable({
       return
     }
 
-    const activeTaskId = String(active.id)
-    const overTaskId = String(over.id)
-    const fromIndex = visibleTasks.findIndex((task) => task.id === activeTaskId)
-    const toIndex = visibleTasks.findIndex((task) => task.id === overTaskId)
-
-    if (fromIndex < 0 || toIndex < 0) {
-      return
-    }
-
-    const chapterId = selectedChapter.id
-    const hadManualOverride = manualOrderChapterIds.has(chapterId)
-    if (!hadManualOverride) {
-      setManualOrderChapterIds((current) => {
-        const next = new Set(current)
-        next.add(chapterId)
-        return next
-      })
-    }
-
-    const reorderedChapterTasks = arrayMove(visibleTasks, fromIndex, toIndex)
-
-    const orderedChapterTaskIds = reorderedChapterTasks.map((task) => task.id)
-
-    setReorderingTaskIds(orderedChapterTaskIds)
-    setTasksByChapter((previous) => ({
-      ...previous,
-      [chapterId]: reorderedChapterTasks,
-    }))
+    if (!beginMutation()) return
 
     try {
+      const activeTaskId = String(active.id)
+      const overTaskId = String(over.id)
+      const fromIndex = visibleTasks.findIndex((task) => task.id === activeTaskId)
+      const toIndex = visibleTasks.findIndex((task) => task.id === overTaskId)
+
+      if (fromIndex < 0 || toIndex < 0) {
+        return
+      }
+
+      const chapterId = selectedChapter.id
+      const reorderedChapterTasks = arrayMove(visibleTasks, fromIndex, toIndex)
+      const orderedChapterTaskIds = reorderedChapterTasks.map((task) => task.id)
+
+      setReorderingTaskIds(orderedChapterTaskIds)
+
       const result = await reorderTasks({
         chapterId,
         taskIds: orderedChapterTaskIds,
       })
 
       if (result.status !== "SUCCESS") {
-        if (!hadManualOverride) {
-          setManualOrderChapterIds((current) => {
-            const next = new Set(current)
-            next.delete(chapterId)
-            return next
-          })
-        }
         addToast(result.status === "ERROR" ? result.message : "Failed to reorder tasks.", "error")
-        router.refresh()
+        return
       }
-    } catch {
-      if (!hadManualOverride) {
-        setManualOrderChapterIds((current) => {
-          const next = new Set(current)
-          next.delete(chapterId)
-          return next
-        })
-      }
-      addToast("Could not reorder tasks right now.", "error")
-      router.refresh()
+
+      setManualOrderChapterIds((current) => {
+        const next = new Set(current)
+        next.add(chapterId)
+        return next
+      })
+      await refetchFromDbState(true)
+    } catch (error) {
+      showMutationError(error, "Could not reorder tasks right now.")
     } finally {
       setReorderingTaskIds([])
+      endMutation()
     }
   }
 
   useEffect(() => {
     if (!selectedChapter || showArchived) return
     if (reorderingTaskIds.length > 0) return
+    if (mutationLockRef.current) return
 
     const chapterId = selectedChapter.id
     if (manualOrderChapterIds.has(chapterId)) return
@@ -935,14 +974,17 @@ export function SubjectsDataTable({
 
     const orderedTaskIds = autoOrderedTasks.map((task) => task.id)
     setReorderingTaskIds(orderedTaskIds)
-    setTasksByChapter((previous) => ({
-      ...previous,
-      [chapterId]: autoOrderedTasks,
-    }))
 
     let alive = true
 
     void (async () => {
+      if (!beginMutation()) {
+        if (alive) {
+          setReorderingTaskIds([])
+        }
+        return
+      }
+
       try {
         const result = await reorderTasks({
           chapterId,
@@ -953,23 +995,28 @@ export function SubjectsDataTable({
 
         if (result.status !== "SUCCESS") {
           addToast(result.status === "ERROR" ? result.message : "Failed to auto-order tasks.", "error")
-          router.refresh()
+          return
         }
-      } catch {
+
+        await refetchFromDbState(false)
+      } catch (error) {
         if (!alive) return
-        addToast("Could not auto-order tasks.", "error")
-        router.refresh()
+        showMutationError(error, "Could not auto-order tasks.")
       } finally {
         if (alive) {
           setReorderingTaskIds([])
         }
+        endMutation()
       }
     })()
 
     return () => {
       alive = false
     }
-  }, [addToast, chapterTasks, manualOrderChapterIds, reorderingTaskIds.length, router, selectedChapter, showArchived])
+  // Intentionally scoped to ordering state inputs so auto-order does not rerun
+  // on helper closure churn from unrelated renders.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapterTasks, manualOrderChapterIds, reorderingTaskIds.length, selectedChapter, showArchived, showMutationError])
 
 
   async function handleSaveChapter(event: FormEvent<HTMLFormElement>) {
@@ -989,6 +1036,8 @@ export function SubjectsDataTable({
       return
     }
 
+    if (!beginMutation()) return
+
     setChapterDialogSaving(true)
 
     try {
@@ -997,10 +1046,9 @@ export function SubjectsDataTable({
 
         const result = await addChapter(selectedSubject.id, chapterDialog.value)
         if (result.status === "SUCCESS") {
-          setSelectedChapterId(result.chapterId)
           setChapterDialog(CLOSED_DIALOG_STATE)
           addToast("Chapter added.", "success")
-          router.refresh()
+          await refetchFromDbState(true)
           return
         }
 
@@ -1023,7 +1071,7 @@ export function SubjectsDataTable({
       if (result.status === "SUCCESS") {
         setChapterDialog(CLOSED_DIALOG_STATE)
         addToast("Chapter updated.", "success")
-        router.refresh()
+        await refetchFromDbState(true)
         return
       }
 
@@ -1033,8 +1081,11 @@ export function SubjectsDataTable({
       }
 
       addToast(result.message, "error")
+    } catch (error) {
+      showMutationError(error, "Failed to save chapter.")
     } finally {
       setChapterDialogSaving(false)
+      endMutation()
     }
   }
 
@@ -1047,27 +1098,17 @@ export function SubjectsDataTable({
       return
     }
 
+    if (!beginMutation()) return
+
     setTaskDialogSaving(true)
 
     try {
       const result = await updateSubjectTaskTitle(taskDialog.targetId, taskDialog.value)
 
       if (result.status === "SUCCESS") {
-        if (selectedChapter) {
-          const chapterId = selectedChapter.id
-          const nextTitle = taskDialog.value.trim()
-
-          setTasksByChapter((previous) => ({
-            ...previous,
-            [chapterId]: (previous[chapterId] ?? []).map((task) =>
-              task.id === taskDialog.targetId ? { ...task, title: nextTitle } : task
-            ),
-          }))
-        }
-
         setTaskDialog(CLOSED_DIALOG_STATE)
         addToast("Task updated.", "success")
-        router.refresh()
+        await refetchFromDbState(true)
         return
       }
 
@@ -1077,29 +1118,146 @@ export function SubjectsDataTable({
       }
 
       addToast(result.message, "error")
+    } catch (error) {
+      showMutationError(error, "Failed to update task title.")
     } finally {
       setTaskDialogSaving(false)
+      endMutation()
     }
   }
 
   async function handleDeleteChapter(chapterId: string, chapterName: string) {
-    if (!window.confirm(`Delete chapter "${chapterName}"? Tasks linked to it will be detached.`)) {
+    if (!window.confirm(`Delete chapter "${chapterName}"? All tasks in this chapter will also be deleted.`)) {
       return
     }
 
-    const result = await deleteChapter(chapterId)
-    if (result.status === "SUCCESS") {
-      addToast("Chapter deleted.", "success")
-      router.refresh()
+    if (!beginMutation()) return
+
+    try {
+      const result = await deleteChapter(chapterId)
+      if (result.status === "SUCCESS") {
+        closeManageMode()
+        addToast("Chapter and its tasks deleted.", "success")
+        await refetchFromDbState(true)
+        return
+      }
+
+      if (result.status === "UNAUTHORIZED") {
+        addToast("Unauthorized", "error")
+        return
+      }
+
+      addToast(result.message, "error")
+    } catch (error) {
+      showMutationError(error, "Failed to delete chapter.")
+    } finally {
+      endMutation()
+    }
+  }
+
+  async function handleArchiveChapterFromDialog() {
+    if (chapterDialog.mode !== "edit" || !chapterDialog.targetId) return
+
+    if (!window.confirm("Archive this chapter? It will be removed from active intake and planning.")) {
       return
     }
 
-    if (result.status === "UNAUTHORIZED") {
-      addToast("Unauthorized", "error")
+    if (!beginMutation()) return
+
+    setChapterArchiveSaving(true)
+    try {
+      const result = await archiveChapter(chapterDialog.targetId)
+      if (result.status === "SUCCESS") {
+        setChapterDialog(CLOSED_DIALOG_STATE)
+        closeManageMode()
+        addToast("Chapter archived.", "success")
+        await refetchFromDbState(true)
+        return
+      }
+
+      if (result.status === "UNAUTHORIZED") {
+        addToast("Unauthorized", "error")
+        return
+      }
+
+      addToast(result.message, "error")
+    } catch (error) {
+      showMutationError(error, "Failed to archive chapter.")
+    } finally {
+      setChapterArchiveSaving(false)
+      endMutation()
+    }
+  }
+
+  async function handleOpenArchivedChaptersModal() {
+    if (mutationLockRef.current) return
+    if (!selectedSubject?.id) {
+      addToast("Select a subject first.", "error")
       return
     }
 
-    addToast(result.message, "error")
+    setArchivedChapterModalOpen(true)
+    await loadArchivedChaptersForSubject(selectedSubject.id, true)
+  }
+
+  async function handleRestoreArchivedChapter(chapterId: string) {
+    if (!selectedSubject?.id) return
+
+    if (!beginMutation()) return
+
+    setArchivedChapterPendingId(chapterId)
+    try {
+      const result = await unarchiveChapter(chapterId)
+      if (result.status === "SUCCESS") {
+        addToast("Chapter restored.", "success")
+        await refetchFromDbState(true)
+        return
+      }
+
+      if (result.status === "UNAUTHORIZED") {
+        addToast("Unauthorized", "error")
+        return
+      }
+
+      addToast(result.message, "error")
+    } catch (error) {
+      showMutationError(error, "Failed to restore chapter.")
+    } finally {
+      setArchivedChapterPendingId(null)
+      endMutation()
+    }
+  }
+
+  async function handleDeleteArchivedChapter(chapterId: string, chapterName: string) {
+    if (!selectedSubject?.id) return
+
+    if (!window.confirm(`Permanently delete archived chapter "${chapterName}"?`)) {
+      return
+    }
+
+    if (!beginMutation()) return
+
+    setArchivedChapterPendingId(chapterId)
+    try {
+      const result = await deleteChapter(chapterId)
+      if (result.status === "SUCCESS") {
+        addToast("Archived chapter deleted.", "success")
+        await refetchFromDbState(true)
+        return
+      }
+
+      if (result.status === "UNAUTHORIZED") {
+        addToast("Unauthorized", "error")
+        return
+      }
+
+      addToast(result.message, "error")
+    } catch (error) {
+      showMutationError(error, "Failed to delete archived chapter.")
+    } finally {
+      setArchivedChapterPendingId(null)
+      endMutation()
+    }
   }
 
   async function handleDeleteSubject(subjectId: string, subjectName: string) {
@@ -1107,19 +1265,28 @@ export function SubjectsDataTable({
       return
     }
 
-    const result = await deleteSubject(subjectId)
-    if (result.status === "SUCCESS") {
-      addToast("Subject deleted.", "success")
-      router.refresh()
-      return
-    }
+    if (!beginMutation()) return
 
-    if (result.status === "UNAUTHORIZED") {
-      addToast("Unauthorized", "error")
-      return
-    }
+    try {
+      const result = await deleteSubject(subjectId)
+      if (result.status === "SUCCESS") {
+        closeManageMode()
+        addToast("Subject deleted.", "success")
+        await refetchFromDbState(true)
+        return
+      }
 
-    addToast(result.message, "error")
+      if (result.status === "UNAUTHORIZED") {
+        addToast("Unauthorized", "error")
+        return
+      }
+
+      addToast(result.message, "error")
+    } catch (error) {
+      showMutationError(error, "Failed to delete subject.")
+    } finally {
+      endMutation()
+    }
   }
 
   async function handleDeleteTask(taskId: string, taskTitle: string) {
@@ -1127,19 +1294,27 @@ export function SubjectsDataTable({
       return
     }
 
-    const result = await deleteSubjectTask(taskId)
-    if (result.status === "SUCCESS") {
-      addToast("Task deleted.", "success")
-      router.refresh()
-      return
-    }
+    if (!beginMutation()) return
 
-    if (result.status === "UNAUTHORIZED") {
-      addToast("Unauthorized", "error")
-      return
-    }
+    try {
+      const result = await deleteSubjectTask(taskId)
+      if (result.status === "SUCCESS") {
+        addToast("Task deleted.", "success")
+        await refetchFromDbState(true)
+        return
+      }
 
-    addToast(result.message, "error")
+      if (result.status === "UNAUTHORIZED") {
+        addToast("Unauthorized", "error")
+        return
+      }
+
+      addToast(result.message, "error")
+    } catch (error) {
+      showMutationError(error, "Failed to delete task.")
+    } finally {
+      endMutation()
+    }
   }
 
   async function handleCreateTasks(event: FormEvent<HTMLFormElement>) {
@@ -1149,6 +1324,8 @@ export function SubjectsDataTable({
       addToast("Select a chapter first.", "error")
       return
     }
+
+    if (!beginMutation()) return
 
     setTaskComposerSaving(true)
 
@@ -1169,7 +1346,7 @@ export function SubjectsDataTable({
           addToast("Task added.", "success")
           setTaskComposerOpen(false)
           resetTaskComposerFields()
-          router.refresh()
+          await refetchFromDbState(true)
           return
         }
 
@@ -1221,7 +1398,7 @@ export function SubjectsDataTable({
         addToast(`Added ${result.createdCount} tasks.`, "success")
         setTaskComposerOpen(false)
         resetTaskComposerFields()
-        router.refresh()
+        await refetchFromDbState(true)
         return
       }
 
@@ -1231,8 +1408,11 @@ export function SubjectsDataTable({
       }
 
       addToast(result.message, "error")
+    } catch (error) {
+      showMutationError(error, "Failed to create task.")
     } finally {
       setTaskComposerSaving(false)
+      endMutation()
     }
   }
 
@@ -1248,18 +1428,14 @@ export function SubjectsDataTable({
     })
   }
 
-  function toggleSelectVisibleTasks() {
+  function selectAllVisibleTasks() {
     setSelectedTaskIds((current) => {
       const next = new Set(current)
-      if (allVisibleSelected) {
-        for (const task of visibleTasks) {
-          next.delete(task.id)
-        }
-      } else {
-        for (const task of visibleTasks) {
-          next.add(task.id)
-        }
+
+      for (const task of visibleTasks) {
+        next.add(task.id)
       }
+
       return next
     })
   }
@@ -1267,15 +1443,17 @@ export function SubjectsDataTable({
   async function handleDeleteSelectedTasks() {
     if (!selectedChapter) return
 
-    const taskIds = Array.from(selectedTaskIds)
+    const taskIds = selectedVisibleTaskIds
     if (taskIds.length === 0) {
-      addToast("Select tasks to delete.", "error")
+      addToast("Select visible tasks to delete.", "error")
       return
     }
 
     if (!window.confirm(`Delete ${taskIds.length} selected task${taskIds.length === 1 ? "" : "s"}?`)) {
       return
     }
+
+    if (!beginMutation()) return
 
     setDeletingSelectedTasks(true)
     try {
@@ -1285,16 +1463,9 @@ export function SubjectsDataTable({
       })
 
       if (result.status === "SUCCESS") {
-        const selectedIdSet = new Set(taskIds)
-        setTasksByChapter((previous) => ({
-          ...previous,
-          [selectedChapter.id]: (previous[selectedChapter.id] ?? []).filter(
-            (task) => !selectedIdSet.has(task.id)
-          ),
-        }))
-        setSelectedTaskIds(new Set())
+        closeManageMode()
         addToast(`Deleted ${result.deletedCount} task${result.deletedCount === 1 ? "" : "s"}.`, "success")
-        router.refresh()
+        await refetchFromDbState(true)
         return
       }
 
@@ -1304,8 +1475,11 @@ export function SubjectsDataTable({
       }
 
       addToast(result.message, "error")
+    } catch (error) {
+      showMutationError(error, "Failed to delete selected tasks.")
     } finally {
       setDeletingSelectedTasks(false)
+      endMutation()
     }
   }
 
@@ -1314,8 +1488,8 @@ export function SubjectsDataTable({
     if (pendingTaskIds.has(taskId)) return
 
     const chapterId = selectedChapter.id
-    const currentTask = (tasksByChapter[chapterId] ?? []).find((task) => task.id === taskId)
-    if (!currentTask) return
+    if (!(tasksByChapter[chapterId] ?? []).some((task) => task.id === taskId)) return
+    if (!beginMutation()) return
 
     setPendingTaskIds((current) => {
       const next = new Set(current)
@@ -1323,66 +1497,29 @@ export function SubjectsDataTable({
       return next
     })
 
-    setTasksByChapter((previous) => ({
-      ...previous,
-      [chapterId]: (previous[chapterId] ?? []).map((task) =>
-        task.id === taskId ? { ...task, completed: nextCompleted } : task
-      ),
-    }))
-
     try {
-      if (nextCompleted) {
-        const result = await completeTask(taskId)
-        if (result.status !== "SUCCESS") {
-          setTasksByChapter((previous) => ({
-            ...previous,
-            [chapterId]: (previous[chapterId] ?? []).map((task) =>
-              task.id === taskId ? { ...task, completed: currentTask.completed } : task
-            ),
-          }))
-          if (result.status === "UNAUTHORIZED") {
-            addToast("Unauthorized", "error")
-          } else if (result.status === "NOT_FOUND") {
-            addToast("Task not found.", "error")
-          } else {
-            addToast(result.message || "Could not update task status.", "error")
-          }
-          return
+      const result = await setSubjectTaskCompletion(taskId, nextCompleted)
+      if (result.status !== "SUCCESS") {
+        if (result.status === "UNAUTHORIZED") {
+          addToast("Unauthorized", "error")
+        } else if (result.status === "NOT_FOUND") {
+          addToast("Task not found.", "error")
+        } else {
+          addToast(result.message || "Could not update task status.", "error")
         }
-      } else {
-        const result = await uncompleteTask(taskId)
-        if (result.status !== "SUCCESS") {
-          setTasksByChapter((previous) => ({
-            ...previous,
-            [chapterId]: (previous[chapterId] ?? []).map((task) =>
-              task.id === taskId ? { ...task, completed: currentTask.completed } : task
-            ),
-          }))
-          if (result.status === "UNAUTHORIZED") {
-            addToast("Unauthorized", "error")
-          } else if (result.status === "NOT_FOUND") {
-            addToast("Task not found.", "error")
-          } else {
-            addToast(result.message || "Could not update task status.", "error")
-          }
-          return
-        }
+        return
       }
-      router.refresh()
-    } catch {
-      setTasksByChapter((previous) => ({
-        ...previous,
-        [chapterId]: (previous[chapterId] ?? []).map((task) =>
-          task.id === taskId ? { ...task, completed: currentTask.completed } : task
-        ),
-      }))
-      addToast("Could not update task status.", "error")
+
+      await refetchFromDbState(true)
+    } catch (error) {
+      showMutationError(error, "Could not update task status.")
     } finally {
       setPendingTaskIds((current) => {
         const next = new Set(current)
         next.delete(taskId)
         return next
       })
+      endMutation()
     }
   }
 
@@ -1418,18 +1555,13 @@ export function SubjectsDataTable({
       return
     }
 
+    if (!beginMutation()) return
+
     setTaskDurationSavingIds((previous) => {
       const next = new Set(previous)
       next.add(taskId)
       return next
     })
-
-    setTasksByChapter((previous) => ({
-      ...previous,
-      [chapterId]: (previous[chapterId] ?? []).map((task) =>
-        task.id === taskId ? { ...task, durationMinutes: nextDuration } : task
-      ),
-    }))
 
     try {
       const result = await updateSubjectTaskDuration({
@@ -1438,26 +1570,13 @@ export function SubjectsDataTable({
       })
 
       if (result.status !== "SUCCESS") {
-        setTasksByChapter((previous) => ({
-          ...previous,
-          [chapterId]: (previous[chapterId] ?? []).map((task) =>
-            task.id === taskId ? { ...task, durationMinutes: existingTask.durationMinutes } : task
-          ),
-        }))
-
         addToast(result.status === "ERROR" ? result.message : "Failed to update task duration.", "error")
       } else {
         addToast("Task duration updated.", "success")
-        router.refresh()
+        await refetchFromDbState(true)
       }
-    } catch {
-      setTasksByChapter((previous) => ({
-        ...previous,
-        [chapterId]: (previous[chapterId] ?? []).map((task) =>
-          task.id === taskId ? { ...task, durationMinutes: existingTask.durationMinutes } : task
-        ),
-      }))
-      addToast("Could not update task duration.", "error")
+    } catch (error) {
+      showMutationError(error, "Could not update task duration.")
     } finally {
       setTaskDurationDrafts((previous) => {
         const next = { ...previous }
@@ -1470,15 +1589,16 @@ export function SubjectsDataTable({
         next.delete(taskId)
         return next
       })
+      endMutation()
     }
   }
 
   async function handleApplySelectedTaskDuration() {
     if (!selectedChapter || showArchived) return
 
-    const taskIds = Array.from(selectedTaskIds)
+    const taskIds = selectedVisibleTaskIds
     if (taskIds.length === 0) {
-      addToast("Select tasks to apply duration.", "error")
+      addToast("Select visible tasks to apply duration.", "error")
       return
     }
 
@@ -1490,18 +1610,9 @@ export function SubjectsDataTable({
 
     const durationMinutes = normalizeDurationMinutes(parsed)
     const chapterId = selectedChapter.id
-    const selectedTaskIdsSet = new Set(taskIds)
-    const before = (tasksByChapter[chapterId] ?? []).filter((task) => selectedTaskIdsSet.has(task.id))
+    if (!beginMutation()) return
 
     setBulkDurationSaving(true)
-    setTasksByChapter((previous) => ({
-      ...previous,
-      [chapterId]: (previous[chapterId] ?? []).map((task) =>
-        selectedTaskIdsSet.has(task.id)
-          ? { ...task, durationMinutes }
-          : task
-      ),
-    }))
 
     try {
       const result = await bulkUpdateSubjectTaskDuration({
@@ -1511,33 +1622,16 @@ export function SubjectsDataTable({
       })
 
       if (result.status !== "SUCCESS") {
-        const beforeMap = new Map(before.map((task) => [task.id, task.durationMinutes]))
-        setTasksByChapter((previous) => ({
-          ...previous,
-          [chapterId]: (previous[chapterId] ?? []).map((task) =>
-            beforeMap.has(task.id)
-              ? { ...task, durationMinutes: beforeMap.get(task.id) ?? task.durationMinutes }
-              : task
-          ),
-        }))
         addToast(result.status === "ERROR" ? result.message : "Failed to apply duration.", "error")
       } else {
         addToast(`Updated duration for ${result.updatedCount} task${result.updatedCount === 1 ? "" : "s"}.`, "success")
-        router.refresh()
+        await refetchFromDbState(true)
       }
-    } catch {
-      const beforeMap = new Map(before.map((task) => [task.id, task.durationMinutes]))
-      setTasksByChapter((previous) => ({
-        ...previous,
-        [chapterId]: (previous[chapterId] ?? []).map((task) =>
-          beforeMap.has(task.id)
-            ? { ...task, durationMinutes: beforeMap.get(task.id) ?? task.durationMinutes }
-            : task
-        ),
-      }))
-      addToast("Could not apply duration update.", "error")
+    } catch (error) {
+      showMutationError(error, "Could not apply duration update.")
     } finally {
       setBulkDurationSaving(false)
+      endMutation()
     }
   }
 
@@ -1563,12 +1657,7 @@ export function SubjectsDataTable({
   function handleAddCustomCapacityDate() {
     const parsed = Number.parseInt(customCapacityMinutesInput, 10)
     const selectedDates = Array.from(selectedCustomDates)
-    const singleDate = customCapacityDateInput.trim()
-    const targetDates = selectedDates.length > 0
-      ? selectedDates
-      : singleDate
-        ? [singleDate]
-        : []
+    const targetDates = selectedDates.length > 0 ? selectedDates : []
 
     if (targetDates.length === 0) {
       addToast("Select one or more dates for custom capacity.", "error")
@@ -1588,7 +1677,6 @@ export function SubjectsDataTable({
       },
     }))
 
-    setCustomCapacityDateInput("")
     setCustomCapacityMinutesInput("")
     setSelectedCustomDates(new Set())
   }
@@ -1604,91 +1692,22 @@ export function SubjectsDataTable({
     })
   }
 
-  async function handleAddOffDay() {
-    const date = offDayDateInput.trim()
-    const reason = offDayReasonInput.trim()
-    const selectedDates = Array.from(selectedOffDayDates)
-    const targetDates = selectedDates.length > 0
-      ? selectedDates
-      : date
-        ? [date]
-        : []
-
-    if (targetDates.length === 0) {
-      addToast("Select one or more dates to mark off-day.", "error")
-      return
-    }
-
-    setOffDaySaving(true)
-    try {
-      const existingDates = new Set(offDays.map((offDay) => offDay.date))
-      const datesToAdd = targetDates.filter((item) => !existingDates.has(item))
-
-      if (datesToAdd.length === 0) {
-        addToast("Selected dates are already marked as off-days.", "info")
-        return
-      }
-
-      const results = await Promise.all(
-        datesToAdd.map((targetDate) => addOffDay({ date: targetDate, reason }))
-      )
-
-      const failed = results.find((result) => result.status !== "SUCCESS")
-      if (failed) {
-        addToast(
-          failed.status === "ERROR" ? failed.message : "Failed to add off-days.",
-          "error"
-        )
-        return
-      }
-
-      setOffDays((previous) => [
-        ...previous,
-        ...results.map((result, index) => ({
-          id: (result as { id: string }).id,
-          date: datesToAdd[index],
-          reason: reason || null,
-        })),
-      ].sort((left, right) => left.date.localeCompare(right.date)))
-
-      setOffDayDateInput("")
-      setOffDayReasonInput("")
-      setSelectedOffDayDates(new Set())
-      addToast(`Added ${datesToAdd.length} off-day${datesToAdd.length === 1 ? "" : "s"}.`, "success")
-      router.refresh()
-    } catch {
-      addToast("Could not add off-days right now.", "error")
-    } finally {
-      setOffDaySaving(false)
-    }
-  }
-
-  async function handleDeleteOffDay(item: OffDayItem) {
-    const result = await deleteOffDay(item.id)
-    if (result.status === "SUCCESS") {
-      setOffDays((previous) => previous.filter((offDay) => offDay.id !== item.id))
-      addToast("Off-day removed.", "success")
-      router.refresh()
-      return
-    }
-
-    addToast(result.status === "ERROR" ? result.message : "Failed to remove off-day.", "error")
-  }
-
   async function handleSaveConstraints() {
     if (!constraintsDraft.study_start_date || !constraintsDraft.exam_date) {
-      addToast("Study start and final deadline are required.", "error")
+      addToast("Start date and final deadline are required.", "error")
       return
     }
 
     if (constraintsDraft.study_start_date >= constraintsDraft.exam_date) {
-      addToast("Final deadline must be after study start date.", "error")
+      addToast("Final deadline must be after start date.", "error")
       return
     }
 
+    if (!beginMutation()) return
+
     setConstraintsSaving(true)
     try {
-      const result = await savePlanConfig({
+      const payload = {
         study_start_date: constraintsDraft.study_start_date,
         exam_date: constraintsDraft.exam_date,
         weekday_capacity_minutes: Math.max(0, Math.trunc(constraintsDraft.weekday_capacity_minutes)),
@@ -1697,18 +1716,23 @@ export function SubjectsDataTable({
         day_of_week_capacity: normalizeDayOfWeekCapacity(constraintsDraft.day_of_week_capacity),
         custom_day_capacity: constraintsDraft.custom_day_capacity,
         flexibility_minutes: Math.max(0, Math.trunc(constraintsDraft.flexibility_minutes)),
-        max_daily_minutes: Math.max(30, Math.trunc(constraintsDraft.max_daily_minutes)),
-      })
+      }
+
+      console.log("Saving Step-2:", payload)
+      const result = await savePlanConfig(payload)
+      console.log("DB response:", result)
 
       if (result.status === "SUCCESS") {
         addToast("Step-2 constraints saved.", "success")
+        await refetchFromDbState(false)
       } else {
         addToast(result.status === "ERROR" ? result.message : "Failed to save constraints.", "error")
       }
-    } catch {
-      addToast("Could not save constraints.", "error")
+    } catch (error) {
+      showMutationError(error, "Could not save constraints.")
     } finally {
       setConstraintsSaving(false)
+      endMutation()
     }
   }
 
@@ -1716,15 +1740,7 @@ export function SubjectsDataTable({
     if (showArchived || reorderingSubjects) return
     if (orderedIds.length <= 1) return
 
-    const orderSet = new Set(orderedIds)
-    const previousSubjects = subjects
-
-    const reorderedActive = orderedIds
-      .map((id) => previousSubjects.find((subject) => subject.id === id))
-      .filter((subject): subject is SubjectNavItem => Boolean(subject))
-    const remainingSubjects = previousSubjects.filter((subject) => !orderSet.has(subject.id))
-
-    setSubjects([...reorderedActive, ...remainingSubjects])
+    if (!beginMutation()) return
     setReorderingSubjects(true)
 
     try {
@@ -1736,16 +1752,17 @@ export function SubjectsDataTable({
       )
 
       if (result.status !== "SUCCESS") {
-        setSubjects(previousSubjects)
         addToast(result.status === "ERROR" ? result.message : "Failed to reorder subjects.", "error")
-        router.refresh()
+        return
       }
-    } catch {
-      setSubjects(previousSubjects)
-      addToast("Could not reorder subjects.", "error")
-      router.refresh()
+
+      addToast("Subjects reordered.", "success")
+      await refetchFromDbState(true)
+    } catch (error) {
+      showMutationError(error, "Could not reorder subjects.")
     } finally {
       setReorderingSubjects(false)
+      endMutation()
     }
   }
 
@@ -1753,19 +1770,7 @@ export function SubjectsDataTable({
     if (showArchived || reorderingChapters || !selectedSubject) return
     if (orderedIds.length <= 1) return
 
-    const previousSubjects = subjects
-    const chapterLookup = new Map((selectedSubject.chapters ?? []).map((chapter) => [chapter.id, chapter]))
-    const reorderedChapters = orderedIds
-      .map((id) => chapterLookup.get(id))
-      .filter((chapter): chapter is SubjectNavChapter => Boolean(chapter))
-
-    setSubjects((current) =>
-      current.map((subject) =>
-        subject.id === selectedSubject.id
-          ? { ...subject, chapters: reorderedChapters }
-          : subject
-      )
-    )
+    if (!beginMutation()) return
 
     setReorderingChapters(true)
     try {
@@ -1778,16 +1783,17 @@ export function SubjectsDataTable({
       )
 
       if (result.status !== "SUCCESS") {
-        setSubjects(previousSubjects)
         addToast(result.status === "ERROR" ? result.message : "Failed to reorder chapters.", "error")
-        router.refresh()
+        return
       }
-    } catch {
-      setSubjects(previousSubjects)
-      addToast("Could not reorder chapters.", "error")
-      router.refresh()
+
+      addToast("Chapters reordered.", "success")
+      await refetchFromDbState(true)
+    } catch (error) {
+      showMutationError(error, "Could not reorder chapters.")
     } finally {
       setReorderingChapters(false)
+      endMutation()
     }
   }
 
@@ -1811,24 +1817,30 @@ export function SubjectsDataTable({
     }>,
     topicMetaMap: Map<string, TopicMetaDraft>
   ) {
-    const nextSubjects: SubjectNavItem[] = structureSubjects.map((subject) => ({
-      id: subject.id,
-      name: subject.name,
-      archived: subject.archived ?? false,
-      chapters: subject.topics.map((topic) => ({
-        id: topic.id,
-        name: topic.name,
-        archived: topic.archived ?? false,
-        topics: [],
-        earliestStart: topicMetaMap.get(topic.id)?.earliestStart ?? null,
-        deadline: topicMetaMap.get(topic.id)?.deadline ?? null,
-        restAfterDays: topicMetaMap.get(topic.id)?.restAfterDays ?? 0,
-      })),
-    }))
+    const nextSubjects: SubjectNavItem[] = structureSubjects.map((subject) => {
+      const activeTopics = subject.topics.filter((topic) => topic.archived !== true)
+
+      return {
+        id: subject.id,
+        name: subject.name,
+        archived: subject.archived ?? false,
+        chapters: activeTopics.map((topic) => ({
+          id: topic.id,
+          name: topic.name,
+          archived: topic.archived ?? false,
+          topics: [],
+          earliestStart: topicMetaMap.get(topic.id)?.earliestStart ?? null,
+          deadline: topicMetaMap.get(topic.id)?.deadline ?? null,
+          restAfterDays: topicMetaMap.get(topic.id)?.restAfterDays ?? 0,
+        })),
+      }
+    })
 
     const nextTasksByChapter: Record<string, TopicTaskItem[]> = {}
     for (const subject of structureSubjects) {
       for (const topic of subject.topics) {
+        if (topic.archived === true) continue
+
         nextTasksByChapter[topic.id] = topic.tasks.map((task) => ({
           id: task.id,
           topicId: task.topic_id ?? topic.id,
@@ -1842,20 +1854,40 @@ export function SubjectsDataTable({
     return { nextSubjects, nextTasksByChapter }
   }
 
-  async function importStructureFromSubjects(onlyUndone: boolean) {
-    if (onlyUndone) {
-      setImportingUndone(true)
-    } else {
-      setImportingAll(true)
+  async function importStructureFromSubjects(
+    mode: IntakeImportMode,
+    options?: { persistMode?: boolean; showSuccessToast?: boolean; trackLoading?: boolean }
+  ): Promise<boolean> {
+    const trackLoading = options?.trackLoading !== false
+
+    if (trackLoading) {
+      if (mode === "undone") {
+        setImportingUndone(true)
+      } else {
+        setImportingAll(true)
+      }
     }
 
     try {
-      const [structureRes, paramsMap] = await Promise.all([
+      if (options?.persistMode !== false) {
+        const saveModeRes = await saveIntakeImportMode(mode)
+        if (saveModeRes.status !== "SUCCESS") {
+          addToast(
+            saveModeRes.status === "ERROR"
+              ? saveModeRes.message
+              : "Please sign in to persist import mode.",
+            "error"
+          )
+          return false
+        }
+      }
+
+      const [structureRes, paramsRes] = await Promise.all([
         getStructure({
-          onlyUndoneTasks: onlyUndone,
-          dropTopicsWithoutTasks: onlyUndone,
+          onlyUndoneTasks: mode === "undone",
+          dropTopicsWithoutTasks: mode === "undone",
         }),
-        loadTopicParamsSnapshot(false),
+        getTopicParams(),
       ])
 
       if (structureRes.status !== "SUCCESS") {
@@ -1865,15 +1897,20 @@ export function SubjectsDataTable({
             : "Please sign in to import from subjects.",
           "error"
         )
-        return
+        return false
+      }
+
+      const paramsRows = paramsRes.status === "SUCCESS" ? paramsRes.params : []
+      if (paramsRes.status !== "SUCCESS") {
+        addToast("Failed to load chapter dependency data.", "error")
       }
 
       const topicMetaMap = new Map<string, TopicMetaDraft>()
-      for (const [topicId, param] of paramsMap.entries()) {
-        topicMetaMap.set(topicId, {
-          earliestStart: param.earliest_start,
-          deadline: param.deadline,
-          restAfterDays: Math.max(0, param.rest_after_days ?? 0),
+      for (const row of paramsRows) {
+        topicMetaMap.set(row.topic_id, {
+          earliestStart: row.earliest_start ?? null,
+          deadline: row.deadline ?? null,
+          restAfterDays: Math.max(0, row.rest_after_days ?? 0),
         })
       }
 
@@ -1882,11 +1919,19 @@ export function SubjectsDataTable({
         topicMetaMap
       )
 
+      const nextTopicParamsMap = mapTopicParamsToDraftMap(paramsRows, nextTasksByChapter)
+
       setSubjects(nextSubjects)
       setTasksByChapter(nextTasksByChapter)
+      setTopicParamsByTopic(nextTopicParamsMap)
       setShowArchived(false)
-      setSelectedTaskIds(new Set())
-      setManageMode(false)
+      closeManageMode()
+      setTaskDurationDrafts({})
+      setTaskDurationSavingIds(new Set())
+      setPendingTaskIds(new Set())
+      setManualOrderChapterIds(new Set())
+      setReorderingTaskIds([])
+      setIntakeImportMode(mode)
 
       if (nextSubjects.length > 0) {
         setSelectedSubjectId(nextSubjects[0].id)
@@ -1897,17 +1942,66 @@ export function SubjectsDataTable({
         setSelectedChapterId(null)
       }
 
-      addToast(
-        onlyUndone
-          ? "Imported undone-only structure snapshot."
-          : "Imported full structure snapshot.",
-        "success"
-      )
-    } catch {
-      addToast("Could not import structure from subjects.", "error")
+      if (options?.showSuccessToast !== false) {
+        addToast(
+          mode === "undone"
+            ? "Imported undone-only structure snapshot."
+            : "Imported full structure snapshot.",
+          "success"
+        )
+      }
+
+      return true
+    } catch (error) {
+      showMutationError(error, "Could not import structure from subjects.")
+      return false
     } finally {
-      setImportingAll(false)
-      setImportingUndone(false)
+      if (trackLoading) {
+        setImportingAll(false)
+        setImportingUndone(false)
+      }
+    }
+  }
+
+  async function refetchFromDbState(showErrorToast = true): Promise<boolean> {
+    try {
+      const modeRes = await getIntakeImportMode()
+      const reloadMode = modeRes.status === "SUCCESS" ? modeRes.mode : intakeImportMode
+
+      if (modeRes.status === "ERROR" && showErrorToast) {
+        addToast(modeRes.message, "error")
+      }
+
+      const imported = await importStructureFromSubjects(reloadMode, {
+        persistMode: false,
+        showSuccessToast: false,
+        trackLoading: false,
+      })
+
+      await loadStep2Snapshot(showErrorToast)
+      return imported
+    } catch (error) {
+      if (showErrorToast) {
+        showMutationError(error, "Failed to reload saved intake data.")
+      } else {
+        console.error(error)
+      }
+      return false
+    }
+  }
+
+  async function handleImportModeClick(mode: IntakeImportMode) {
+    if (!beginMutation()) return
+
+    try {
+      const imported = await importStructureFromSubjects(mode)
+      if (!imported) {
+        addToast("Import failed. Please try again.", "error")
+      }
+    } catch (error) {
+      showMutationError(error, "Import failed. Please try again.")
+    } finally {
+      endMutation()
     }
   }
 
@@ -1916,17 +2010,22 @@ export function SubjectsDataTable({
       return
     }
 
+    if (!beginMutation()) return
+
     setResettingIntake(true)
     try {
-      await Promise.all([
-        importStructureFromSubjects(false),
-        loadStep2Snapshot(true),
-        loadTopicParamsSnapshot(true),
-      ])
-    } catch {
-      addToast("Could not reset intake view.", "error")
+      resetTransientIntakeState()
+
+      const imported = await refetchFromDbState(true)
+
+      if (imported) {
+        addToast("Reloaded saved intake data.", "success")
+      }
+    } catch (error) {
+      showMutationError(error, "Could not reset intake view.")
     } finally {
       setResettingIntake(false)
+      endMutation()
     }
   }
 
@@ -1961,8 +2060,8 @@ export function SubjectsDataTable({
     try {
       const map = await loadTopicParamsSnapshot(true)
       setDependencySelectedIds(new Set(map.get(targetId)?.depends_on ?? []))
-    } catch {
-      addToast("Could not load dependencies.", "error")
+    } catch (error) {
+      showMutationError(error, "Could not load dependencies.")
     } finally {
       setDependencyLoading(false)
     }
@@ -2008,6 +2107,8 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
     const dependsOn = Array.from(dependencySelectedIds)
       .filter((id) => id !== dependencyTargetChapterId)
 
+    if (!beginMutation()) return
+
     setDependencySaving(true)
 
     try {
@@ -2015,7 +2116,6 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
         {
           topic_id: dependencyTargetChapterId,
           estimated_hours: estimatedHours,
-          priority: 3,
           deadline: existing?.deadline ?? null,
           earliest_start: existing?.earliest_start ?? chapter.earliestStart ?? null,
           depends_on: dependsOn,
@@ -2030,45 +2130,23 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
       ])
 
       if (result.status === "SUCCESS") {
-        setTopicParamsByTopic((previous) => {
-          const next = new Map(previous)
-          next.set(dependencyTargetChapterId, {
-            topic_id: dependencyTargetChapterId,
-            estimated_hours: estimatedHours,
-            deadline: existing?.deadline ?? null,
-            earliest_start: existing?.earliest_start ?? chapter.earliestStart ?? null,
-            depends_on: dependsOn,
-            session_length_minutes: inferSessionLengthMinutes(
-              chapterTaskDurations,
-              existing?.session_length_minutes
-            ),
-            rest_after_days: existing?.rest_after_days ?? Math.max(0, chapter.restAfterDays ?? 0),
-            max_sessions_per_day: existing?.max_sessions_per_day ?? 0,
-            study_frequency: existing?.study_frequency ?? "daily",
-          })
-          return next
-        })
-
         addToast("Dependencies saved.", "success")
         setDependencyModalOpen(false)
+        await refetchFromDbState(false)
       } else {
         addToast(result.status === "ERROR" ? result.message : "Failed to save dependencies.", "error")
       }
-    } catch {
-      addToast("Could not save dependencies.", "error")
+    } catch (error) {
+      showMutationError(error, "Could not save dependencies.")
     } finally {
       setDependencySaving(false)
+      endMutation()
     }
   }
 
   const customCapacityEntries = useMemo(
     () => Object.entries(constraintsDraft.custom_day_capacity).sort(([left], [right]) => left.localeCompare(right)),
     [constraintsDraft.custom_day_capacity]
-  )
-
-  const offDayDateSet = useMemo(
-    () => new Set(offDays.map((item) => item.date)),
-    [offDays]
   )
 
   const step2CalendarWeeks = useMemo(
@@ -2134,7 +2212,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
       {displaySubjects.length === 0 ? (
         <div className="empty-state">
           <p className="text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
-            {showArchived ? "No archived subjects." : "No subjects yet."}
+            {showArchived ? "No archived subjects." : "No active subjects."}
           </p>
           <p className="mt-1 text-sm" style={{ color: "var(--sh-text-muted)" }}>
             {showArchived
@@ -2144,7 +2222,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
 
           <div className="mt-5 flex flex-wrap gap-2">
             {!showArchived && (
-              <Button variant="primary" onClick={openCreateSubject}>
+              <Button variant="primary" onClick={openCreateSubject} disabled={isMutating}>
                 Add first subject
               </Button>
             )}
@@ -2152,63 +2230,61 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
               variant="ghost"
               onClick={() => setShowArchived((value) => !value)}
               size="sm"
+              disabled={isMutating}
             >
               {showArchived ? "Show Active Subjects" : "Archived Subjects"}
             </Button>
           </div>
         </div>
       ) : (
-        <div
-          className="rounded-2xl border p-3 sm:p-4 overflow-hidden"
-          style={{
-            borderColor: "var(--sh-border)",
-            background:
-              "linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",
-            boxShadow: "var(--sh-shadow-sm)",
-          }}
-        >
+        <div className="px-0.5 sm:px-0">
           <p className="mb-3 text-xs font-medium sm:hidden" style={{ color: "var(--sh-text-muted)" }}>
             Swipe horizontally between Subjects, Chapters, and the overview panel.
           </p>
 
-          <p
-            className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em]"
-            style={{ color: "var(--sh-text-muted)" }}
-          >
-            Step-1
-          </p>
+          <div className="mb-3 flex items-center gap-2 overflow-x-auto">
+            <p
+              className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em]"
+              style={{ color: "var(--sh-text-muted)" }}
+            >
+              STEP-1
+            </p>
 
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                void importStructureFromSubjects(false)
-              }}
-              disabled={importingAll || importingUndone || resettingIntake}
-            >
-              {importingAll ? "Importing..." : "Import All"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                void importStructureFromSubjects(true)
-              }}
-              disabled={importingAll || importingUndone || resettingIntake}
-            >
-              {importingUndone ? "Importing..." : "Import Undone Only"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                void handleResetIntakeView()
-              }}
-              disabled={resettingIntake || importingAll || importingUndone}
-            >
-              {resettingIntake ? "Resetting..." : "Reload Saved Intake Data"}
-            </Button>
+            <div className="ml-auto flex min-w-max flex-nowrap items-center justify-end gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 shrink-0"
+                onClick={() => {
+                  void handleImportModeClick("all")
+                }}
+                disabled={isMutating || importingAll || importingUndone || resettingIntake}
+              >
+                {importingAll ? "Importing..." : "Import All"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 shrink-0"
+                onClick={() => {
+                  void handleImportModeClick("undone")
+                }}
+                disabled={isMutating || importingAll || importingUndone || resettingIntake}
+              >
+                {importingUndone ? "Importing..." : "Import Undone Only"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 shrink-0"
+                onClick={() => {
+                  void handleResetIntakeView()
+                }}
+                disabled={isMutating || resettingIntake || importingAll || importingUndone}
+              >
+                {resettingIntake ? "Resetting..." : "Reload Saved Intake Data"}
+              </Button>
+            </div>
           </div>
 
           <div className="flex h-[520px] min-h-[520px] items-stretch gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
@@ -2229,7 +2305,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     size="sm"
                     className="w-full justify-center"
                     onClick={openCreateSubject}
-                    disabled={showArchived}
+                    disabled={isMutating || showArchived}
                   >
                     Add Subject
                   </Button>
@@ -2240,7 +2316,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     onClick={() => {
                       void openDependencyManager("subject")
                     }}
-                    disabled={showArchived || !selectedSubject || selectedSubject.chapters.length === 0}
+                    disabled={isMutating || showArchived || !selectedSubject || selectedSubject.chapters.length === 0}
                   >
                     Set Dependencies
                   </Button>
@@ -2249,6 +2325,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     size="sm"
                     className="w-full justify-center"
                     onClick={() => setShowArchived((value) => !value)}
+                    disabled={isMutating}
                   >
                     {showArchived
                       ? "Show Active Subjects"
@@ -2275,7 +2352,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     size="sm"
                     className="w-full justify-center"
                     onClick={openCreateChapter}
-                    disabled={!selectedSubject || showArchived}
+                    disabled={isMutating || !selectedSubject || showArchived}
                   >
                     Add Chapter
                   </Button>
@@ -2286,9 +2363,22 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     onClick={() => {
                       void openDependencyManager("chapter")
                     }}
-                    disabled={showArchived || !selectedChapter}
+                    disabled={isMutating || showArchived || !selectedChapter}
                   >
                     Set Dependencies
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-center"
+                    onClick={() => {
+                      void handleOpenArchivedChaptersModal()
+                    }}
+                    disabled={isMutating || showArchived || !selectedSubject || archivedChapterLoading}
+                  >
+                    {archivedChapterLoading
+                      ? "Loading Archived Chapters..."
+                      : `Archived Chapters (${archivedChapterRows.length})`}
                   </Button>
                 </>
               }
@@ -2303,15 +2393,6 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
             >
               {selectedSubject && selectedChapter ? (
                 <div className="flex h-full min-h-0 flex-col">
-                  <nav
-                    className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-wide"
-                    style={{ color: "var(--sh-text-muted)" }}
-                  >
-                    <span>{selectedSubject.name}</span>
-                    <span>{">"}</span>
-                    <span>{selectedChapter.name}</span>
-                  </nav>
-
                   <div className="mt-3 flex flex-wrap items-start gap-3">
                     <div className="min-w-0 flex-1">
                       <h2
@@ -2327,125 +2408,91 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                         variant="primary"
                         size="sm"
                         onClick={openTaskComposer}
-                        disabled={showArchived}
+                        disabled={isMutating || showArchived}
                       >
                         Add Task
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setManageMode((value) => !value)}
-                        disabled={showArchived || chapterTasks.length === 0}
+                        onClick={() => {
+                          if (isManageOpen) {
+                            closeManageMode()
+                          } else {
+                            setIsManageOpen(true)
+                          }
+                        }}
+                        disabled={isMutating || showArchived || chapterTasks.length === 0}
                       >
-                        {manageMode ? "Done" : "Manage"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={selectedChapter.archived ? handleUnarchiveChapter : handleArchiveChapter}
-                        disabled={pendingChapterId === selectedChapter.id}
-                      >
-                        {selectedChapter.archived ? "Restore Chapter" : "Archive Chapter"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleArchiveSelected}
-                        disabled={pendingSubjectId === selectedSubject.id}
-                      >
-                        {selectedSubject.archived ? "Restore Subject" : "Archive Subject"}
+                        {isManageOpen ? "Done" : "Manage"}
                       </Button>
                     </div>
                   </div>
 
-                  {manageMode ? (
+                  {isManageOpen ? (
                     <section
-                      className="mt-2 h-[126px] rounded-lg border p-2 flex flex-col overflow-hidden"
+                      className="mt-2 h-[64px] rounded-lg border p-2 flex flex-col overflow-hidden"
                       style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                          Manage Tasks
-                        </span>
-                        <span className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                          {selectedTaskIds.size} selected
-                        </span>
-                      </div>
+                      <div className="min-h-0 flex flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={selectAllVisibleTasks}
+                          disabled={isMutating || visibleTasks.length === 0}
+                        >
+                          Select All
+                        </Button>
 
-                      <div className="mt-2 grid min-h-0 flex-1 gap-1.5 overflow-y-auto pr-1">
-                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={toggleSelectVisibleTasks}
-                            disabled={visibleTasks.length === 0}
-                          >
-                            {allVisibleSelected ? "Unselect Visible" : "Select Visible"}
-                          </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => setSelectedTaskIds(new Set())}
+                          disabled={isMutating || selectedTaskIds.size === 0}
+                        >
+                          Clear
+                        </Button>
 
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedTaskIds(new Set())}
-                            disabled={selectedTaskIds.size === 0}
-                          >
-                            Clear
-                          </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => {
+                            void handleDeleteSelectedTasks()
+                          }}
+                          disabled={isMutating || selectedVisibleTaskIds.length === 0 || deletingSelectedTasks}
+                        >
+                          {deletingSelectedTasks ? "Deleting..." : "Delete Selected"}
+                        </Button>
 
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => {
-                              void handleDeleteSelectedTasks()
-                            }}
-                            disabled={selectedTaskIds.size === 0 || deletingSelectedTasks}
-                          >
-                            {deletingSelectedTasks ? "Deleting..." : "Delete Selected"}
-                          </Button>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                          <span className="text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
-                            Time
-                          </span>
+                        <div className="ml-2 flex items-center gap-1.5 shrink-0">
                           <input
                             type="number"
                             min={MIN_SESSION_LENGTH_MINUTES}
                             max={MAX_SESSION_LENGTH_MINUTES}
                             value={bulkDurationInput}
                             onChange={(event) => setBulkDurationInput(event.target.value)}
-                            className="ui-input h-8 w-[82px]"
-                            placeholder="Min"
+                            className="ui-input h-8 w-[90px]"
+                            placeholder="Time"
                           />
 
                           <Button
                             variant="ghost"
                             size="sm"
+                            className="shrink-0"
                             onClick={() => {
                               void handleApplySelectedTaskDuration()
                             }}
-                            disabled={selectedTaskIds.size === 0 || bulkDurationSaving}
+                            disabled={isMutating || selectedVisibleTaskIds.length === 0 || bulkDurationSaving}
                           >
                             {bulkDurationSaving ? "Applying..." : "Apply"}
                           </Button>
                         </div>
                       </div>
                     </section>
-                  ) : (
-                    <section
-                      className="mt-2 h-[126px] rounded-lg border p-2 flex flex-col overflow-hidden"
-                      style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
-                    >
-                      <div className="flex h-full flex-col items-start justify-center gap-1 px-1">
-                        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                          Tasks
-                        </p>
-                        <p className="text-sm" style={{ color: "var(--sh-text-secondary)" }}>
-                          {completedCount}/{chapterTasks.length} completed
-                        </p>
-                      </div>
-                    </section>
-                  )}
+                  ) : null}
 
                   <section
                     className="mt-3 min-h-0 flex-1 rounded-lg border p-2 flex flex-col"
@@ -2455,13 +2502,13 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                       <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
                         Tasks Overview
                       </p>
-                      <div className="text-right">
-                        <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
+                      <div className="flex items-center gap-4 text-sm" style={{ color: "var(--sh-text-secondary)" }}>
+                        <span>
                           Showing {visibleTasks.length} task{visibleTasks.length === 1 ? "" : "s"}
-                        </p>
-                        <p className="text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
-                          {progressCompleted}/{progressTotal} completed
-                        </p>
+                        </span>
+                        <span>
+                          {completedCount}/{chapterTasks.length} completed
+                        </span>
                       </div>
                     </div>
 
@@ -2472,11 +2519,20 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                           className="rounded-lg border border-dashed px-4 py-6 text-center text-sm"
                           style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
                         >
-                          No tasks in this view yet.
+                          No tasks available.
                         </div>
                       )}
 
-                      {visibleTasks.length > 0 && !manageMode && (
+                      {visibleTasks.length > 0 && completedCount === chapterTasks.length && (
+                        <div
+                          className="rounded-lg border border-dashed px-4 py-3 text-center text-xs"
+                          style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
+                        >
+                          All tasks completed.
+                        </div>
+                      )}
+
+                      {visibleTasks.length > 0 && !isManageOpen && (
                         <DndContext
                           sensors={sensors}
                           collisionDetection={closestCenter}
@@ -2512,7 +2568,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                                   isPending={pendingTaskIds.has(task.id)}
                                   isDurationSaving={taskDurationSavingIds.has(task.id)}
                                   isReordering={reorderingTaskIds.includes(task.id)}
-                                  canEdit={!showArchived}
+                                  canEdit={!showArchived && !isMutating}
                                   durationDraft={taskDurationDrafts[task.id] ?? String(task.durationMinutes)}
                                   onToggle={(nextCompleted) => handleToggleTask(task.id, nextCompleted)}
                                   onDurationDraftChange={(value) => setTaskDurationDraft(task.id, value)}
@@ -2528,7 +2584,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                         </DndContext>
                       )}
 
-                      {visibleTasks.length > 0 && manageMode && (
+                      {visibleTasks.length > 0 && isManageOpen && (
                         <>
                           <div className="mb-1 grid grid-cols-1 gap-2 xl:grid-cols-2">
                             <div className="flex justify-end pr-[76px]">
@@ -2571,12 +2627,13 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                                     onChange={() => toggleTaskSelection(task.id)}
                                     className="h-4 w-4 rounded border"
                                     aria-label="Select task"
+                                    disabled={isMutating}
                                   />
 
                                   <button
                                     type="button"
                                     onClick={() => handleToggleTask(task.id, !task.completed)}
-                                    disabled={isPending || showArchived}
+                                    disabled={isMutating || isPending || showArchived || isManageOpen}
                                     className="flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors disabled:opacity-50"
                                     style={{
                                       borderColor: task.completed
@@ -2623,7 +2680,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                                           void handleSaveTaskDuration(task.id)
                                         }
                                       }}
-                                      disabled={isDurationSaving || showArchived}
+                                      disabled={isMutating || isDurationSaving || showArchived}
                                       className="ui-input h-7 text-xs text-center"
                                       style={{ width: "3.8rem" }}
                                       title="Task duration (minutes)"
@@ -2634,7 +2691,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                                     <RowActionButton
                                       label="Edit task title"
                                       onClick={() => openEditTask(task.id, task.title)}
-                                      disabled={isPending || isDurationSaving || showArchived}
+                                      disabled={isMutating || isPending || isDurationSaving || showArchived}
                                     />
                                     <RowActionButton
                                       label="Delete task"
@@ -2642,7 +2699,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                                         void handleDeleteTask(task.id, task.title)
                                       }}
                                       danger
-                                      disabled={isPending || isDurationSaving || showArchived}
+                                      disabled={isMutating || isPending || isDurationSaving || showArchived}
                                     />
                                   </div>
                                 </div>
@@ -2682,14 +2739,6 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                 background: "var(--sh-card)",
               }}
             >
-              <div className="pb-2">
-                <p
-                  className="text-[11px] font-semibold uppercase tracking-[0.14em]"
-                  style={{ color: "var(--sh-text-muted)" }}
-                >
-                  Block-1
-                </p>
-              </div>
               {constraintsLoading ? (
                 <div
                   className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-4 text-center text-sm"
@@ -2702,7 +2751,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Input
                       type="date"
-                      label="Study Start"
+                      label="Start Date"
                       value={constraintsDraft.study_start_date}
                       onChange={(event) =>
                         setConstraintsDraft((previous) => ({
@@ -2724,7 +2773,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     />
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-3">
+                  <div className="grid gap-3 md:grid-cols-2">
                     <Input
                       type="number"
                       min={0}
@@ -2749,31 +2798,17 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                         }))
                       }
                     />
-
-                    <Input
-                      type="number"
-                      min={30}
-                      max={720}
-                      label="Max Daily Minutes"
-                      value={String(constraintsDraft.max_daily_minutes)}
-                      onChange={(event) =>
-                        setConstraintsDraft((previous) => ({
-                          ...previous,
-                          max_daily_minutes: clampInteger(Number.parseInt(event.target.value || "480", 10) || 480, 30, 720),
-                        }))
-                      }
-                    />
                   </div>
 
                   {hasStep2DateError && (
                     <p className="text-xs text-red-400/90">
-                      Final deadline must be after study start date.
+                      Final deadline must be after start date.
                     </p>
                   )}
 
                   <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}>
                     <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                      Day-of-Week Capacity Overrides
+                      Set Particular Day Capacity
                     </p>
                     <p className="mt-1 text-[11px]" style={{ color: "var(--sh-text-secondary)" }}>
                       Leave blank to use weekday/weekend defaults.
@@ -2800,25 +2835,9 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                   <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}>
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                        Calendar (Custom Capacity + Off Days)
+                        Calendar (Custom Capacity)
                       </p>
                       <div className="flex items-center gap-1.5">
-                        <Button
-                          type="button"
-                          variant={step2CalendarSelectionMode === "custom" ? "primary" : "ghost"}
-                          size="sm"
-                          onClick={() => setStep2CalendarSelectionMode("custom")}
-                        >
-                          Select for Capacity
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={step2CalendarSelectionMode === "offday" ? "primary" : "ghost"}
-                          size="sm"
-                          onClick={() => setStep2CalendarSelectionMode("offday")}
-                        >
-                          Select for Off Days
-                        </Button>
                         <Button
                           type="button"
                           variant="ghost"
@@ -2843,7 +2862,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
 
                     <div className="mt-2 space-y-1.5">
                       <p className="text-[11px]" style={{ color: "var(--sh-text-secondary)" }}>
-                        Active mode: {step2CalendarSelectionMode === "custom" ? "Custom Capacity" : "Off Days"}. Click days to select for that mode.
+                        Click days to select date-specific capacity overrides.
                       </p>
 
                       <div className="grid grid-cols-7 gap-1">
@@ -2862,61 +2881,39 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                             }
 
                             const selectedCustom = selectedCustomDates.has(isoDate)
-                            const selectedOffDay = selectedOffDayDates.has(isoDate)
-                            const selected = step2CalendarSelectionMode === "custom" ? selectedCustom : selectedOffDay
+                            const selected = selectedCustom
                             const hasCustom = isoDate in constraintsDraft.custom_day_capacity
-                            const hasOffDay = offDayDateSet.has(isoDate)
 
                             return (
                               <button
                                 key={`custom-day-${isoDate}`}
                                 type="button"
                                 onClick={() => {
-                                  if (step2CalendarSelectionMode === "custom") {
-                                    setSelectedCustomDates((previous) => {
-                                      const next = new Set(previous)
-                                      if (next.has(isoDate)) next.delete(isoDate)
-                                      else next.add(isoDate)
-                                      return next
-                                    })
-                                  } else {
-                                    setSelectedOffDayDates((previous) => {
-                                      const next = new Set(previous)
-                                      if (next.has(isoDate)) next.delete(isoDate)
-                                      else next.add(isoDate)
-                                      return next
-                                    })
-                                  }
+                                  setSelectedCustomDates((previous) => {
+                                    const next = new Set(previous)
+                                    if (next.has(isoDate)) next.delete(isoDate)
+                                    else next.add(isoDate)
+                                    return next
+                                  })
                                 }}
                                 className="h-8 rounded-md border text-[11px] font-medium transition-colors"
                                 style={{
                                   borderColor: selected
-                                    ? step2CalendarSelectionMode === "custom"
-                                      ? "rgba(56, 189, 248, 0.6)"
-                                      : "rgba(251, 191, 36, 0.65)"
+                                    ? "rgba(56, 189, 248, 0.6)"
                                     : hasCustom
                                       ? "rgba(56, 189, 248, 0.35)"
-                                      : hasOffDay
-                                        ? "rgba(251, 191, 36, 0.35)"
                                       : "var(--sh-border)",
                                   background: selected
-                                    ? step2CalendarSelectionMode === "custom"
-                                      ? "rgba(56, 189, 248, 0.18)"
-                                      : "rgba(251, 191, 36, 0.18)"
+                                    ? "rgba(56, 189, 248, 0.18)"
                                     : hasCustom
                                       ? "rgba(56, 189, 248, 0.1)"
-                                      : hasOffDay
-                                        ? "rgba(251, 191, 36, 0.1)"
                                       : "rgba(255,255,255,0.01)",
                                   color: selected
-                                    ? step2CalendarSelectionMode === "custom"
-                                      ? "#bae6fd"
-                                      : "#fde68a"
+                                    ? "#bae6fd"
                                     : "var(--sh-text-secondary)",
                                 }}
                                 title={[
                                   hasCustom ? `${constraintsDraft.custom_day_capacity[isoDate]} min capacity` : "No custom capacity",
-                                  hasOffDay ? "Marked off-day" : "Not off-day",
                                 ].join(" • ")}
                               >
                                 {isoDate.slice(-2)}
@@ -2930,158 +2927,66 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                         <span className="rounded-full border px-2 py-1 text-[10px]" style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-secondary)" }}>
                           Capacity selected: {selectedCustomDates.size}
                         </span>
-                        <span className="rounded-full border px-2 py-1 text-[10px]" style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-secondary)" }}>
-                          Off-day selected: {selectedOffDayDates.size}
-                        </span>
-                        <span className="rounded-full border px-2 py-1 text-[10px]" style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-secondary)" }}>
-                          Saved off-days: {offDays.length}
-                        </span>
                       </div>
 
-                      {step2CalendarSelectionMode === "custom" ? (
-                        <div className="mt-2 space-y-2 rounded-md border p-2" style={{ borderColor: "rgba(56, 189, 248, 0.35)", background: "rgba(56, 189, 248, 0.06)" }}>
-                          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#bae6fd" }}>
-                            Custom Capacity Actions
-                          </p>
+                      <div className="mt-2 space-y-2 rounded-md border p-2" style={{ borderColor: "rgba(56, 189, 248, 0.35)", background: "rgba(56, 189, 248, 0.06)" }}>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#bae6fd" }}>
+                          Custom Capacity Actions
+                        </p>
 
-                          <div className="grid gap-2 md:grid-cols-[1fr_auto_auto] items-end">
-                            <Input
-                              type="number"
-                              min={0}
-                              label="Minutes for selected dates"
-                              value={customCapacityMinutesInput}
-                              onChange={(event) => setCustomCapacityMinutesInput(event.target.value)}
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={handleAddCustomCapacityDate}
-                            >
-                              Apply to Selected
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setSelectedCustomDates(new Set())}
-                              disabled={selectedCustomDates.size === 0}
-                            >
-                              Clear Selection
-                            </Button>
-                          </div>
-
+                        <div className="grid gap-2 md:grid-cols-[1fr_auto_auto] items-end">
                           <Input
-                            type="date"
-                            label="Or pick a single date"
-                            value={customCapacityDateInput}
-                            onChange={(event) => setCustomCapacityDateInput(event.target.value)}
+                            type="number"
+                            min={0}
+                            label="Minutes for selected dates"
+                            value={customCapacityMinutesInput}
+                            onChange={(event) => setCustomCapacityMinutesInput(event.target.value)}
                           />
-
-                          {customCapacityEntries.length === 0 ? (
-                            <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                              No custom date overrides yet.
-                            </p>
-                          ) : (
-                            customCapacityEntries.map(([date, minutes]) => (
-                              <div
-                                key={date}
-                                className="flex items-center justify-between gap-2 rounded border px-2 py-1"
-                                style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.01)" }}
-                              >
-                                <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                                  {date} - {minutes} min
-                                </p>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleRemoveCustomCapacityDate(date)}
-                                >
-                                  Remove
-                                </Button>
-                              </div>
-                            ))
-                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleAddCustomCapacityDate}
+                          >
+                            Apply to Selected
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedCustomDates(new Set())}
+                            disabled={selectedCustomDates.size === 0}
+                          >
+                            Clear Selection
+                          </Button>
                         </div>
-                      ) : (
-                        <div className="mt-2 space-y-2 rounded-md border p-2" style={{ borderColor: "rgba(251, 191, 36, 0.35)", background: "rgba(251, 191, 36, 0.06)" }}>
-                          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#fde68a" }}>
-                            Off-Day Actions
+
+                        {customCapacityEntries.length === 0 ? (
+                          <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
+                            No custom date overrides yet.
                           </p>
-
-                          <div className="grid gap-2 md:grid-cols-[1fr_auto_auto] items-end">
-                            <Input
-                              label="Reason for selected dates"
-                              value={offDayReasonInput}
-                              onChange={(event) => setOffDayReasonInput(event.target.value)}
-                              placeholder="Optional"
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                void handleAddOffDay()
-                              }}
-                              disabled={offDaySaving}
-                            >
-                              {offDaySaving ? "Applying..." : "Apply Off Days"}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setSelectedOffDayDates(new Set())}
-                              disabled={selectedOffDayDates.size === 0}
-                            >
-                              Clear Selection
-                            </Button>
-                          </div>
-
-                          <Input
-                            type="date"
-                            label="Or pick a single date"
-                            value={offDayDateInput}
-                            onChange={(event) => setOffDayDateInput(event.target.value)}
-                          />
-
-                          {offDaysLoading && (
-                            <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                              Loading off-days...
-                            </p>
-                          )}
-
-                          {!offDaysLoading && offDays.length === 0 && (
-                            <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                              No off-days added.
-                            </p>
-                          )}
-
-                          {offDays.map((offDay) => (
+                        ) : (
+                          customCapacityEntries.map(([date, minutes]) => (
                             <div
-                              key={offDay.id}
+                              key={date}
                               className="flex items-center justify-between gap-2 rounded border px-2 py-1"
                               style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.01)" }}
                             >
                               <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                                {offDay.date}
-                                {offDay.reason ? ` - ${offDay.reason}` : ""}
+                                {date} - {minutes} min
                               </p>
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => {
-                                  void handleDeleteOffDay(offDay)
-                                }}
+                                onClick={() => handleRemoveCustomCapacityDate(date)}
                               >
                                 Remove
                               </Button>
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          ))
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3095,14 +3000,6 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                 background: "var(--sh-card)",
               }}
             >
-              <div className="pb-2">
-                <p
-                  className="text-[11px] font-semibold uppercase tracking-[0.14em]"
-                  style={{ color: "var(--sh-text-muted)" }}
-                >
-                  Block-2
-                </p>
-              </div>
               {constraintsLoading ? (
                 <div
                   className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-4 text-center text-sm"
@@ -3159,7 +3056,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                         onClick={() => {
                           void handleSaveConstraints()
                         }}
-                        disabled={constraintsSaving || hasStep2DateError}
+                        disabled={isMutating || constraintsSaving || hasStep2DateError}
                       >
                         {constraintsSaving ? "Saving..." : "Save Step-2 Constraints"}
                       </Button>
@@ -3177,16 +3074,22 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
         mode={drawerMode}
         subjectId={selectedSubjectIdForDrawer}
         initialSubject={subjectSnapshotForDrawer}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => {
+          if (isMutating) return
+          setDrawerOpen(false)
+        }}
         onSaved={() => {
           setDrawerOpen(false)
-          router.refresh()
+          void refetchFromDbState(true)
         }}
       />
 
       <Modal
         open={chapterDialog.open}
-        onClose={() => setChapterDialog(CLOSED_DIALOG_STATE)}
+        onClose={() => {
+          if (isMutating || chapterDialogSaving || chapterArchiveSaving) return
+          setChapterDialog(CLOSED_DIALOG_STATE)
+        }}
         title={chapterDialog.mode === "create" ? "Add Chapter" : "Edit Chapter"}
         size="md"
       >
@@ -3264,7 +3167,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                   setChapterDialog(CLOSED_DIALOG_STATE)
                   void handleDeleteChapter(targetId, targetName)
                 }}
-                disabled={chapterDialogSaving}
+                disabled={isMutating || chapterDialogSaving}
               >
                 Delete Chapter
               </Button>
@@ -3277,18 +3180,127 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
               variant="ghost"
               size="sm"
               onClick={() => setChapterDialog(CLOSED_DIALOG_STATE)}
+              disabled={isMutating || chapterDialogSaving || chapterArchiveSaving}
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" size="sm" disabled={chapterDialogSaving}>
+            {chapterDialog.mode === "edit" && chapterDialog.targetId && (
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                onClick={() => {
+                  void handleArchiveChapterFromDialog()
+                }}
+                disabled={isMutating || chapterDialogSaving || chapterArchiveSaving}
+              >
+                {chapterArchiveSaving ? "Archiving..." : "Archive Chapter"}
+              </Button>
+            )}
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={isMutating || chapterDialogSaving || chapterArchiveSaving}
+            >
               {chapterDialogSaving
                 ? "Saving..."
                 : chapterDialog.mode === "create"
                   ? "Add Chapter"
-                  : "Save Chapter"}
+                  : "Save Changes"}
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={archivedChapterModalOpen}
+        onClose={() => {
+          if (isMutating || archivedChapterLoading || archivedChapterPendingId) return
+          setArchivedChapterModalOpen(false)
+        }}
+        title={selectedSubject
+          ? `Archived Chapters (${archivedChapterRows.length})`
+          : "Archived Chapters"}
+        size="md"
+      >
+        <div className="space-y-3">
+          {archivedChapterLoading ? (
+            <div
+              className="rounded-lg border border-dashed px-3 py-4 text-sm"
+              style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
+            >
+              Loading archived chapters...
+            </div>
+          ) : archivedChapterRows.length === 0 ? (
+            <div
+              className="rounded-lg border border-dashed px-3 py-4 text-sm"
+              style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
+            >
+              No archived chapters for this subject.
+            </div>
+          ) : (
+            <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+              {archivedChapterRows.map((chapter) => {
+                const isPending = archivedChapterPendingId === chapter.id
+
+                return (
+                  <div
+                    key={chapter.id}
+                    className="rounded-lg border p-2"
+                    style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <p
+                        className="min-w-0 flex-1 truncate text-sm font-medium"
+                        style={{ color: "var(--sh-text-primary)" }}
+                        title={chapter.name}
+                      >
+                        {chapter.name}
+                      </p>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={isMutating || isPending || archivedChapterLoading}
+                        onClick={() => {
+                          void handleRestoreArchivedChapter(chapter.id)
+                        }}
+                      >
+                        Restore
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        disabled={isMutating || isPending || archivedChapterLoading}
+                        onClick={() => {
+                          void handleDeleteArchivedChapter(chapter.id, chapter.name)
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setArchivedChapterModalOpen(false)}
+              disabled={isMutating || !!archivedChapterPendingId}
+            >
+              Close
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <NameModal
@@ -3298,16 +3310,19 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
         value={taskDialog.value}
         placeholder="e.g. Solve past-paper set 1"
         submitLabel="Save Task"
-        loading={taskDialogSaving}
+        loading={taskDialogSaving || isMutating}
         onChange={(value) => setTaskDialog((previous) => ({ ...previous, value }))}
-        onClose={() => setTaskDialog(CLOSED_DIALOG_STATE)}
+        onClose={() => {
+          if (isMutating || taskDialogSaving) return
+          setTaskDialog(CLOSED_DIALOG_STATE)
+        }}
         onSubmit={handleSaveTaskTitle}
       />
 
       <Modal
         open={dependencyModalOpen}
         onClose={() => {
-          if (dependencySaving) return
+          if (isMutating || dependencySaving) return
           setDependencyModalOpen(false)
         }}
         title={dependencyScope === "subject" ? "Set Dependencies (Subject)" : "Set Dependencies (Chapter)"}
@@ -3323,7 +3338,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                 value={dependencyTargetChapterId}
                 onChange={(event) => setDependencyTargetChapterId(event.target.value)}
                 className="ui-input"
-                disabled={dependencyLoading || dependencySaving}
+                disabled={isMutating || dependencyLoading || dependencySaving}
               >
                 {dependencyTargetOptions.map((option) => (
                   <option key={`dependency-target-${option.id}`} value={option.id}>
@@ -3371,7 +3386,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                       borderColor: selected ? "var(--sh-primary-glow)" : "var(--sh-border)",
                       background: selected ? "var(--sh-primary-muted)" : "transparent",
                     }}
-                    disabled={dependencySaving}
+                    disabled={isMutating || dependencySaving}
                   >
                     <p
                       className="text-sm font-semibold"
@@ -3398,7 +3413,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
               variant="ghost"
               size="sm"
               onClick={() => setDependencySelectedIds(new Set())}
-              disabled={dependencySaving || dependencySelectedIds.size === 0}
+              disabled={isMutating || dependencySaving || dependencySelectedIds.size === 0}
             >
               Clear
             </Button>
@@ -3409,7 +3424,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                 variant="ghost"
                 size="sm"
                 onClick={() => setDependencyModalOpen(false)}
-                disabled={dependencySaving}
+                disabled={isMutating || dependencySaving}
               >
                 Cancel
               </Button>
@@ -3420,7 +3435,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                 onClick={() => {
                   void handleSaveDependencies()
                 }}
-                disabled={dependencySaving || dependencyLoading || !dependencyTargetChapterId}
+                disabled={isMutating || dependencySaving || dependencyLoading || !dependencyTargetChapterId}
               >
                 {dependencySaving ? "Saving..." : "Save Dependencies"}
               </Button>
@@ -3432,6 +3447,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
       <Modal
         open={taskComposerOpen}
         onClose={() => {
+          if (taskComposerSaving || isMutating) return
           setTaskComposerOpen(false)
           resetTaskComposerFields()
         }}
@@ -3452,6 +3468,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                 background:
                   taskCreateMode === "single" ? "var(--sh-primary-muted)" : "transparent",
               }}
+              disabled={isMutating || taskComposerSaving}
             >
               Single Task
             </button>
@@ -3468,6 +3485,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                 background:
                   taskCreateMode === "bulk" ? "var(--sh-primary-muted)" : "transparent",
               }}
+              disabled={isMutating || taskComposerSaving}
             >
               Bulk Series
             </button>
@@ -3580,10 +3598,11 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                 setTaskComposerOpen(false)
                 resetTaskComposerFields()
               }}
+              disabled={isMutating || taskComposerSaving}
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" size="sm" disabled={taskComposerSaving}>
+            <Button type="submit" variant="primary" size="sm" disabled={isMutating || taskComposerSaving}>
               {taskComposerSaving
                 ? "Saving..."
                 : taskCreateMode === "single"
@@ -3650,6 +3669,7 @@ function DraggableTaskRow({
           type="button"
           {...attributes}
           {...listeners}
+          disabled={!canEdit}
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-xs transition-colors hover:bg-white/5 disabled:opacity-50"
           style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)", touchAction: "none" }}
           aria-label="Drag to reorder"
@@ -3715,7 +3735,7 @@ function DraggableTaskRow({
             }}
             disabled={isDurationSaving || !canEdit}
             className="ui-input h-7 text-xs text-center"
-            style={{ width: "3.8rem" }}
+            style={{ width: "4.2rem" }}
             title="Task duration (minutes)"
           />
 

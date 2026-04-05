@@ -44,10 +44,16 @@ export function PlanHistory({
   }, [])
 
   useEffect(() => {
-    void loadHistory()
+    const frame = requestAnimationFrame(() => {
+      void loadHistory()
+    })
+
+    return () => {
+      cancelAnimationFrame(frame)
+    }
   }, [loadHistory, refreshKey])
 
-  const visibleHistory = history.slice(0, maxVisible)
+  const listHeightRem = Math.max(1, maxVisible) * 3.5 + Math.max(0, maxVisible - 1) * 0.5
 
   if (loading) {
     return (
@@ -55,10 +61,11 @@ export function PlanHistory({
         <div className="section-card-header">
           <div className="section-card-title">{title}</div>
         </div>
-        <div className="section-card-body space-y-2.5 animate-pulse">
-          <div className="h-11 rounded-xl skeleton" />
-          <div className="h-11 rounded-xl skeleton" />
-          <div className="h-11 rounded-xl skeleton" />
+        <div className="section-card-body space-y-2.5 animate-pulse" style={{ height: `${listHeightRem}rem` }}>
+          <div className="h-14 rounded-xl skeleton" />
+          <div className="h-14 rounded-xl skeleton" />
+          <div className="h-14 rounded-xl skeleton" />
+          <div className="h-14 rounded-xl skeleton" />
         </div>
       </section>
     )
@@ -104,8 +111,8 @@ export function PlanHistory({
           </div>
         ) : (
           <>
-            <div className="space-y-2 max-h-72 overflow-y-auto scrollbar-thin">
-              {visibleHistory.map((snapshot) => {
+            <div className="space-y-2 overflow-y-auto scrollbar-thin pr-1" style={{ height: `${listHeightRem}rem` }}>
+              {history.map((snapshot) => {
                 const timeStr = new Date(snapshot.created_at).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
@@ -116,7 +123,7 @@ export function PlanHistory({
                 return (
                   <div
                     key={snapshot.id}
-                    className="group flex items-center gap-3 rounded-xl border px-3 py-3 transition-all duration-200"
+                    className="group flex h-14 items-center gap-3 rounded-xl border px-3 py-3 transition-all duration-200"
                     style={{
                       background: "rgba(255,255,255,0.02)",
                       borderColor: "var(--sh-border)",
@@ -142,8 +149,8 @@ export function PlanHistory({
             {history.length > maxVisible && (
               <div className="mt-3 text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
                 {showPlannerLinks
-                  ? `Showing latest ${maxVisible} of ${history.length} plans.`
-                  : `Showing latest ${maxVisible} plan snapshots.`}
+                  ? `Showing all ${history.length} plans. Scroll to view older entries.`
+                  : `Showing all ${history.length} plan snapshots. Scroll to view older entries.`}
               </div>
             )}
           </>

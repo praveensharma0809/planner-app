@@ -1,5 +1,6 @@
 "use server"
 
+import { createHash } from "crypto"
 import { revalidatePath } from "next/cache"
 import {
   buildDaySlots,
@@ -11,7 +12,7 @@ import {
   type PlanResult,
 } from "@/lib/planner/engine"
 import { durationSince, trackServerEvent } from "@/lib/ops/telemetry"
-import { isISODate, normalizeSessionType } from "@/lib/planner/contracts"
+import { isISODate } from "@/lib/planner/contracts"
 import {
   buildDroppedReasons,
   buildReoptimizeUnits,
@@ -21,6 +22,7 @@ import {
   buildUnitsFromActiveTopics,
   buildPendingUnitsAndMeta,
   mapScheduledToSnapshotTasks,
+  resolveSessionSourceTask,
   resolveSessionTaskTitle,
   sortTopicsBySubjectOrder,
   type DroppedReason,
@@ -31,7 +33,6 @@ import {
   commitPlanAtomic,
   deletePendingPlanTasks,
   getExistingTasksInRange,
-  getOffDaysForUser,
   getOpenManualTasksByTopic,
   getPendingPlanTasks,
   getPlanSnapshots,
@@ -44,25 +45,27 @@ import {
   insertTasks,
 } from "@/lib/planner/repository"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getTodayLocalDate, normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
 import type {
   PlanSnapshot,
   Topic,
 } from "@/lib/types/db"
 
 const PLANNER_SETTINGS_SELECT =
-  "study_start_date, exam_date, weekday_capacity_minutes, weekend_capacity_minutes, max_active_subjects, day_of_week_capacity, custom_day_capacity, flexibility_minutes, max_daily_minutes"
+  "study_start_date, exam_date, weekday_capacity_minutes, weekend_capacity_minutes, max_active_subjects, day_of_week_capacity, custom_day_capacity, flexibility_minutes"
 
 const TOPIC_SELECT = "id, user_id, subject_id, name, sort_order, created_at"
 
 interface InsertTaskRow {
   user_id: string
+  task_type: "subject"
   subject_id: string
   topic_id: string | null
+  source_topic_task_id: string | null
   title: string
   scheduled_date: string
   duration_minutes: number
   session_type: "core" | "revision" | "practice"
-  priority: number
   session_number: number
   total_sessions: number
   completed: boolean
@@ -83,11 +86,23 @@ interface PlanConfig {
   custom_day_capacity?: Record<string, number> | null
   plan_order_stack?: string[] | null
   flexibility_minutes?: number
-  max_daily_minutes?: number
   max_topics_per_subject_per_day?: number
   min_subject_gap_days?: number
   subject_ordering?: Record<string, string> | null
   flexible_threshold?: Record<string, number> | null
+}
+
+interface CommitSessionPayload {
+  subject_id: string
+  topic_id: string | null
+  is_manual?: boolean
+  title: string
+  scheduled_date: string
+  duration_minutes: number
+  session_type: "core" | "revision" | "practice"
+  session_number: number
+  total_sessions: number
+  source_topic_task_id: string | null
 }
 
 export type GeneratePlanResponse =
@@ -97,9 +112,19 @@ export type GeneratePlanResponse =
   | { status: "ERROR"; message: string }
   | PlanResult
 
-export type KeepPreviousMode = "future" | "until" | "none" | "merge"
+export interface GeneratePlanInput {
+  selectedTaskIds?: string[]
+}
 
-const KEEP_MODES = ["future", "until", "none", "merge"] as const
+export type KeepPreviousMode = "until" | "none"
+
+const KEEP_MODES = ["until", "none"] as const
+const COMMIT_DUPLICATE_MESSAGE = "Duplicate commit detected. Please wait a moment before retrying."
+const ALLOWED_SESSION_TYPES = new Set<CommitSessionPayload["session_type"]>([
+  "core",
+  "revision",
+  "practice",
+])
 
 export type CommitPlanResponse =
   | { status: "UNAUTHORIZED" }
@@ -120,6 +145,64 @@ export type ReoptimizePreviewResponse =
       schedule: ScheduledSession[]
       droppedSessions: number
     }
+
+export interface ReoptimizePreviewInput {
+  selectedTaskIds?: string[]
+}
+
+function buildCommitSessionSignature(session: CommitSessionPayload): string {
+  return JSON.stringify({
+    subject_id: session.subject_id,
+    topic_id: session.topic_id,
+    scheduled_date: session.scheduled_date,
+    duration_minutes: session.duration_minutes,
+    session_type: session.session_type,
+    session_number: session.session_number,
+    total_sessions: session.total_sessions,
+    is_manual: Boolean(session.is_manual),
+    source_topic_task_id: session.source_topic_task_id,
+  })
+}
+
+function buildCommitPayloadHash(
+  userId: string,
+  sessions: CommitSessionPayload[]
+): string {
+  const signaturePayload = {
+    userId,
+    sessions: sessions
+      .map((session) => buildCommitSessionSignature(session))
+      .sort(),
+  }
+
+  return createHash("sha256")
+    .update(JSON.stringify(signaturePayload))
+    .digest("hex")
+}
+
+function mapCommitRpcErrorMessage(errorMessage: string | null | undefined): string {
+  const normalized = (errorMessage ?? "").toLowerCase()
+
+  if (normalized.includes("duplicate_commit")) {
+    return COMMIT_DUPLICATE_MESSAGE
+  }
+
+  if (normalized.includes("empty_commit_not_allowed")) {
+    return "Cannot commit empty plan"
+  }
+
+  if (normalized.includes("invalid_task_payload")) {
+    return "Commit payload was invalid. Please regenerate your plan and try again."
+  }
+
+  if (normalized.startsWith("invalid_")) {
+    return "Commit payload failed validation. Please review your plan and try again."
+  }
+
+  return errorMessage && errorMessage.trim().length > 0
+    ? `Failed to commit plan: ${errorMessage}`
+    : "Failed to commit plan."
+}
 
 export type RescheduleMissedPlanResponse =
   | { status: "UNAUTHORIZED" }
@@ -156,7 +239,26 @@ function sortPreviewSessions(sessions: ScheduledSession[]) {
 
 function normalizeKeepMode(value: KeepPreviousMode | string | null | undefined): KeepPreviousMode {
   const candidate = value as KeepPreviousMode | null | undefined
-  return candidate && KEEP_MODES.includes(candidate) ? candidate : "future"
+  return candidate && KEEP_MODES.includes(candidate) ? candidate : "until"
+}
+
+function normalizePlannerSelectedTaskIds(input: unknown): string[] {
+  if (!Array.isArray(input)) return []
+
+  const seen = new Set<string>()
+  const normalized: string[] = []
+
+  for (const raw of input) {
+    if (typeof raw !== "string") continue
+    const value = raw.trim()
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    normalized.push(value)
+
+    if (normalized.length >= 5000) break
+  }
+
+  return normalized
 }
 
 function sanitizeSummary(summary: string | undefined, sessionCount: number): string {
@@ -175,6 +277,7 @@ async function normalizePlannerTaskSourceAfterCommit(
       .from("tasks")
       .update({ task_source: "plan" })
       .eq("user_id", userId)
+      .eq("task_type", "subject")
       .eq("plan_snapshot_id", snapshotId)
 
     // Safety sweep: historical leaked planner rows occasionally ended up as "manual".
@@ -183,6 +286,7 @@ async function normalizePlannerTaskSourceAfterCommit(
       .from("tasks")
       .update({ task_source: "plan" })
       .eq("user_id", userId)
+      .eq("task_type", "subject")
       .eq("task_source", "manual")
       .not("plan_snapshot_id", "is", null)
   } catch {
@@ -192,8 +296,8 @@ async function normalizePlannerTaskSourceAfterCommit(
 
 function sanitizeSessionsForCommit(
   sessions: ScheduledSession[]
-): { ok: true; sessions: ScheduledSession[] } | { ok: false; message: string } {
-  const sanitized: ScheduledSession[] = []
+): { ok: true; sessions: CommitSessionPayload[] } | { ok: false; message: string } {
+  const sanitized: CommitSessionPayload[] = []
 
   for (const [index, session] of sessions.entries()) {
     if (!session.subject_id || session.subject_id.trim().length === 0) {
@@ -203,7 +307,11 @@ function sanitizeSessionsForCommit(
       }
     }
 
-    if (!session.topic_id || session.topic_id.trim().length === 0) {
+    const topicId = session.topic_id?.trim().length
+      ? session.topic_id.trim()
+      : null
+
+    if (!topicId && !session.is_manual) {
       return {
         ok: false,
         message: `Session ${index + 1} is missing topic_id.`,
@@ -217,31 +325,74 @@ function sanitizeSessionsForCommit(
       }
     }
 
-    if (!Number.isFinite(session.duration_minutes) || session.duration_minutes <= 0) {
+    if (!Number.isInteger(session.duration_minutes) || session.duration_minutes <= 0) {
       return {
         ok: false,
-        message: `Session ${index + 1} must have duration_minutes > 0.`,
+        message: `Session ${index + 1} must have integer duration_minutes > 0.`,
       }
     }
 
-    const sessionNumber = Math.max(1, Math.floor(session.session_number ?? 1))
-    const totalSessions = Math.max(1, Math.floor(session.total_sessions ?? 1))
+    const durationMinutes = session.duration_minutes
 
-    if (sessionNumber > totalSessions) {
+    const sessionType =
+      typeof session.session_type === "string"
+        ? session.session_type.trim().toLowerCase()
+        : ""
+    if (!ALLOWED_SESSION_TYPES.has(sessionType as CommitSessionPayload["session_type"])) {
       return {
         ok: false,
-        message: `Session ${index + 1} has session_number greater than total_sessions.`,
+        message: `Session ${index + 1} has invalid session_type.`,
       }
     }
+
+    const isManualSession = Boolean(session.is_manual)
+    const sessionNumber = isManualSession
+      ? (Number.isInteger(session.session_number) && session.session_number > 0
+        ? session.session_number
+        : 1)
+      : session.session_number
+    const totalSessions = isManualSession
+      ? (Number.isInteger(session.total_sessions) && session.total_sessions > 0
+        ? session.total_sessions
+        : 1)
+      : session.total_sessions
+
+    if (!isManualSession) {
+      if (
+        !Number.isInteger(sessionNumber)
+        || !Number.isInteger(totalSessions)
+        || sessionNumber <= 0
+        || totalSessions <= 0
+      ) {
+        return {
+          ok: false,
+          message: `Session ${index + 1} has invalid session counters.`,
+        }
+      }
+
+      if (sessionNumber > totalSessions) {
+        return {
+          ok: false,
+          message: `Session ${index + 1} has session_number greater than total_sessions.`,
+        }
+      }
+    }
+
+    const sourceTopicTaskId =
+      typeof session.source_topic_task_id === "string" && session.source_topic_task_id.trim().length > 0
+        ? session.source_topic_task_id.trim()
+        : null
 
     sanitized.push({
       ...session,
       title: session.title?.trim() || "Study session",
-      session_type: normalizeSessionType(session.session_type),
-      priority: Number.isFinite(session.priority) ? session.priority : 3,
-      duration_minutes: Math.floor(session.duration_minutes),
+      topic_id: topicId,
+      ...(session.is_manual ? { is_manual: true as const } : {}),
+      session_type: sessionType as CommitSessionPayload["session_type"],
+      duration_minutes: durationMinutes,
       session_number: sessionNumber,
       total_sessions: totalSessions,
+      source_topic_task_id: topicId ? sourceTopicTaskId : null,
     })
   }
 
@@ -263,7 +414,6 @@ function buildConstraintsFromPlanConfig(
     | "custom_day_capacity"
     | "plan_order_stack"
     | "flexibility_minutes"
-    | "max_daily_minutes"
     | "max_topics_per_subject_per_day"
     | "min_subject_gap_days"
     | "subject_ordering"
@@ -271,7 +421,6 @@ function buildConstraintsFromPlanConfig(
   >
 ): GlobalConstraints {
   const normalizedPlanOrder =
-    planConfig.plan_order === "priority" ||
     planConfig.plan_order === "deadline" ||
     planConfig.plan_order === "subject" ||
     planConfig.plan_order === "balanced"
@@ -300,9 +449,6 @@ function buildConstraintsFromPlanConfig(
     ...(planConfig.flexibility_minutes != null && {
       flexibility_minutes: planConfig.flexibility_minutes,
     }),
-    ...(planConfig.max_daily_minutes != null && {
-      max_daily_minutes: planConfig.max_daily_minutes,
-    }),
     ...(planConfig.max_topics_per_subject_per_day != null && {
       max_topics_per_subject_per_day:
         planConfig.max_topics_per_subject_per_day,
@@ -321,31 +467,18 @@ function buildConstraintsFromPlanConfig(
 }
 
 function todayISO() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, "0")
-  const day = String(now.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
+  return getTodayLocalDate()
 }
 
 function addDays(isoDate: string, days: number) {
-  const parts = isoDate.split("-")
-  if (parts.length !== 3) return isoDate
+  const normalized = normalizeLocalDate(isoDate)
+  if (!normalized) return isoDate
 
-  const year = Number(parts[0])
-  const month = Number(parts[1])
-  const day = Number(parts[2])
+  const date = new Date(`${normalized}T12:00:00`)
+  if (Number.isNaN(date.getTime())) return isoDate
 
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-    return isoDate
-  }
-
-  const date = new Date(Date.UTC(year, month - 1, day))
-  date.setUTCDate(date.getUTCDate() + days)
-  const yyyy = date.getUTCFullYear()
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0")
-  const dd = String(date.getUTCDate()).padStart(2, "0")
-  return `${yyyy}-${mm}-${dd}`
+  date.setDate(date.getDate() + days)
+  return normalizeLocalDate(date) ?? normalized
 }
 
 export async function getPlanHistory(): Promise<GetPlanHistoryResponse> {
@@ -362,7 +495,9 @@ export async function getPlanHistory(): Promise<GetPlanHistoryResponse> {
   return { status: "SUCCESS", snapshots: (data ?? []) as PlanSnapshot[] }
 }
 
-export async function generatePlanAction(): Promise<GeneratePlanResponse> {
+export async function generatePlanAction(
+  input: GeneratePlanInput = {}
+): Promise<GeneratePlanResponse> {
   const startedAt = Date.now()
   const supabase = await createServerSupabaseClient()
   const {
@@ -379,6 +514,8 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
     })
     return { status: "UNAUTHORIZED" }
   }
+
+  const selectedTaskIds = normalizePlannerSelectedTaskIds(input.selectedTaskIds)
 
   const track = async (
     status: "success" | "warning" | "error",
@@ -402,10 +539,37 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
   }
   const planConfig = config as PlanConfig
 
+  const { data: subjects, error: subjectsError } = await getSubjectsForUser(
+    supabase,
+    user.id
+  )
+
+  if (subjectsError) {
+    await track("error", { reason: "subjects_query_failed", message: subjectsError.message })
+    return { status: "ERROR", message: `subjects query failed: ${subjectsError.message}` }
+  }
+
+  const activeSubjects = (subjects ?? []) as Array<{
+    id: string
+    name: string
+    sort_order: number
+    deadline?: string | null
+    archived?: boolean | null
+  }>
+
+  if (activeSubjects.length === 0) {
+    await track("warning", { reason: "no_active_subjects" })
+    return { status: "NO_TOPICS" }
+  }
+
+  const activeSubjectIds = new Set(activeSubjects.map((subject) => subject.id))
+
   const { data: topics, error: topicsError } = await getTopicsForUser(
     supabase,
     user.id,
-    TOPIC_SELECT
+    TOPIC_SELECT,
+    undefined,
+    Array.from(activeSubjectIds)
   )
 
   if (topicsError) {
@@ -417,24 +581,6 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
     return { status: "NO_TOPICS" }
   }
 
-  const { data: subjects, error: subjectsError } = await getSubjectsForUser(
-    supabase,
-    user.id
-  )
-
-  if (subjectsError) {
-    await track("error", { reason: "subjects_query_failed", message: subjectsError.message })
-    return { status: "ERROR", message: `subjects query failed: ${subjectsError.message}` }
-  }
-
-  const activeSubjects = ((subjects ?? []) as Array<{
-    id: string
-    name: string
-    sort_order: number
-    deadline?: string | null
-    archived?: boolean | null
-  }>).filter((subject) => subject.archived !== true)
-
   const {
     subjectNameMap,
     subjectOrderMap,
@@ -444,7 +590,6 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
     activeSubjects
   )
 
-  const activeSubjectIds = new Set(activeSubjects.map((subject) => subject.id))
   const activeTopics = sortTopicsBySubjectOrder(
     (topics as Topic[]).filter(
       (topic) => activeSubjectIds.has(topic.subject_id) && topic.archived !== true
@@ -461,7 +606,13 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
   const topicNameMap = new Map(activeTopics.map((topic) => [topic.id, topic.name]))
   const [{ data: topicParamRows }, { data: topicTasks }] = await Promise.all([
     getTopicParamsForUser(supabase, user.id, topicIds),
-    getOpenManualTasksByTopic(supabase, user.id, undefined, topicIds),
+    getOpenManualTasksByTopic(
+      supabase,
+      user.id,
+      undefined,
+      topicIds,
+      selectedTaskIds.length > 0 ? selectedTaskIds : undefined
+    ),
   ])
 
   const paramMap = buildTopicParamMap((topicParamRows ?? []) as Array<Record<string, unknown>>)
@@ -469,8 +620,6 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
   const topicTaskSourceMap = buildTaskSourceByTopic(
     (topicTasks ?? []) as PlannerTaskSourceRow[]
   )
-
-  const { data: offDayRows } = await getOffDaysForUser(supabase, user.id)
 
   const units = buildUnitsFromActiveTopics({
     activeTopics,
@@ -492,9 +641,7 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
   const result = generatePlan({
     units,
     constraints: buildConstraintsFromPlanConfig(planConfig),
-    offDays: new Set<string>(
-      ((offDayRows ?? []) as Array<{ date: string }>).map((row) => row.date)
-    ),
+    offDays: new Set<string>(),
   })
 
   const hasFeasibility =
@@ -515,6 +662,11 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
     const titledSchedule = result.schedule.map((session) => {
       const topicName = topicNameMap.get(session.topic_id) ?? session.title
       const sourceTasks = topicTaskSourceMap.get(session.topic_id) ?? []
+      const sourceTask = resolveSessionSourceTask(
+        sourceTasks,
+        session.session_number,
+        session.total_sessions
+      )
 
       return {
         ...session,
@@ -524,6 +676,7 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
           session.session_number,
           session.total_sessions
         ),
+        source_topic_task_id: sourceTask?.id ?? null,
       }
     })
 
@@ -539,7 +692,7 @@ export async function generatePlanAction(): Promise<GeneratePlanResponse> {
 
 export async function commitPlan(
   sessions: ScheduledSession[],
-  keepMode: KeepPreviousMode = "future",
+  keepMode: KeepPreviousMode = "until",
   summary?: string
 ): Promise<CommitPlanResponse> {
   const startedAt = Date.now()
@@ -559,9 +712,27 @@ export async function commitPlan(
     return { status: "UNAUTHORIZED" }
   }
 
-  const { data: config } = await getPlannerSettings(supabase, user.id)
-
   const normalizedKeepMode = normalizeKeepMode(keepMode)
+
+  if (sessions.length === 0) {
+    await trackServerEvent({
+      supabase,
+      eventName: "planner.commit",
+      status: "warning",
+      userId: user.id,
+      durationMs: durationSince(startedAt),
+      metadata: {
+        reason: "empty_commit",
+        keepMode: normalizedKeepMode,
+        sessionCount: 0,
+      },
+    })
+    return {
+      status: "ERROR",
+      message: "Cannot commit empty plan",
+    }
+  }
+
   const sanitizedSessionsResult = sanitizeSessionsForCommit(sessions)
   if (!sanitizedSessionsResult.ok) {
     await trackServerEvent({
@@ -583,6 +754,48 @@ export async function commitPlan(
   }
 
   const sanitizedSessions = sanitizedSessionsResult.sessions
+  if (sanitizedSessions.length === 0) {
+    await trackServerEvent({
+      supabase,
+      eventName: "planner.commit",
+      status: "warning",
+      userId: user.id,
+      durationMs: durationSince(startedAt),
+      metadata: {
+        reason: "empty_commit",
+        keepMode: normalizedKeepMode,
+        sessionCount: 0,
+      },
+    })
+    return {
+      status: "ERROR",
+      message: "Cannot commit empty plan",
+    }
+  }
+
+  const generatedSessions = sanitizedSessions.filter((session) => !session.is_manual)
+  if (generatedSessions.length === 0) {
+    await trackServerEvent({
+      supabase,
+      eventName: "planner.commit",
+      status: "warning",
+      userId: user.id,
+      durationMs: durationSince(startedAt),
+      metadata: {
+        reason: "missing_generated_sessions",
+        keepMode: normalizedKeepMode,
+        sessionCount: sanitizedSessions.length,
+      },
+    })
+    return {
+      status: "ERROR",
+      message: "Missing required generated sessions",
+    }
+  }
+
+  const commitHash = buildCommitPayloadHash(user.id, sanitizedSessions)
+
+  const { data: config } = await getPlannerSettings(supabase, user.id)
   const snapshotSummary = sanitizeSummary(summary, sanitizedSessions.length)
 
   const newPlanStartDate =
@@ -594,6 +807,8 @@ export async function commitPlan(
         )
       : null
 
+  console.log("Sanitized sessions:", sanitizedSessions)
+
   const { data, error } = await commitPlanAtomic(supabase, {
     userId: user.id,
     tasks: sanitizedSessions,
@@ -601,9 +816,11 @@ export async function commitPlan(
     configSnapshot: config ?? {},
     keepMode: normalizedKeepMode,
     newPlanStartDate,
+    commitHash,
   })
 
   if (error) {
+    const mappedMessage = mapCommitRpcErrorMessage(error.message)
     console.error("commitPlan error:", error.message)
     await trackServerEvent({
       supabase,
@@ -616,18 +833,27 @@ export async function commitPlan(
         keepMode: normalizedKeepMode,
         sessionCount: sanitizedSessions.length,
         message: error.message,
+        mappedMessage,
       },
     })
-    return { status: "ERROR", message: "Failed to commit plan." }
+    return {
+      status: "ERROR",
+      message: mappedMessage,
+    }
   }
 
-  const result = data as {
-    status: string
-    task_count: number
-    snapshot_id: string
-  } | null
+  const resultRow = (Array.isArray(data) ? data[0] : data) as
+    | {
+        status?: string
+        task_count?: number
+        snapshot_id?: string
+      }
+    | null
 
-  if (!result || result.status !== "SUCCESS") {
+  const rpcStatus = typeof resultRow?.status === "string" ? resultRow.status : null
+
+  if (!resultRow || rpcStatus !== "SUCCESS") {
+    const mappedMessage = mapCommitRpcErrorMessage(rpcStatus)
     await trackServerEvent({
       supabase,
       eventName: "planner.commit",
@@ -638,13 +864,40 @@ export async function commitPlan(
         reason: "rpc_non_success",
         keepMode: normalizedKeepMode,
         sessionCount: sanitizedSessions.length,
-        rpcStatus: result?.status ?? null,
+        rpcStatus,
+        mappedMessage,
       },
     })
-    return { status: "ERROR", message: "Failed to commit plan." }
+    return {
+      status: "ERROR",
+      message: mappedMessage,
+    }
   }
 
-  await normalizePlannerTaskSourceAfterCommit(supabase, user.id, result.snapshot_id)
+  const taskCount = Number.isFinite(resultRow.task_count) ? Number(resultRow.task_count) : 0
+  const snapshotId = typeof resultRow.snapshot_id === "string" ? resultRow.snapshot_id : ""
+
+  if (!snapshotId) {
+    await trackServerEvent({
+      supabase,
+      eventName: "planner.commit",
+      status: "error",
+      userId: user.id,
+      durationMs: durationSince(startedAt),
+      metadata: {
+        reason: "rpc_malformed_result",
+        keepMode: normalizedKeepMode,
+        sessionCount: sanitizedSessions.length,
+        rpcStatus,
+      },
+    })
+    return {
+      status: "ERROR",
+      message: "Failed to commit plan: malformed_result",
+    }
+  }
+
+  await normalizePlannerTaskSourceAfterCommit(supabase, user.id, snapshotId)
 
   revalidatePath("/dashboard")
   revalidatePath("/dashboard/calendar")
@@ -661,20 +914,21 @@ export async function commitPlan(
     metadata: {
       keepMode: normalizedKeepMode,
       sessionCount: sanitizedSessions.length,
-      taskCount: result.task_count,
-      snapshotId: result.snapshot_id,
+      taskCount,
+      snapshotId,
     },
   })
 
   return {
     status: "SUCCESS",
-    taskCount: result.task_count,
-    snapshotId: result.snapshot_id,
+    taskCount,
+    snapshotId,
   }
 }
 
 export async function reoptimizePreviewPlan(
-  reservedSessions: ScheduledSession[]
+  reservedSessions: ScheduledSession[],
+  input: ReoptimizePreviewInput = {}
 ): Promise<ReoptimizePreviewResponse> {
   const supabase = await createServerSupabaseClient()
   const {
@@ -682,6 +936,8 @@ export async function reoptimizePreviewPlan(
   } = await supabase.auth.getUser()
 
   if (!user) return { status: "UNAUTHORIZED" }
+
+  const selectedTaskIds = normalizePlannerSelectedTaskIds(input.selectedTaskIds)
 
   const { data: config } = await getPlannerSettings(supabase, user.id)
 
@@ -691,30 +947,26 @@ export async function reoptimizePreviewPlan(
 
   const planConfig = config as PlanConfig
 
-  const { data: topics } = await getTopicsForUser(supabase, user.id, TOPIC_SELECT)
-
-  if (!topics || topics.length === 0) {
-    return { status: "NO_TOPICS" }
-  }
-
-  const [{ data: subjects, error: subjectsError }, { data: topicParamRows }, { data: offDayRows }, { data: topicTasks }] = await Promise.all([
-    getSubjectsForUser(supabase, user.id),
-    getTopicParamsForUser(supabase, user.id),
-    getOffDaysForUser(supabase, user.id),
-    getOpenManualTasksByTopic(supabase, user.id),
-  ])
+  const { data: subjects, error: subjectsError } = await getSubjectsForUser(
+    supabase,
+    user.id
+  )
 
   if (subjectsError) {
     return { status: "NO_TOPICS" }
   }
 
-  const activeSubjects = ((subjects ?? []) as Array<{
+  const activeSubjects = (subjects ?? []) as Array<{
     id: string
     name: string
     sort_order: number
     deadline?: string | null
     archived?: boolean | null
-  }>).filter((subject) => subject.archived !== true)
+  }>
+
+  if (activeSubjects.length === 0) {
+    return { status: "NO_TOPICS" }
+  }
 
   const {
     subjectNameMap,
@@ -723,6 +975,19 @@ export async function reoptimizePreviewPlan(
     
   } = buildSubjectMaps(activeSubjects)
   const activeSubjectIds = new Set(activeSubjects.map((subject) => subject.id))
+
+  const { data: topics } = await getTopicsForUser(
+    supabase,
+    user.id,
+    TOPIC_SELECT,
+    undefined,
+    Array.from(activeSubjectIds)
+  )
+
+  if (!topics || topics.length === 0) {
+    return { status: "NO_TOPICS" }
+  }
+
   const activeTopics = sortTopicsBySubjectOrder(
     (topics as Topic[]).filter(
       (topic) => activeSubjectIds.has(topic.subject_id) && topic.archived !== true
@@ -733,6 +998,18 @@ export async function reoptimizePreviewPlan(
   if (activeTopics.length === 0) {
     return { status: "NO_TOPICS" }
   }
+
+  const topicIds = activeTopics.map((topic) => topic.id)
+  const [{ data: topicParamRows }, { data: topicTasks }] = await Promise.all([
+    getTopicParamsForUser(supabase, user.id, topicIds),
+    getOpenManualTasksByTopic(
+      supabase,
+      user.id,
+      undefined,
+      topicIds,
+      selectedTaskIds.length > 0 ? selectedTaskIds : undefined
+    ),
+  ])
 
   const topicNameMap = new Map(activeTopics.map((topic) => [topic.id, topic.name]))
   const paramMap = buildTopicParamMap((topicParamRows ?? []) as Array<Record<string, unknown>>)
@@ -773,9 +1050,7 @@ export async function reoptimizePreviewPlan(
     reservedGeneratedMinutesByTopic,
   })
 
-  const offDays = new Set<string>(
-    ((offDayRows ?? []) as Array<{ date: string }>).map((row) => row.date)
-  )
+  const offDays = new Set<string>()
   const reservedSlots: ReservedSlot[] = Array.from(reservedByDate.entries()).map(
     ([date, minutes]) => ({ date, minutes })
   )
@@ -793,6 +1068,11 @@ export async function reoptimizePreviewPlan(
     const nextSessionNumber = session.session_number + offset
     const topicName = topicNameMap.get(session.topic_id) ?? session.title
     const sourceTasks = topicTaskSourceMap.get(session.topic_id) ?? []
+    const sourceTask = resolveSessionSourceTask(
+      sourceTasks,
+      nextSessionNumber,
+      totalSessions
+    )
 
     return {
       ...session,
@@ -802,6 +1082,7 @@ export async function reoptimizePreviewPlan(
         nextSessionNumber,
         totalSessions
       ),
+      source_topic_task_id: sourceTask?.id ?? null,
       session_number: nextSessionNumber,
       total_sessions: totalSessions,
       topic_completion_after:
@@ -899,7 +1180,6 @@ export async function rescheduleMissedPlan(): Promise<RescheduleMissedPlanRespon
   const [
     { data: profile },
     { data: config },
-    { data: offDaysRows },
     { data: subjects },
     { data: topics },
     { data: topicParamRows },
@@ -959,9 +1239,6 @@ export async function rescheduleMissedPlan(): Promise<RescheduleMissedPlanRespon
     ...(planConfig?.flexibility_minutes != null && {
       flexibility_minutes: planConfig.flexibility_minutes,
     }),
-    ...(planConfig?.max_daily_minutes != null && {
-      max_daily_minutes: planConfig.max_daily_minutes,
-    }),
     ...(planConfig?.max_topics_per_subject_per_day != null && {
       max_topics_per_subject_per_day:
         planConfig.max_topics_per_subject_per_day,
@@ -978,9 +1255,7 @@ export async function rescheduleMissedPlan(): Promise<RescheduleMissedPlanRespon
     }),
   }
 
-  const offDays = new Set<string>(
-    ((offDaysRows ?? []) as Array<{ date: string }>).map((row) => row.date)
-  )
+  const offDays = new Set<string>()
   const daySlots = buildDaySlots(constraints, offDays)
 
   if (daySlots.length === 0) {
@@ -1116,7 +1391,6 @@ export async function rescheduleMissedPlan(): Promise<RescheduleMissedPlanRespon
       final_revision_days: constraints.final_revision_days,
       buffer_percentage: constraints.buffer_percentage,
       flexibility_minutes: constraints.flexibility_minutes,
-      max_daily_minutes: constraints.max_daily_minutes,
     },
     summary: `Rescheduled ${filteredPendingTasks.length} pending plan sessions`,
   })
@@ -1126,13 +1400,14 @@ export async function rescheduleMissedPlan(): Promise<RescheduleMissedPlanRespon
   if (scheduled.length > 0) {
     const insertPayload: InsertTaskRow[] = scheduled.map((session) => ({
       user_id: user.id,
+      task_type: "subject",
       subject_id: session.subject_id,
       topic_id: session.topic_id,
+      source_topic_task_id: session.source_topic_task_id ?? null,
       title: session.title,
       scheduled_date: session.scheduled_date,
       duration_minutes: session.duration_minutes,
       session_type: session.session_type,
-      priority: session.priority,
       session_number: session.session_number,
       total_sessions: session.total_sessions,
       completed: false,

@@ -10,7 +10,6 @@ function buildUnit(overrides: Partial<PlannableUnit> = {}): PlannableUnit {
     topic_name: "Mechanics",
     estimated_minutes: 180,
     session_length_minutes: 60,
-    priority: 2,
     deadline: "2024-01-05",
     depends_on: [],
     ...overrides,
@@ -139,7 +138,6 @@ describe("schedule", () => {
       subject_id: "subject-urgent",
       subject_name: "Urgent Subject",
       topic_name: "Urgent Topic",
-      priority: 1,
       deadline: "2024-01-02",
       estimated_minutes: 60,
     })
@@ -148,7 +146,6 @@ describe("schedule", () => {
       subject_id: "subject-relaxed",
       subject_name: "Relaxed Subject",
       topic_name: "Relaxed Topic",
-      priority: 5,
       deadline: "2024-01-07",
       estimated_minutes: 60,
     })
@@ -253,7 +250,6 @@ describe("schedule", () => {
       estimated_minutes: 120,
       session_length_minutes: 60,
       deadline: "2024-01-07",
-      priority: 5,
     })
 
     const topic2 = buildUnit({
@@ -262,7 +258,6 @@ describe("schedule", () => {
       estimated_minutes: 60,
       session_length_minutes: 60,
       deadline: "2024-01-03",
-      priority: 1,
     })
 
     const result = schedule(
@@ -802,7 +797,6 @@ describe("schedule", () => {
         weekend_capacity_minutes: 60,
         day_of_week_capacity: [null, null, null, 0, null, null, null],
         flexibility_minutes: 60,
-        max_daily_minutes: 180,
       },
       new Set<string>()
     )
@@ -834,7 +828,6 @@ describe("schedule", () => {
         weekend_capacity_minutes: 60,
         custom_day_capacity: { "2024-01-02": 0 },
         flexibility_minutes: 60,
-        max_daily_minutes: 180,
       },
       new Set<string>()
     )
@@ -851,7 +844,6 @@ describe("schedule", () => {
         weekday_capacity_minutes: 50,
         weekend_capacity_minutes: 50,
         flexibility_minutes: 10,
-        max_daily_minutes: 60,
       },
       new Set<string>()
     )
@@ -861,7 +853,7 @@ describe("schedule", () => {
     expect(result[0].flex_extra_minutes).toBe(10)
   })
 
-  it("caps total schedulable minutes by max_daily_minutes", () => {
+  it("allows scheduling up to base plus flexibility capacity", () => {
     const result = schedule(
       [buildUnit({ estimated_minutes: 240, deadline: "2024-01-01" })],
       {
@@ -870,59 +862,56 @@ describe("schedule", () => {
         weekday_capacity_minutes: 200,
         weekend_capacity_minutes: 200,
         flexibility_minutes: 60,
-        max_daily_minutes: 180,
       },
       new Set<string>()
     )
 
-    expect(result).toHaveLength(3)
+    expect(result).toHaveLength(4)
     expect(result.every((session) => session.scheduled_date === "2024-01-01")).toBe(true)
     const totalMinutes = result.reduce((sum, session) => sum + session.duration_minutes, 0)
-    expect(totalMinutes).toBe(180)
+    expect(totalMinutes).toBe(240)
   })
 
   it("ignores plan order stack and keeps input order", () => {
-    const highPriority = buildUnit({
-      id: "priority-first",
-      topic_name: "Priority First",
-      priority: 1,
+    const firstInStack = buildUnit({
+      id: "stack-first",
+      topic_name: "Stack First",
       deadline: "2024-01-05",
       estimated_minutes: 60,
     })
     const urgentDeadline = buildUnit({
       id: "deadline-first",
       topic_name: "Deadline First",
-      priority: 5,
       deadline: "2024-01-02",
       estimated_minutes: 60,
       subject_id: "subject-2",
       subject_name: "Chemistry",
     })
 
-    const priorityFirstStack = schedule(
-      [highPriority, urgentDeadline],
+    const urgencyFirstStack = schedule(
+      [firstInStack, urgentDeadline],
       {
         ...baseConstraints,
         weekday_capacity_minutes: 60,
         weekend_capacity_minutes: 60,
-        plan_order_stack: ["priority", "deadline"],
+        plan_order_stack: ["urgency", "deadline"],
       },
       new Set<string>()
     )
 
     const deadlineFirstStack = schedule(
-      [highPriority, urgentDeadline],
+      [firstInStack, urgentDeadline],
       {
         ...baseConstraints,
         weekday_capacity_minutes: 60,
         weekend_capacity_minutes: 60,
-        plan_order_stack: ["deadline", "priority"],
+        plan_order_stack: ["deadline", "urgency"],
       },
       new Set<string>()
     )
 
-    expect(priorityFirstStack[0].topic_id).toBe("priority-first")
-    expect(deadlineFirstStack[0].topic_id).toBe("priority-first")
+    expect(urgencyFirstStack[0].topic_id).toBe("stack-first")
+    expect(deadlineFirstStack[0].topic_id).toBe("stack-first")
   })
 
   it("reserves fixed calendar capacity before scheduling free sessions", () => {

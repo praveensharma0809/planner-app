@@ -1,3 +1,5 @@
+import { normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
+
 export type TopicOrderingMode =
   | "sequential"
   | "flexible_sequential"
@@ -7,7 +9,6 @@ export type StudyFrequency = "daily" | "spaced"
 
 export type PlanOrderCriterion =
   | "urgency"
-  | "priority"
   | "deadline"
   | "subject_order"
   | "effort"
@@ -20,7 +21,6 @@ export interface PlannableUnit {
   topic_name: string
   estimated_minutes: number
   session_length_minutes: number
-  priority: number
   deadline: string
   earliest_start?: string
   depends_on: string[]
@@ -42,11 +42,10 @@ export interface GlobalConstraints {
   day_of_week_capacity?: (number | null)[]
   custom_day_capacity?: Record<string, number>
   plan_order_stack?: PlanOrderCriterion[]
-  plan_order: "priority" | "deadline" | "subject" | "balanced"
+  plan_order: "deadline" | "subject" | "balanced"
   final_revision_days: number
   buffer_percentage: number
   flexibility_minutes?: number
-  max_daily_minutes?: number
   max_active_subjects: number
   max_topics_per_subject_per_day?: number
   min_subject_gap_days?: number
@@ -67,7 +66,6 @@ export interface ScheduledSession {
   scheduled_date: string
   duration_minutes: number
   session_type: "core" | "revision" | "practice"
-  priority: number
   session_number: number
   total_sessions: number
   is_flex_day?: boolean
@@ -76,6 +74,7 @@ export interface ScheduledSession {
   is_topic_final_session?: boolean
   is_pinned?: boolean
   is_manual?: boolean
+  source_topic_task_id?: string | null
 }
 
 export type UnitFeasibilityStatus = "safe" | "tight" | "at_risk" | "impossible"
@@ -129,19 +128,20 @@ export type PlanResult =
   | { status: "READY"; schedule: ScheduledSession[]; feasibility: FeasibilityResult }
 
 function isWeekend(date: Date): boolean {
-  const day = date.getUTCDay()
+  const day = date.getDay()
   return day === 0 || day === 6
 }
 
 function toISO(date: Date): string {
-  const year = date.getUTCFullYear()
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0")
-  const day = String(date.getUTCDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
+  const normalized = normalizeLocalDate(date)
+  return normalized ?? ""
 }
 
 function parseISODate(isoDate: string): Date {
-  const parts = isoDate.split("-")
+  const normalized = normalizeLocalDate(isoDate)
+  if (!normalized) return new Date(Number.NaN)
+
+  const parts = normalized.split("-")
   if (parts.length !== 3) return new Date(Number.NaN)
 
   const year = Number(parts[0])
@@ -152,12 +152,12 @@ function parseISODate(isoDate: string): Date {
     return new Date(Number.NaN)
   }
 
-  return new Date(Date.UTC(year, month - 1, day))
+  return new Date(year, month - 1, day, 12, 0, 0, 0)
 }
 
 function addDays(date: Date, n: number): Date {
   const next = new Date(date)
-  next.setUTCDate(next.getUTCDate() + n)
+  next.setDate(next.getDate() + n)
   return next
 }
 
@@ -170,7 +170,6 @@ export function buildDaySlots(
   const endDate = addDays(parseISODate(constraints.exam_date), -revisionDays)
 
   const flexMinutes = constraints.flexibility_minutes ?? 0
-  const maxDaily = constraints.max_daily_minutes ?? 480
 
   const slots: DaySlot[] = []
   let cursor = new Date(start)
@@ -197,12 +196,10 @@ export function buildDaySlots(
 
       const normalizedRawCapacity = Math.max(0, rawCapacity)
       const isZeroCapacityDay = normalizedRawCapacity === 0
-      const baseCapacity = isZeroCapacityDay
-        ? 0
-        : Math.min(normalizedRawCapacity, maxDaily)
+      const baseCapacity = isZeroCapacityDay ? 0 : normalizedRawCapacity
       const flexCap = isZeroCapacityDay
         ? 0
-        : Math.min(baseCapacity + flexMinutes, maxDaily)
+        : baseCapacity + flexMinutes
 
       if (baseCapacity > 0 || flexCap > 0) {
         slots.push({
@@ -679,7 +676,6 @@ export function schedule(
       scheduled_date: day.date,
       duration_minutes: state.unit.session_length_minutes,
       session_type: "core",
-      priority: state.unit.priority,
       session_number: sessionNumber,
       total_sessions: totalSessions,
       is_flex_day: isFlexDay || undefined,

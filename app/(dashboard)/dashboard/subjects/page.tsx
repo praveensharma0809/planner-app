@@ -1,5 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
-import type { Subject, Task, Topic } from "@/lib/types/db"
+import type { Subject, Topic, TopicTask } from "@/lib/types/db"
 import { redirect } from "next/navigation"
 import {
   SubjectsDataTable,
@@ -9,7 +9,7 @@ import {
 
 type SubjectRow = Pick<Subject, "id" | "name" | "archived" | "sort_order">
 type TopicRow = Pick<Topic, "id" | "subject_id" | "name" | "sort_order" | "archived">
-type TaskRow = Pick<Task, "id" | "topic_id" | "title" | "completed" | "sort_order" | "created_at">
+type TaskRow = Pick<TopicTask, "id" | "topic_id" | "title" | "completed" | "sort_order" | "created_at">
 
 export default async function SubjectsPage() {
   const supabase = await createServerSupabaseClient()
@@ -23,6 +23,8 @@ export default async function SubjectsPage() {
     .from("subjects")
     .select("id, name, archived, sort_order")
     .eq("user_id", user.id)
+    .not("name", "ilike", "others")
+    .not("name", "ilike", "__deprecated_others__")
     .order("sort_order", { ascending: true })
 
   const subjects = (subjectRows ?? []) as SubjectRow[]
@@ -50,13 +52,9 @@ export default async function SubjectsPage() {
 
   if (topicIds.length > 0) {
     const { data: taskRows } = await supabase
-      .from("tasks")
+      .from("topic_tasks")
       .select("id, topic_id, title, completed, sort_order, created_at")
       .eq("user_id", user.id)
-      .eq("task_source", "manual")
-      .eq("session_number", 0)
-      .eq("total_sessions", 1)
-      .is("plan_snapshot_id", null)
       .in("topic_id", topicIds)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true })

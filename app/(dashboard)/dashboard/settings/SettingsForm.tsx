@@ -6,42 +6,44 @@ import { updateProfile } from "@/app/actions/dashboard/updateProfile"
 interface Props {
   profile: {
     full_name: string | null
-    primary_exam: string | null
-    exam_date: string | null
-    daily_available_minutes: number
+    email: string | null
+    phone_number: string | null
   }
 }
 
 export function SettingsForm({ profile }: Props) {
-  const [fullName, setFullName] = useState(profile.full_name ?? "")
-  const [primaryExam, setPrimaryExam] = useState(profile.primary_exam ?? "")
-  const [examDate, setExamDate] = useState(profile.exam_date ?? "")
-  const [dailyHours, setDailyHours] = useState(
-    String(Math.round(profile.daily_available_minutes / 60))
-  )
+  const [savedValues, setSavedValues] = useState({
+    fullName: profile.full_name ?? "",
+    email: profile.email ?? "",
+    phoneNumber: profile.phone_number ?? "",
+  })
+  const [fullName, setFullName] = useState(savedValues.fullName)
+  const [email, setEmail] = useState(savedValues.email)
+  const [phoneNumber, setPhoneNumber] = useState(savedValues.phoneNumber)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
+  const isDirty =
+    fullName !== savedValues.fullName
+    || email !== savedValues.email
+    || phoneNumber !== savedValues.phoneNumber
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const parsed = parseInt(dailyHours)
-    if (isNaN(parsed) || parsed <= 0) {
-      setMessage({ type: "error", text: "Please enter a valid number of hours." })
-      return
-    }
+
     setSaving(true)
     setMessage(null)
 
     try {
       const result = await updateProfile({
         full_name: fullName,
-        primary_exam: primaryExam,
-        exam_date: examDate,
-        daily_available_minutes: parsed * 60,
+        email,
+        phone_number: phoneNumber,
       })
 
       if (result.status === "SUCCESS") {
-        setMessage({ type: "success", text: "Settings saved." })
+        setSavedValues({ fullName, email, phoneNumber })
+        setMessage({ type: "success", text: "Profile updated." })
       } else if (result.status === "ERROR") {
         setMessage({ type: "error", text: result.message })
       } else {
@@ -55,67 +57,66 @@ export function SettingsForm({ profile }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 max-w-lg">
-      <div className="space-y-1.5">
-        <label htmlFor="settings-fullname" className="text-[10px] text-white/30 uppercase tracking-wider font-medium">Full name</label>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="space-y-2">
+        <label
+          htmlFor="settings-fullname"
+          className="text-sm font-medium text-white/55"
+        >
+          Full name
+        </label>
         <input
           id="settings-fullname"
           type="text"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           required
-          className="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.06] focus:outline-none focus:border-indigo-500/30 focus:ring-1 focus:ring-indigo-500/20 transition-all"
+          className="h-11 w-full rounded-xl border border-white/[0.1] bg-white/[0.04] px-3.5 text-sm text-white/90 placeholder:text-white/35 transition-[border-color,box-shadow,background-color] focus:border-indigo-300/45 focus:bg-white/[0.06] focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
         />
       </div>
 
-      <div className="space-y-1.5">
-        <label htmlFor="settings-goal" className="text-[10px] text-white/30 uppercase tracking-wider font-medium">Goal name</label>
+      <div className="space-y-2">
+        <label
+          htmlFor="settings-email"
+          className="text-sm font-medium text-white/55"
+        >
+          Email
+        </label>
         <input
-          id="settings-goal"
-          type="text"
-          value={primaryExam}
-          onChange={(e) => setPrimaryExam(e.target.value)}
-          placeholder="e.g. CPA certification, product launch, research thesis..."
-          required
-          className="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.06] focus:outline-none focus:border-indigo-500/30 focus:ring-1 focus:ring-indigo-500/20 transition-all placeholder:text-white/25"
+          id="settings-email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="name@example.com"
+          className="h-11 w-full rounded-xl border border-white/[0.1] bg-white/[0.04] px-3.5 text-sm text-white/90 placeholder:text-white/35 transition-[border-color,box-shadow,background-color] focus:border-indigo-300/45 focus:bg-white/[0.06] focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
         />
+        <p className="text-xs text-white/40">Optional. Must be valid if provided.</p>
       </div>
 
-      <div className="space-y-1.5">
-        <label htmlFor="settings-hours" className="text-[10px] text-white/30 uppercase tracking-wider font-medium">Daily available hours</label>
+      <div className="space-y-2">
+        <label
+          htmlFor="settings-phone"
+          className="text-sm font-medium text-white/55"
+        >
+          Phone
+        </label>
         <input
-          id="settings-hours"
-          type="number"
-          value={dailyHours}
-          onChange={(e) => setDailyHours(e.target.value)}
-          min={1}
-          max={16}
-          required
-          className="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.06] focus:outline-none focus:border-indigo-500/30 focus:ring-1 focus:ring-indigo-500/20 transition-all"
+          id="settings-phone"
+          type="tel"
+          value={phoneNumber}
+          onChange={(e) => setPhoneNumber(e.target.value)}
+          placeholder="+1 555 123 4567"
+          className="h-11 w-full rounded-xl border border-white/[0.1] bg-white/[0.04] px-3.5 text-sm text-white/90 placeholder:text-white/35 transition-[border-color,box-shadow,background-color] focus:border-indigo-300/45 focus:bg-white/[0.06] focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
         />
-        <p className="text-xs text-white/30">
-          {!isNaN(parseInt(dailyHours)) && parseInt(dailyHours) > 0 ? `${parseInt(dailyHours) * 60} minutes` : "&#x2014;"}
-        </p>
-      </div>
-
-      <div className="space-y-1.5">
-        <label htmlFor="settings-deadline" className="text-[10px] text-white/30 uppercase tracking-wider font-medium">Goal deadline</label>
-        <input
-          id="settings-deadline"
-          type="date"
-          value={examDate}
-          onChange={(e) => setExamDate(e.target.value)}
-          required
-          className="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.06] focus:outline-none focus:border-indigo-500/30 focus:ring-1 focus:ring-indigo-500/20 transition-all"
-        />
+        <p className="text-xs text-white/40">Optional. Must be valid if provided.</p>
       </div>
 
       {message && (
         <div
-          className={`text-sm px-3 py-2 rounded-xl ${
+          className={`rounded-xl border px-3 py-2 text-xs ${
             message.type === "success"
-              ? "bg-emerald-500/[0.06] text-emerald-400 border border-emerald-500/15"
-              : "bg-red-500/[0.06] text-red-400 border border-red-500/15"
+              ? "border-emerald-500/20 bg-emerald-500/[0.08] text-emerald-300"
+              : "border-rose-400/30 bg-rose-500/[0.08] text-rose-200"
           }`}
         >
           {message.text}
@@ -124,10 +125,17 @@ export function SettingsForm({ profile }: Props) {
 
       <button
         type="submit"
-        disabled={saving}
-        className="btn-primary"
+        disabled={saving || !isDirty}
+        className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(99,102,241,0.35)] transition-all hover:from-indigo-400 hover:to-violet-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-55 disabled:shadow-none"
       >
-        {saving ? "Saving..." : "Save changes"}
+        {saving ? (
+          <>
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
+            Saving...
+          </>
+        ) : (
+          "Save changes"
+        )}
       </button>
     </form>
   )

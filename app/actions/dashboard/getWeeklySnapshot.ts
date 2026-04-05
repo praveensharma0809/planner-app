@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isCanonicalIntakeManualTask } from "@/lib/planner/contracts"
+import { getTodayLocalDate, normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
 import type { Task } from "@/lib/types/db"
 
 export type GetWeeklySnapshotResponse =
@@ -10,7 +11,7 @@ export type GetWeeklySnapshotResponse =
 
 function getWeekRange(base: Date): { startISO: string; endISO: string } {
   const start = new Date(base)
-  start.setHours(0, 0, 0, 0)
+  start.setHours(12, 0, 0, 0)
   const day = start.getDay()
   const diffToMonday = (day + 6) % 7
   start.setDate(start.getDate() - diffToMonday)
@@ -18,8 +19,8 @@ function getWeekRange(base: Date): { startISO: string; endISO: string } {
   const end = new Date(start)
   end.setDate(start.getDate() + 6)
 
-  const startISO = start.toISOString().split("T")[0]
-  const endISO = end.toISOString().split("T")[0]
+  const startISO = normalizeLocalDate(start) ?? getTodayLocalDate()
+  const endISO = normalizeLocalDate(end) ?? startISO
   return { startISO, endISO }
 }
 
@@ -46,7 +47,7 @@ export async function getWeeklySnapshot(weekOf?: string): Promise<GetWeeklySnaps
 
   const { data } = await supabase
     .from("tasks")
-    .select("id, user_id, subject_id, topic_id, title, scheduled_date, duration_minutes, priority, completed, task_source, session_type, plan_snapshot_id, session_number, total_sessions, sort_order, created_at, updated_at")
+    .select("id, user_id, task_type, subject_id, topic_id, title, scheduled_date, duration_minutes, completed, task_source, session_type, plan_snapshot_id, session_number, total_sessions, sort_order, created_at, updated_at")
     .eq("user_id", user.id)
     .gte("scheduled_date", startISO)
     .lte("scheduled_date", endISO)

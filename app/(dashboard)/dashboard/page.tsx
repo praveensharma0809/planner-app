@@ -3,9 +3,9 @@ import { getStreak } from "@/app/actions/dashboard/getStreak"
 import { getWeeklySnapshot } from "@/app/actions/dashboard/getWeeklySnapshot"
 import { getSubjectProgress, type SubjectProgress } from "@/app/actions/dashboard/getSubjectProgress"
 import { getBacklog } from "@/app/actions/dashboard/getBacklog"
-import { completeTask } from "@/app/actions/plan/completeTask"
+import { setTaskCompletion } from "@/app/actions/plan/setTaskCompletion"
+import { deleteScheduleTask } from "@/app/actions/schedule/deleteScheduleTask"
 import { SubmitButton } from "@/app/components/SubmitButton"
-import { QuickAddTask } from "@/app/(dashboard)/dashboard/QuickAddTask"
 import { RescheduleMissedButton } from "./RescheduleMissedButton"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import type { Task } from "@/lib/types/db"
@@ -15,6 +15,9 @@ import { Progress } from "@/app/components/ui"
 import { PageHeader } from "@/app/components/layout/PageHeader"
 import { ContentGrid } from "@/app/components/layout/ContentGrid"
 import { SectionCard } from "@/app/components/layout/SectionCard"
+import { AddTaskButton } from "@/app/components/tasks/AddTaskButton"
+import { STANDALONE_SUBJECT_LABEL } from "@/lib/constants"
+import { getTasksForDate, getTodayLocalDate } from "@/lib/tasks/getTasksForDate"
 
 interface DashboardSubjectOption {
   id: string
@@ -102,19 +105,13 @@ function getProgressFillClass(percent: number) {
   return "overview-progress-fill-danger"
 }
 
-function getPriorityBadgeVariant(priority: number): "default" | "warning" | "danger" {
-  if (priority <= 1) return "danger"
-  if (priority === 2) return "warning"
-  return "default"
-}
-
 export default async function DashboardPage() {
   const [streak, weekly, subjectProgress, backlog, supabase] = await Promise.all([
-    getStreak(),
-    getWeeklySnapshot(),
-    getSubjectProgress(),
-    getBacklog(),
-    createServerSupabaseClient(),
+    getStreak().catch(() => ({ status: "NO_PROFILE" as const })),
+    getWeeklySnapshot().catch(() => ({ status: "SUCCESS" as const, tasks: [] })),
+    getSubjectProgress().catch(() => ({ status: "SUCCESS" as const, subjects: [] })),
+    getBacklog().catch(() => ({ status: "SUCCESS" as const, tasks: [] })),
+    createServerSupabaseClient().catch(() => null),
   ])
 
   const streakData = streak.status === "SUCCESS" ? streak : null
@@ -122,25 +119,27 @@ export default async function DashboardPage() {
   const subjects: SubjectProgress[] = subjectProgress.status === "SUCCESS" ? subjectProgress.subjects : []
   const backlogTasks: Task[] = backlog.status === "SUCCESS" ? backlog.tasks : []
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = supabase
+    ? (await supabase.auth.getUser().catch(() => ({ data: { user: null } }))).data.user
+    : null
 
-  const subjectList: DashboardSubjectOption[] = user
+  const subjectList: DashboardSubjectOption[] = user && supabase
     ? ((
         await supabase
           .from("subjects")
           .select("id, name, sort_order")
           .eq("user_id", user.id)
           .eq("archived", false)
+          .not("name", "ilike", "others")
+          .not("name", "ilike", "__deprecated_others__")
           .order("sort_order", { ascending: true })
       ).data ?? [])
     : []
 
   const subjectNameById = new Map(subjectList.map((subject) => [subject.id, subject.name]))
 
-  const today = new Date().toISOString().split("T")[0]
-  const todayTasks = tasks.filter((task) => task.scheduled_date === today)
+  const today = getTodayLocalDate()
+  const todayTasks = getTasksForDate(tasks, today)
   const pendingToday = todayTasks.filter((task) => !task.completed)
   const doneToday = todayTasks.filter((task) => task.completed)
   const remainingTodayMinutes = pendingToday.reduce((sum, task) => sum + task.duration_minutes, 0)
@@ -156,15 +155,13 @@ export default async function DashboardPage() {
     : 0
 
   const todayPaceLabel =
-    todayTasks.length === 0 ? "Open day"
+    todayTasks.length === 0 ? "No tasks yet"
       : pendingToday.length === 0 ? "All clear"
         : todayProgressPercent >= 75 ? "Strong"
           : todayProgressPercent >= 40 ? "On track"
             : "Busy"
 
   const pendingTodaySorted = [...pendingToday].sort((a, b) => {
-    const priorityCompare = a.priority - b.priority
-    if (priorityCompare !== 0) return priorityCompare
     const durationCompare = b.duration_minutes - a.duration_minutes
     if (durationCompare !== 0) return durationCompare
     return a.created_at.localeCompare(b.created_at)
@@ -247,11 +244,27 @@ export default async function DashboardPage() {
 
     const taskId = formData.get("task_id")
     if (typeof taskId !== "string" || !taskId) return
-    await completeTask(taskId)
+    try {
+      await setTaskCompletion(taskId, true)
+    } catch {
+      // Avoid crashing the server-action transport on unexpected runtime failures.
+    }
+  }
+
+  async function handleDelete(formData: FormData) {
+    "use server"
+
+    const taskId = formData.get("task_id")
+    if (typeof taskId !== "string" || !taskId) return
+    try {
+      await deleteScheduleTask(taskId)
+    } catch {
+      // Avoid crashing the server-action transport on unexpected runtime failures.
+    }
   }
 
   return (
-    <div className="page-root animate-fade-in">
+    <div className="page-root animate-fade-in flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto">
       <PageHeader
         eyebrow={formatDate(today)}
         title={greeting}
@@ -279,7 +292,7 @@ export default async function DashboardPage() {
                 </div>
                 <p className="dashboard-hero-description">
                   {todayTasks.length === 0
-                    ? "Open day. Generate a plan when you're ready to structure it."
+                    ? "Generate a plan or use quick add when you're ready."
                     : pendingToday.length === 0
                       ? "Everything done. Great work today!"
                       : `${formatMinutes(remainingTodayMinutes)} of focus remaining`}
@@ -326,14 +339,20 @@ export default async function DashboardPage() {
               </div>
             }
             action={
-              <Link href="/dashboard/calendar" className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
-                Calendar →
-              </Link>
+              <div className="flex items-center gap-2">
+                <AddTaskButton
+                  subjects={subjectList}
+                  initialDate={today}
+                  buttonLabel="Quick add for today"
+                  buttonClassName="ui-btn ui-btn-ghost ui-btn-sm"
+                />
+                <Link href="/dashboard/calendar" className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
+                  Calendar →
+                </Link>
+              </div>
             }
           >
             <div className="space-y-3">
-              <QuickAddTask subjects={subjectList} />
-
               {todayTasks.length === 0 ? (
                 <div className="dashboard-empty-state">
                   <div className="dashboard-empty-icon">
@@ -342,7 +361,7 @@ export default async function DashboardPage() {
                     </svg>
                   </div>
                   <p className="dashboard-empty-title">No tasks scheduled</p>
-                  <p className="dashboard-empty-text">Start by generating a plan or adding a task below</p>
+                  <p className="dashboard-empty-text">Start by generating a plan or using quick add above</p>
                 </div>
               ) : (
                 <div className="space-y-3 pt-1">
@@ -381,25 +400,30 @@ export default async function DashboardPage() {
                   {visiblePendingTasks.length > 0 && (
                     <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
                       {visiblePendingTasks.map((task) => (
-                        <form
+                        <div
                           key={task.id}
-                          action={handleComplete}
                           className="flex items-center gap-2 rounded-xl border px-2.5 py-2"
                           style={{ borderColor: "var(--sh-border)", background: "var(--sh-card)" }}
                         >
-                          <input type="hidden" name="task_id" value={task.id} />
-                          <SubmitButton
-                            className="dashboard-task-checkbox"
-                            aria-label="Complete task"
-                          >
-                            <span className="sr-only">Complete</span>
-                          </SubmitButton>
+                          <form action={handleComplete}>
+                            <input type="hidden" name="task_id" value={task.id} />
+                            <SubmitButton
+                              className="dashboard-task-checkbox"
+                              aria-label="Complete task"
+                            >
+                              <span className="sr-only">Complete</span>
+                            </SubmitButton>
+                          </form>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium" style={{ color: "var(--sh-text-primary)" }}>
                               {task.title}
                             </p>
                             <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
-                              <span>{subjectNameById.get(task.subject_id) ?? "Others"}</span>
+                              <span>
+                                {task.task_type === "standalone"
+                                  ? STANDALONE_SUBJECT_LABEL
+                                  : (task.subject_id ? subjectNameById.get(task.subject_id) : null) ?? "Unknown"}
+                              </span>
                               <span>{task.duration_minutes}m</span>
                               {task.session_number != null && task.total_sessions != null && task.total_sessions > 1 && (
                                 <span>{task.session_number}/{task.total_sessions}</span>
@@ -407,10 +431,23 @@ export default async function DashboardPage() {
                               {task.session_type !== "core" && <span>{task.session_type}</span>}
                             </div>
                           </div>
-                          <Badge variant={getPriorityBadgeVariant(task.priority)} size="sm">
-                            P{task.priority}
-                          </Badge>
-                        </form>
+                          <form action={handleDelete}>
+                            <input type="hidden" name="task_id" value={task.id} />
+                            <SubmitButton
+                              className="task-icon-delete-button shrink-0"
+                              aria-label="Delete task"
+                              title="Delete"
+                            >
+                              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 6V4.8A1.8 1.8 0 0 1 9.8 3h4.4A1.8 1.8 0 0 1 16 4.8V6" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 6l-1 13a2 2 0 0 1-2 1.8H8a2 2 0 0 1-2-1.8L5 6" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 10v7M14 10v7" />
+                              </svg>
+                              <span className="sr-only">Delete</span>
+                            </SubmitButton>
+                          </form>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -442,8 +479,28 @@ export default async function DashboardPage() {
                             </div>
                             <span className="dashboard-task-completed-title">{task.title}</span>
                             <span className="dashboard-task-completed-time">
-                              {(subjectNameById.get(task.subject_id) ?? "Others").slice(0, 10)} · {task.duration_minutes}m
+                              {(
+                                task.task_type === "standalone"
+                                  ? STANDALONE_SUBJECT_LABEL
+                                  : (task.subject_id ? subjectNameById.get(task.subject_id) : null) ?? "Unknown"
+                              ).slice(0, 10)} · {task.duration_minutes}m
                             </span>
+                            <form action={handleDelete}>
+                              <input type="hidden" name="task_id" value={task.id} />
+                              <SubmitButton
+                                className="task-icon-delete-button shrink-0"
+                                aria-label="Delete task"
+                                title="Delete"
+                              >
+                                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 6V4.8A1.8 1.8 0 0 1 9.8 3h4.4A1.8 1.8 0 0 1 16 4.8V6" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 6l-1 13a2 2 0 0 1-2 1.8H8a2 2 0 0 1-2-1.8L5 6" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 10v7M14 10v7" />
+                                </svg>
+                                <span className="sr-only">Delete</span>
+                              </SubmitButton>
+                            </form>
                           </div>
                         ))}
                       </div>
@@ -455,7 +512,6 @@ export default async function DashboardPage() {
           </SectionCard>
         </div>
 
-        {/* Sidebar */}
         {/* Sidebar */}
         <div className="space-y-5">
           {/* Alerts */}

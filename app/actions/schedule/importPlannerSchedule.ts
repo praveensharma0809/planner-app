@@ -1,6 +1,7 @@
 "use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getTodayLocalDate, normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
 
 type SessionType = "core" | "revision" | "practice"
 
@@ -11,7 +12,6 @@ type PlannerImportRow = {
   scheduled_date: string
   duration_minutes: number
   session_type: SessionType
-  priority: number
   completed: boolean
   created_at: string
 }
@@ -30,13 +30,6 @@ export type ImportPlannerScheduleResponse =
       tasks: PlannerImportTask[]
     }
 
-function toISODateLocal(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
-}
-
 function getWeekRange(baseDate: Date) {
   const weekStart = new Date(baseDate)
   weekStart.setHours(12, 0, 0, 0)
@@ -48,9 +41,12 @@ function getWeekRange(baseDate: Date) {
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekEnd.getDate() + 6)
 
+  const weekStartISO = normalizeLocalDate(weekStart) ?? getTodayLocalDate()
+  const weekEndISO = normalizeLocalDate(weekEnd) ?? weekStartISO
+
   return {
-    weekStartISO: toISODateLocal(weekStart),
-    weekEndISO: toISODateLocal(weekEnd),
+    weekStartISO,
+    weekEndISO,
   }
 }
 
@@ -80,14 +76,13 @@ export async function importPlannerSchedule(
   const { data: rows, error: taskError } = await supabase
     .from("tasks")
     .select(
-      "id, subject_id, title, scheduled_date, duration_minutes, session_type, priority, completed, created_at"
+      "id, subject_id, title, scheduled_date, duration_minutes, session_type, completed, created_at"
     )
     .eq("user_id", user.id)
     .eq("task_source", "plan")
     .gte("scheduled_date", weekStartISO)
     .lte("scheduled_date", weekEndISO)
     .order("scheduled_date", { ascending: true })
-    .order("priority", { ascending: true })
     .order("created_at", { ascending: true })
 
   if (taskError) {
