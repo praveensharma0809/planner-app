@@ -33,7 +33,6 @@ async function updateStreakOncePerDay(
       .maybeSingle()
 
     if (profileError) {
-      console.error("completeTask: profile read error:", profileError.message)
       return
     }
 
@@ -73,7 +72,6 @@ async function updateStreakOncePerDay(
       .maybeSingle()
 
     if (updateError) {
-      console.error("completeTask: profile update error:", updateError.message)
       return
     }
 
@@ -98,7 +96,6 @@ async function maybeMarkSourceTopicTaskCompleted(
     .limit(1)
 
   if (remainingError) {
-    console.error("completeTask: source completion check error:", remainingError.message)
     return
   }
 
@@ -113,66 +110,72 @@ async function maybeMarkSourceTopicTaskCompleted(
     .eq("user_id", userId)
 
   if (topicTaskUpdateError) {
-    console.error("completeTask: topic task update error:", topicTaskUpdateError.message)
+    return
   }
 }
 
 export async function completeTask(taskId: string) {
-  if (!taskId || typeof taskId !== "string") {
-    return { status: "NOT_FOUND" } satisfies CompleteTaskResponse
-  }
+  try {
+    if (!taskId || typeof taskId !== "string") {
+      return { status: "NOT_FOUND" } satisfies CompleteTaskResponse
+    }
 
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user }
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return { status: "UNAUTHORIZED" } satisfies CompleteTaskResponse
-  }
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user }
+    } = await supabase.auth.getUser()
+    if (!user) {
+      return { status: "UNAUTHORIZED" } satisfies CompleteTaskResponse
+    }
 
-  // Step 1: Mark task complete.
-  // The .eq("completed", false) guard makes this idempotent —
-  // if the task is already done, 0 rows are updated and we stop.
-  const { data: updatedTask, error: taskError } = await supabase
-    .from("tasks")
-    .update({ completed: true })
-    .eq("id", taskId)
-    .eq("user_id", user.id)
-    .eq("completed", false)
-    .select("subject_id, task_source, source_topic_task_id")
-    .maybeSingle()
+    // Step 1: Mark task complete.
+    // The .eq("completed", false) guard makes this idempotent -
+    // if the task is already done, 0 rows are updated and we stop.
+    const { data: updatedTask, error: taskError } = await supabase
+      .from("tasks")
+      .update({ completed: true })
+      .eq("id", taskId)
+      .eq("user_id", user.id)
+      .eq("completed", false)
+      .select("subject_id, task_source, source_topic_task_id")
+      .maybeSingle()
 
-  if (taskError) {
-    console.error("completeTask: task update error:", taskError.message)
-    return { status: "ERROR", message: taskError.message } satisfies CompleteTaskResponse
-  }
+    if (taskError) {
+      return { status: "ERROR", message: taskError.message } satisfies CompleteTaskResponse
+    }
 
-  // Task was already complete or not found — nothing else to do.
-  if (!updatedTask) {
+    // Task was already complete or not found - nothing else to do.
+    if (!updatedTask) {
+      revalidatePath("/dashboard/calendar")
+      return { status: "NOT_FOUND" } satisfies CompleteTaskResponse
+    }
+
+    // Step 2: Update streak with compare-and-set protection.
+    await updateStreakOncePerDay(supabase, user.id)
+
+    // Step 3: Mark linked intake task complete only when all linked plan sessions are done.
+    if (
+      updatedTask.task_source === "plan"
+      && typeof updatedTask.source_topic_task_id === "string"
+      && updatedTask.source_topic_task_id.length > 0
+    ) {
+      await maybeMarkSourceTopicTaskCompleted(
+        supabase,
+        user.id,
+        updatedTask.source_topic_task_id
+      )
+    }
+
     revalidatePath("/dashboard/calendar")
-    return { status: "NOT_FOUND" } satisfies CompleteTaskResponse
+    revalidatePath("/dashboard")
+    revalidatePath("/schedule")
+    revalidatePath("/dashboard/subjects")
+    revalidatePath("/planner")
+    return { status: "SUCCESS" } satisfies CompleteTaskResponse
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    } satisfies CompleteTaskResponse
   }
-
-  // Step 2: Update streak with compare-and-set protection.
-  await updateStreakOncePerDay(supabase, user.id)
-
-  // Step 3: Mark linked intake task complete only when all linked plan sessions are done.
-  if (
-    updatedTask.task_source === "plan"
-    && typeof updatedTask.source_topic_task_id === "string"
-    && updatedTask.source_topic_task_id.length > 0
-  ) {
-    await maybeMarkSourceTopicTaskCompleted(
-      supabase,
-      user.id,
-      updatedTask.source_topic_task_id
-    )
-  }
-
-  revalidatePath("/dashboard/calendar")
-  revalidatePath("/dashboard")
-  revalidatePath("/schedule")
-  revalidatePath("/dashboard/subjects")
-  revalidatePath("/planner")
-  return { status: "SUCCESS" } satisfies CompleteTaskResponse
 }

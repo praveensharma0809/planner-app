@@ -332,8 +332,6 @@ export default function PlanPreview({
       is_manual: true,
     }
 
-    console.log("UI session:", nextSession)
-
     setManualDraft(null)
     commitSessions([...localSessions, nextSession])
   }

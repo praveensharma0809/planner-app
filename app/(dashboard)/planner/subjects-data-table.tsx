@@ -58,6 +58,20 @@ import {
   MIN_SESSION_LENGTH_MINUTES,
   inferSessionLengthMinutes,
 } from "@/lib/planner/draft"
+import {
+  buildMonthGrid,
+  clampInteger,
+  compareTasksNaturally,
+  composeSeriesName,
+  defaultIntakeConstraints,
+  formatMonthLabel,
+  isLikelyNetworkError,
+  normalizeDayOfWeekCapacity,
+  normalizeDurationMinutes,
+  shiftMonthCursor,
+  shouldAutoOrderTasks,
+  toMonthCursor,
+} from "./subjects-data-table.helpers"
 
 export interface SubjectNavTopic {
   id: string
@@ -162,213 +176,6 @@ const CLOSED_DIALOG_STATE: NameDialogState = {
   earliestStart: "",
   deadline: "",
   restAfterDays: "0",
-}
-
-function clampInteger(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
-
-function defaultIntakeConstraints(): IntakeConstraintsDraft {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = String(today.getMonth() + 1).padStart(2, "0")
-  const day = String(today.getDate()).padStart(2, "0")
-
-  return {
-    study_start_date: `${year}-${month}-${day}`,
-    exam_date: "",
-    weekday_capacity_minutes: 180,
-    weekend_capacity_minutes: 240,
-    day_of_week_capacity: [null, null, null, null, null, null, null],
-    custom_day_capacity: {},
-    flexibility_minutes: 0,
-    max_active_subjects: 0,
-  }
-}
-
-function normalizeDurationMinutes(rawMinutes: number): number {
-  const parsed = Number.isFinite(rawMinutes)
-    ? Math.trunc(rawMinutes)
-    : MIN_SESSION_LENGTH_MINUTES
-
-  return clampInteger(parsed, MIN_SESSION_LENGTH_MINUTES, MAX_SESSION_LENGTH_MINUTES)
-}
-
-function normalizeDayOfWeekCapacity(values: (number | null)[] | null | undefined): (number | null)[] {
-  const next = Array.from({ length: 7 }, (_, index) => {
-    const value = values?.[index]
-    if (value == null) return null
-
-    const parsed = Math.trunc(value)
-    if (!Number.isFinite(parsed) || parsed <= 0) return null
-    return parsed
-  })
-
-  return next
-}
-
-function isLikelyNetworkError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-
-  const message = `${error.name} ${error.message}`.toLowerCase()
-  return (
-    message.includes("network")
-    || message.includes("failed to fetch")
-    || message.includes("fetch failed")
-    || message.includes("load failed")
-    || message.includes("connection")
-    || message.includes("timeout")
-    || message.includes("socket")
-    || message.includes("econn")
-    || message.includes("enotfound")
-  )
-}
-
-function toMonthCursor(input: Date): string {
-  const year = input.getFullYear()
-  const month = String(input.getMonth() + 1).padStart(2, "0")
-  return `${year}-${month}`
-}
-
-function parseMonthCursor(cursor: string): Date {
-  const [yearRaw, monthRaw] = cursor.split("-")
-  const year = Number.parseInt(yearRaw, 10)
-  const month = Number.parseInt(monthRaw, 10)
-
-  if (!Number.isFinite(year) || !Number.isFinite(month)) {
-    const today = new Date()
-    return new Date(today.getFullYear(), today.getMonth(), 1)
-  }
-
-  return new Date(year, month - 1, 1)
-}
-
-function shiftMonthCursor(cursor: string, delta: number): string {
-  const base = parseMonthCursor(cursor)
-  base.setMonth(base.getMonth() + delta)
-  return toMonthCursor(base)
-}
-
-function formatMonthLabel(cursor: string): string {
-  const base = parseMonthCursor(cursor)
-  return base.toLocaleString("en-US", { month: "long", year: "numeric" })
-}
-
-function buildMonthGrid(cursor: string): Array<Array<string | null>> {
-  const base = parseMonthCursor(cursor)
-  const year = base.getFullYear()
-  const month = base.getMonth()
-  const first = new Date(year, month, 1)
-  const totalDays = new Date(year, month + 1, 0).getDate()
-
-  const cells: Array<string | null> = Array(first.getDay()).fill(null)
-  for (let day = 1; day <= totalDays; day += 1) {
-    const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-    cells.push(iso)
-  }
-
-  while (cells.length % 7 !== 0) {
-    cells.push(null)
-  }
-
-  const weeks: Array<Array<string | null>> = []
-  for (let index = 0; index < cells.length; index += 7) {
-    weeks.push(cells.slice(index, index + 7))
-  }
-
-  return weeks
-}
-
-function composeSeriesName(
-  baseName: string,
-  index: number,
-  placement: NumberPlacement,
-  separator: string,
-  numberPadding: number
-): string {
-  const numeric = String(index).padStart(Math.max(0, numberPadding), "0")
-  const cleanSeparator = separator.trim()
-
-  if (placement === "prefix") {
-    return cleanSeparator ? `${numeric}${cleanSeparator}${baseName}` : `${numeric}${baseName}`
-  }
-
-  return cleanSeparator ? `${baseName}${cleanSeparator}${numeric}` : `${baseName}${numeric}`
-}
-
-function buildNumericPatternKey(title: string): string | null {
-  const normalized = title.trim().toLowerCase()
-  if (!normalized) return null
-
-  if (!/\d/.test(normalized)) return null
-  return normalized.replace(/\d+/g, "#")
-}
-
-function extractNumericParts(title: string): number[] {
-  const matches = title.match(/\d+/g)
-  if (!matches) return []
-
-  return matches
-    .map((token) => Number.parseInt(token, 10))
-    .filter((value) => Number.isFinite(value))
-}
-
-function shouldAutoOrderTasks(tasks: TopicTaskItem[]): boolean {
-  if (tasks.length < 2) return false
-
-  const patternCounts = new Map<string, number>()
-  for (const task of tasks) {
-    const key = buildNumericPatternKey(task.title)
-    if (!key) continue
-    patternCounts.set(key, (patternCounts.get(key) ?? 0) + 1)
-  }
-
-  let maxPatternCount = 0
-  for (const count of patternCounts.values()) {
-    if (count > maxPatternCount) {
-      maxPatternCount = count
-    }
-  }
-
-  return maxPatternCount >= 2
-}
-
-function compareTasksNaturally(left: TopicTaskItem, right: TopicTaskItem): number {
-  const leftTitle = left.title.trim()
-  const rightTitle = right.title.trim()
-
-  if (!leftTitle && !rightTitle) {
-    return left.id.localeCompare(right.id)
-  }
-  if (!leftTitle) return 1
-  if (!rightTitle) return -1
-
-  const leftPattern = buildNumericPatternKey(leftTitle)
-  const rightPattern = buildNumericPatternKey(rightTitle)
-
-  if (leftPattern && rightPattern && leftPattern === rightPattern) {
-    const leftNumbers = extractNumericParts(leftTitle)
-    const rightNumbers = extractNumericParts(rightTitle)
-    const maxLength = Math.max(leftNumbers.length, rightNumbers.length)
-
-    for (let index = 0; index < maxLength; index += 1) {
-      const leftValue = leftNumbers[index]
-      const rightValue = rightNumbers[index]
-
-      if (leftValue === undefined && rightValue === undefined) break
-      if (leftValue === undefined) return -1
-      if (rightValue === undefined) return 1
-      if (leftValue !== rightValue) return leftValue - rightValue
-    }
-  }
-
-  const byTitle = leftTitle.localeCompare(rightTitle, undefined, {
-    numeric: true,
-    sensitivity: "base",
-  })
-
-  if (byTitle !== 0) return byTitle
-  return left.id.localeCompare(right.id)
 }
 
 export function SubjectsDataTable({
@@ -479,7 +286,6 @@ export function SubjectsDataTable({
   }, [])
 
   const showMutationError = useCallback((error: unknown, fallbackMessage: string) => {
-    console.error(error)
     addToast(
       isLikelyNetworkError(error)
         ? "Network issue. Check connection."
@@ -566,8 +372,6 @@ export function SubjectsDataTable({
     } catch (error) {
       if (showErrorToast) {
         showMutationError(error, "Failed to load chapter dependency data.")
-      } else {
-        console.error(error)
       }
       return new Map<string, TopicParamDraft>()
     }
@@ -594,8 +398,6 @@ export function SubjectsDataTable({
       } else if (configRes.status === "ERROR") {
         if (showErrorToast) {
           addToast(configRes.message, "error")
-        } else {
-          console.error(configRes.message)
         }
       } else if (showErrorToast) {
         addToast("Step-2 config missing. Save Step-2 constraints first.", "error")
@@ -604,8 +406,6 @@ export function SubjectsDataTable({
     } catch (error) {
       if (showErrorToast) {
         showMutationError(error, "Could not load saved planner data.")
-      } else {
-        console.error(error)
       }
     } finally {
       setConstraintsLoading(false)
@@ -767,8 +567,6 @@ export function SubjectsDataTable({
       setArchivedChapterRows([])
       if (showErrorToast) {
         showMutationError(error, "Failed to load archived chapters.")
-      } else {
-        console.error(error)
       }
     } finally {
       setArchivedChapterLoading(false)
@@ -1718,9 +1516,7 @@ export function SubjectsDataTable({
         flexibility_minutes: Math.max(0, Math.trunc(constraintsDraft.flexibility_minutes)),
       }
 
-      console.log("Saving Step-2:", payload)
       const result = await savePlanConfig(payload)
-      console.log("DB response:", result)
 
       if (result.status === "SUCCESS") {
         addToast("Step-2 constraints saved.", "success")
@@ -1983,8 +1779,6 @@ export function SubjectsDataTable({
     } catch (error) {
       if (showErrorToast) {
         showMutationError(error, "Failed to reload saved intake data.")
-      } else {
-        console.error(error)
       }
       return false
     }
@@ -2914,7 +2708,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                                 }}
                                 title={[
                                   hasCustom ? `${constraintsDraft.custom_day_capacity[isoDate]} min capacity` : "No custom capacity",
-                                ].join(" • ")}
+                                ].join(" G�� ")}
                               >
                                 {isoDate.slice(-2)}
                               </button>
@@ -3536,7 +3330,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                   max={6}
                   value={bulkNumberPadding}
                   onChange={(event) => setBulkNumberPadding(event.target.value)}
-                  hint="Adds leading zeros: 0 → Lecture-1, 1 → Lecture-01, 2 → Lecture-001"
+                  hint="Adds leading zeros: 0 G�� Lecture-1, 1 G�� Lecture-01, 2 G�� Lecture-001"
                 />
 
                 <div className="flex flex-col gap-1.5">
@@ -3568,7 +3362,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     <option value=" ">Space: Lecture 1</option>
                     <option value="_">Underscore: Lecture_1</option>
                     <option value="">None: Lecture1</option>
-                    <option value="·">Dot: Lecture·1</option>
+                    <option value="-+">Dot: Lecture-+1</option>
                   </select>
                 </div>
               </div>

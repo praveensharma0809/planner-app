@@ -293,236 +293,213 @@ function buildDraftConstraints(
 }
 
 export async function getStructure(options: GetStructureOptions = {}): Promise<GetStructureResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { status: "UNAUTHORIZED" }
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  const { data: subjectRows, error: subjectError } = await supabase
-    .from("subjects")
-    .select("id, user_id, name, sort_order, archived, created_at")
-    .eq("user_id", user.id)
-    .eq("archived", false)
-    .not("name", "ilike", "others")
-    .not("name", "ilike", "__deprecated_others__")
-    .order("sort_order", { ascending: true })
-
-  if (subjectError) {
-    return { status: "ERROR", message: subjectError.message }
-  }
-
-  const subjects = (subjectRows ?? []) as Subject[]
-  if (subjects.length === 0) {
-    return { status: "SUCCESS", tree: { subjects: [] } }
-  }
-
-  const subjectIds = subjects.map((subject) => subject.id)
-  let topics: Topic[] = []
-  if (subjectIds.length > 0) {
-    const { data: topicRows, error: topicError } = await supabase
-      .from("topics")
-      .select("id, user_id, subject_id, name, sort_order, archived, created_at")
+    const { data: subjectRows, error: subjectError } = await supabase
+      .from("subjects")
+      .select("id, user_id, name, sort_order, archived, created_at")
       .eq("user_id", user.id)
       .eq("archived", false)
-      .in("subject_id", subjectIds)
+      .not("name", "ilike", "others")
+      .not("name", "ilike", "__deprecated_others__")
       .order("sort_order", { ascending: true })
 
-    if (topicError) {
-      return { status: "ERROR", message: topicError.message }
+    if (subjectError) {
+      return { status: "ERROR", message: subjectError.message }
     }
 
-    topics = (topicRows ?? []) as Topic[]
-  }
-
-  const topicIds = topics.map((topic) => topic.id)
-  const selectedTaskIds = normalizeSelectedTaskIds(options.selectedTaskIds)
-
-  let tasks: TopicTask[] = []
-  if (topicIds.length > 0) {
-    let query = supabase
-      .from("topic_tasks")
-      .select("id, topic_id, title, completed, duration_minutes, sort_order, created_at")
-      .eq("user_id", user.id)
-      .in("topic_id", topicIds)
-
-    if (options.onlyUndoneTasks) {
-      query = query.eq("completed", false)
+    const subjects = (subjectRows ?? []) as Subject[]
+    if (subjects.length === 0) {
+      return { status: "SUCCESS", tree: { subjects: [] } }
     }
 
-    if (selectedTaskIds.length > 0) {
-      query = query.in("id", selectedTaskIds)
+    const subjectIds = subjects.map((subject) => subject.id)
+    let topics: Topic[] = []
+    if (subjectIds.length > 0) {
+      const { data: topicRows, error: topicError } = await supabase
+        .from("topics")
+        .select("id, user_id, subject_id, name, sort_order, archived, created_at")
+        .eq("user_id", user.id)
+        .eq("archived", false)
+        .in("subject_id", subjectIds)
+        .order("sort_order", { ascending: true })
+
+      if (topicError) {
+        return { status: "ERROR", message: topicError.message }
+      }
+
+      topics = (topicRows ?? []) as Topic[]
     }
 
-    const { data: taskRows, error: taskError } = await query
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true })
+    const topicIds = topics.map((topic) => topic.id)
+    const selectedTaskIds = normalizeSelectedTaskIds(options.selectedTaskIds)
 
-    if (taskError) {
-      return { status: "ERROR", message: taskError.message }
+    let tasks: TopicTask[] = []
+    if (topicIds.length > 0) {
+      let query = supabase
+        .from("topic_tasks")
+        .select("id, topic_id, title, completed, duration_minutes, sort_order, created_at")
+        .eq("user_id", user.id)
+        .in("topic_id", topicIds)
+
+      if (options.onlyUndoneTasks) {
+        query = query.eq("completed", false)
+      }
+
+      if (selectedTaskIds.length > 0) {
+        query = query.in("id", selectedTaskIds)
+      }
+
+      const { data: taskRows, error: taskError } = await query
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true })
+
+      if (taskError) {
+        return { status: "ERROR", message: taskError.message }
+      }
+
+      tasks = (taskRows ?? []) as TopicTask[]
     }
 
-    tasks = (taskRows ?? []) as TopicTask[]
-  }
-
-  const tasksByTopic = new Map<string, StructureTask[]>()
-  for (const task of tasks ?? []) {
-    if (!task.topic_id) continue
-    const list = tasksByTopic.get(task.topic_id) ?? []
-    list.push({
-      id: task.id,
-      topic_id: task.topic_id,
-      title: task.title,
-      completed: task.completed,
-      duration_minutes: task.duration_minutes,
-      sort_order: task.sort_order ?? 0,
-      created_at: task.created_at,
-    })
-    tasksByTopic.set(task.topic_id, list)
-  }
-
-  const topicsBySubject = new Map<string, (Topic & { tasks: StructureTask[] })[]>()
-  for (const topic of topics ?? []) {
-    const topicTasks = tasksByTopic.get(topic.id) ?? []
-
-    if (options.dropTopicsWithoutTasks && topicTasks.length === 0) {
-      continue
+    const tasksByTopic = new Map<string, StructureTask[]>()
+    for (const task of tasks ?? []) {
+      if (!task.topic_id) continue
+      const list = tasksByTopic.get(task.topic_id) ?? []
+      list.push({
+        id: task.id,
+        topic_id: task.topic_id,
+        title: task.title,
+        completed: task.completed,
+        duration_minutes: task.duration_minutes,
+        sort_order: task.sort_order ?? 0,
+        created_at: task.created_at,
+      })
+      tasksByTopic.set(task.topic_id, list)
     }
 
-    const list = topicsBySubject.get(topic.subject_id) ?? []
-    list.push({ ...topic, tasks: topicTasks })
-    topicsBySubject.set(topic.subject_id, list)
-  }
+    const topicsBySubject = new Map<string, (Topic & { tasks: StructureTask[] })[]>()
+    for (const topic of topics ?? []) {
+      const topicTasks = tasksByTopic.get(topic.id) ?? []
 
-  return {
-    status: "SUCCESS",
-    tree: {
-      subjects: subjects
-        .map((subject) => ({
-          ...subject,
-          topics: topicsBySubject.get(subject.id) ?? [],
-        }))
-        .filter((subject) => subject.topics.length > 0 || !options.dropTopicsWithoutTasks),
-    },
+      if (options.dropTopicsWithoutTasks && topicTasks.length === 0) {
+        continue
+      }
+
+      const list = topicsBySubject.get(topic.subject_id) ?? []
+      list.push({ ...topic, tasks: topicTasks })
+      topicsBySubject.set(topic.subject_id, list)
+    }
+
+    return {
+      status: "SUCCESS",
+      tree: {
+        subjects: subjects
+          .map((subject) => ({
+            ...subject,
+            topics: topicsBySubject.get(subject.id) ?? [],
+          }))
+          .filter((subject) => subject.topics.length > 0 || !options.dropTopicsWithoutTasks),
+      },
+    }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
 }
 
 export async function saveStructure(
   subjects: SubjectInput[]
 ): Promise<SaveStructureResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { status: "UNAUTHORIZED" }
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  const validationError = validateStructure(subjects)
-  if (validationError) {
-    return { status: "ERROR", message: validationError }
-  }
-
-  const keepSubjectIds = new Set<string>()
-  const keepTopicIds = new Set<string>()
-
-  for (const subject of subjects) {
-    if (subject.id) keepSubjectIds.add(subject.id)
-    for (const topic of subject.topics) {
-      if (topic.id) keepTopicIds.add(topic.id)
+    const validationError = validateStructure(subjects)
+    if (validationError) {
+      return { status: "ERROR", message: validationError }
     }
-  }
 
-  const { data: existingSubjects } = await supabase
-    .from("subjects")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("archived", false)
-    .not("name", "ilike", "others")
-    .not("name", "ilike", "__deprecated_others__")
+    const keepSubjectIds = new Set<string>()
+    const keepTopicIds = new Set<string>()
 
-  for (const subject of existingSubjects ?? []) {
-    if (!keepSubjectIds.has(subject.id)) {
-      await supabase
-        .from("subjects")
-        .update({ archived: true })
-        .eq("id", subject.id)
-        .eq("user_id", user.id)
+    for (const subject of subjects) {
+      if (subject.id) keepSubjectIds.add(subject.id)
+      for (const topic of subject.topics) {
+        if (topic.id) keepTopicIds.add(topic.id)
+      }
     }
-  }
 
-  const existingSubjectIds = (existingSubjects ?? []).map((subject) => subject.id)
-  if (existingSubjectIds.length > 0) {
-    const { data: existingTopics } = await supabase
-      .from("topics")
+    const { data: existingSubjects } = await supabase
+      .from("subjects")
       .select("id")
       .eq("user_id", user.id)
-      .in("subject_id", existingSubjectIds)
+      .eq("archived", false)
+      .not("name", "ilike", "others")
+      .not("name", "ilike", "__deprecated_others__")
 
-    for (const topic of existingTopics ?? []) {
-      if (!keepTopicIds.has(topic.id)) {
+    for (const subject of existingSubjects ?? []) {
+      if (!keepSubjectIds.has(subject.id)) {
         await supabase
-          .from("topics")
-          .delete()
-          .eq("id", topic.id)
+          .from("subjects")
+          .update({ archived: true })
+          .eq("id", subject.id)
           .eq("user_id", user.id)
       }
     }
 
-  }
-
-  for (const subject of subjects) {
-    let subjectId = subject.id
-
-    if (subjectId) {
-      const { error } = await supabase
-        .from("subjects")
-        .update({
-          name: subject.name.trim(),
-          sort_order: subject.sort_order,
-          deadline: normalizeOptionalDate(subject.deadline),
-        })
-        .eq("id", subjectId)
-        .eq("user_id", user.id)
-      if (error) return { status: "ERROR", message: error.message }
-    } else {
-      const { data, error } = await supabase
-        .from("subjects")
-        .insert({
-          user_id: user.id,
-          name: subject.name.trim(),
-          sort_order: subject.sort_order,
-          deadline: normalizeOptionalDate(subject.deadline),
-          archived: false,
-        })
+    const existingSubjectIds = (existingSubjects ?? []).map((subject) => subject.id)
+    if (existingSubjectIds.length > 0) {
+      const { data: existingTopics } = await supabase
+        .from("topics")
         .select("id")
-        .single()
+        .eq("user_id", user.id)
+        .in("subject_id", existingSubjectIds)
 
-      if (error || !data) {
-        return {
-          status: "ERROR",
-          message: error?.message ?? "Failed to create subject",
+      for (const topic of existingTopics ?? []) {
+        if (!keepTopicIds.has(topic.id)) {
+          await supabase
+            .from("topics")
+            .delete()
+            .eq("id", topic.id)
+            .eq("user_id", user.id)
         }
       }
-      subjectId = data.id
+
     }
 
-    for (const topic of subject.topics) {
-      let topicId = topic.id
+    for (const subject of subjects) {
+      let subjectId = subject.id
 
-      if (topicId) {
+      if (subjectId) {
         const { error } = await supabase
-          .from("topics")
-          .update({ name: topic.name.trim(), sort_order: topic.sort_order })
-          .eq("id", topicId)
+          .from("subjects")
+          .update({
+            name: subject.name.trim(),
+            sort_order: subject.sort_order,
+            deadline: normalizeOptionalDate(subject.deadline),
+          })
+          .eq("id", subjectId)
           .eq("user_id", user.id)
         if (error) return { status: "ERROR", message: error.message }
       } else {
         const { data, error } = await supabase
-          .from("topics")
+          .from("subjects")
           .insert({
             user_id: user.id,
-            subject_id: subjectId,
-            name: topic.name.trim(),
-            sort_order: topic.sort_order,
+            name: subject.name.trim(),
+            sort_order: subject.sort_order,
+            deadline: normalizeOptionalDate(subject.deadline),
+            archived: false,
           })
           .select("id")
           .single()
@@ -530,719 +507,815 @@ export async function saveStructure(
         if (error || !data) {
           return {
             status: "ERROR",
-            message: error?.message ?? "Failed to create topic",
+            message: error?.message ?? "Failed to create subject",
           }
         }
-        topicId = data.id
+        subjectId = data.id
       }
 
-      void topicId
+      for (const topic of subject.topics) {
+        let topicId = topic.id
+
+        if (topicId) {
+          const { error } = await supabase
+            .from("topics")
+            .update({ name: topic.name.trim(), sort_order: topic.sort_order })
+            .eq("id", topicId)
+            .eq("user_id", user.id)
+          if (error) return { status: "ERROR", message: error.message }
+        } else {
+          const { data, error } = await supabase
+            .from("topics")
+            .insert({
+              user_id: user.id,
+              subject_id: subjectId,
+              name: topic.name.trim(),
+              sort_order: topic.sort_order,
+            })
+            .select("id")
+            .single()
+
+          if (error || !data) {
+            return {
+              status: "ERROR",
+              message: error?.message ?? "Failed to create topic",
+            }
+          }
+          topicId = data.id
+        }
+
+        void topicId
+      }
+    }
+
+    revalidatePath("/planner")
+    return { status: "SUCCESS" }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
     }
   }
-
-  revalidatePath("/planner")
-  return { status: "SUCCESS" }
 }
 
 export async function getTopicParams(): Promise<GetTopicParamsResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { status: "UNAUTHORIZED" }
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  const { data: settingsRow } = await supabase
-    .from("planner_settings")
-    .select("exam_date")
-    .eq("user_id", user.id)
-    .maybeSingle()
+    const { data: settingsRow } = await supabase
+      .from("planner_settings")
+      .select("exam_date")
+      .eq("user_id", user.id)
+      .maybeSingle()
 
-  const globalExamDate = normalizeOptionalDate(settingsRow?.exam_date)
+    const globalExamDate = normalizeOptionalDate(settingsRow?.exam_date)
 
-  const { data, error } = await supabase
-    .from("topics")
-    .select(
-      "id, subject_id, estimated_hours, deadline, earliest_start, depends_on, session_length_minutes, rest_after_days, max_sessions_per_day, study_frequency"
-    )
-    .eq("user_id", user.id)
-    .eq("archived", false)
-
-  if (error) return { status: "SUCCESS", params: [] }
-
-  const topicRows = (data ?? []) as Array<{
-    id: string
-    subject_id: string
-    estimated_hours: number | null
-    deadline: string | null
-    earliest_start: string | null
-    depends_on: string[] | null
-    session_length_minutes: number | null
-    rest_after_days: number | null
-    max_sessions_per_day: number | null
-    study_frequency: string | null
-  }>
-
-  const subjectIds = [...new Set(topicRows.map((row) => row.subject_id))]
-  const subjectDeadlineMap = new Map<string, string>()
-
-  if (subjectIds.length > 0) {
-    const { data: subjectRows } = await supabase
-      .from("subjects")
-      .select("id, deadline")
+    const { data, error } = await supabase
+      .from("topics")
+      .select(
+        "id, subject_id, estimated_hours, deadline, earliest_start, depends_on, session_length_minutes, rest_after_days, max_sessions_per_day, study_frequency"
+      )
       .eq("user_id", user.id)
       .eq("archived", false)
-      .in("id", subjectIds)
 
-    for (const row of (subjectRows ?? []) as Array<{ id: string; deadline: string | null }>) {
-      const deadline = normalizeOptionalDate(row.deadline)
-      if (deadline) {
-        subjectDeadlineMap.set(row.id, deadline)
+    if (error) return { status: "SUCCESS", params: [] }
+
+    const topicRows = (data ?? []) as Array<{
+      id: string
+      subject_id: string
+      estimated_hours: number | null
+      deadline: string | null
+      earliest_start: string | null
+      depends_on: string[] | null
+      session_length_minutes: number | null
+      rest_after_days: number | null
+      max_sessions_per_day: number | null
+      study_frequency: string | null
+    }>
+
+    const subjectIds = [...new Set(topicRows.map((row) => row.subject_id))]
+    const subjectDeadlineMap = new Map<string, string>()
+
+    if (subjectIds.length > 0) {
+      const { data: subjectRows } = await supabase
+        .from("subjects")
+        .select("id, deadline")
+        .eq("user_id", user.id)
+        .eq("archived", false)
+        .in("id", subjectIds)
+
+      for (const row of (subjectRows ?? []) as Array<{ id: string; deadline: string | null }>) {
+        const deadline = normalizeOptionalDate(row.deadline)
+        if (deadline) {
+          subjectDeadlineMap.set(row.id, deadline)
+        }
       }
     }
-  }
 
-  const inheritedTopicIds: string[] = []
-  const sanitizedDeadlineByTopic = new Map<string, string | null>()
+    const inheritedTopicIds: string[] = []
+    const sanitizedDeadlineByTopic = new Map<string, string | null>()
 
-  for (const row of topicRows) {
-    const topicDeadline = normalizeOptionalDate(row.deadline)
-    const subjectDeadline = subjectDeadlineMap.get(row.subject_id) ?? null
-    const inheritedFromSubject = !!topicDeadline && !!subjectDeadline && topicDeadline === subjectDeadline
-    const inheritedFromGlobal = !!topicDeadline && !!globalExamDate && topicDeadline === globalExamDate
+    for (const row of topicRows) {
+      const topicDeadline = normalizeOptionalDate(row.deadline)
+      const subjectDeadline = subjectDeadlineMap.get(row.subject_id) ?? null
+      const inheritedFromSubject = !!topicDeadline && !!subjectDeadline && topicDeadline === subjectDeadline
+      const inheritedFromGlobal = !!topicDeadline && !!globalExamDate && topicDeadline === globalExamDate
 
-    if (inheritedFromSubject || inheritedFromGlobal) {
-      inheritedTopicIds.push(row.id)
-      sanitizedDeadlineByTopic.set(row.id, null)
-      continue
+      if (inheritedFromSubject || inheritedFromGlobal) {
+        inheritedTopicIds.push(row.id)
+        sanitizedDeadlineByTopic.set(row.id, null)
+        continue
+      }
+
+      sanitizedDeadlineByTopic.set(row.id, topicDeadline)
     }
 
-    sanitizedDeadlineByTopic.set(row.id, topicDeadline)
-  }
+    if (inheritedTopicIds.length > 0) {
+      const uniqueTopicIds = [...new Set(inheritedTopicIds)]
+      await supabase
+        .from("topics")
+        .update({ deadline: null })
+        .eq("user_id", user.id)
+        .in("id", uniqueTopicIds)
+    }
 
-  if (inheritedTopicIds.length > 0) {
-    const uniqueTopicIds = [...new Set(inheritedTopicIds)]
-    await supabase
-      .from("topics")
-      .update({ deadline: null })
-      .eq("user_id", user.id)
-      .in("id", uniqueTopicIds)
-  }
-
-  return {
-    status: "SUCCESS",
-    params: topicRows.map((row) => ({
-      topic_id: row.id,
-      estimated_hours: row.estimated_hours ?? 0,
-      deadline: sanitizedDeadlineByTopic.get(row.id) ?? null,
-      earliest_start: row.earliest_start,
-      depends_on: row.depends_on ?? [],
-      session_length_minutes: inferSessionLengthMinutes([], row.session_length_minutes),
-      rest_after_days: row.rest_after_days ?? 0,
-      max_sessions_per_day: row.max_sessions_per_day ?? 0,
-      study_frequency: row.study_frequency ?? "daily",
-    })) as TopicParams[],
+    return {
+      status: "SUCCESS",
+      params: topicRows.map((row) => ({
+        topic_id: row.id,
+        estimated_hours: row.estimated_hours ?? 0,
+        deadline: sanitizedDeadlineByTopic.get(row.id) ?? null,
+        earliest_start: row.earliest_start,
+        depends_on: row.depends_on ?? [],
+        session_length_minutes: inferSessionLengthMinutes([], row.session_length_minutes),
+        rest_after_days: row.rest_after_days ?? 0,
+        max_sessions_per_day: row.max_sessions_per_day ?? 0,
+        study_frequency: row.study_frequency ?? "daily",
+      })) as TopicParams[],
+    }
+  } catch {
+    return { status: "SUCCESS", params: [] }
   }
 }
 
 export async function saveTopicParams(
   params: TopicParamInput[]
 ): Promise<SaveTopicParamsResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { status: "UNAUTHORIZED" }
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  const normalizedParams = params.map((param) => ({
-    ...param,
-    deadline: normalizeOptionalDate(param.deadline),
-    earliest_start: normalizeOptionalDate(param.earliest_start),
-    depends_on: [
-      ...new Set(param.depends_on.filter((depId) => depId !== param.topic_id)),
-    ],
-    session_length_minutes: Math.trunc(param.session_length_minutes),
-    rest_after_days: Math.max(0, param.rest_after_days ?? 0),
-    max_sessions_per_day: Math.max(0, param.max_sessions_per_day ?? 0),
-    study_frequency: normalizeStudyFrequency(param.study_frequency),
-  }))
+    const normalizedParams = params.map((param) => ({
+      ...param,
+      deadline: normalizeOptionalDate(param.deadline),
+      earliest_start: normalizeOptionalDate(param.earliest_start),
+      depends_on: [
+        ...new Set(param.depends_on.filter((depId) => depId !== param.topic_id)),
+      ],
+      session_length_minutes: Math.trunc(param.session_length_minutes),
+      rest_after_days: Math.max(0, param.rest_after_days ?? 0),
+      max_sessions_per_day: Math.max(0, param.max_sessions_per_day ?? 0),
+      study_frequency: normalizeStudyFrequency(param.study_frequency),
+    }))
 
-  if (normalizedParams.length === 0) {
-    return { status: "SUCCESS" }
-  }
+    if (normalizedParams.length === 0) {
+      return { status: "SUCCESS" }
+    }
 
-  for (const param of normalizedParams) {
-    if (param.estimated_hours < 0) {
-      return {
-        status: "ERROR",
-        message: "Estimated hours must be non-negative.",
+    for (const param of normalizedParams) {
+      if (param.estimated_hours < 0) {
+        return {
+          status: "ERROR",
+          message: "Estimated hours must be non-negative.",
+        }
+      }
+      if (param.session_length_minutes < MIN_SESSION_LENGTH_MINUTES) {
+        return {
+          status: "ERROR",
+          message: `Session length must be at least ${MIN_SESSION_LENGTH_MINUTES} minutes.`,
+        }
+      }
+      if (param.session_length_minutes > MAX_SESSION_LENGTH_MINUTES) {
+        return {
+          status: "ERROR",
+          message: `Session length must be ${MAX_SESSION_LENGTH_MINUTES} minutes or less.`,
+        }
       }
     }
-    if (param.session_length_minutes < MIN_SESSION_LENGTH_MINUTES) {
-      return {
-        status: "ERROR",
-        message: `Session length must be at least ${MIN_SESSION_LENGTH_MINUTES} minutes.`,
-      }
-    }
-    if (param.session_length_minutes > MAX_SESSION_LENGTH_MINUTES) {
-      return {
-        status: "ERROR",
-        message: `Session length must be ${MAX_SESSION_LENGTH_MINUTES} minutes or less.`,
-      }
-    }
-  }
 
-  const topicIds = [...new Set(normalizedParams.map((param) => param.topic_id))]
-  const { data: topicRows, error: topicError } = await supabase
-    .from("topics")
-    .select("id, name, subject_id")
-    .eq("user_id", user.id)
-    .in("id", topicIds)
-
-  if (topicError) return { status: "ERROR", message: topicError.message }
-
-  const knownTopics = topicRows ?? []
-  const knownTopicIds = new Set(knownTopics.map((topic) => topic.id))
-  const knownTopicMap = new Map(knownTopics.map((topic) => [topic.id, topic]))
-  const topicNameMap = new Map(knownTopics.map((topic) => [topic.id, topic.name]))
-
-  const subjectIds = [...new Set(knownTopics.map((topic) => topic.subject_id))]
-  let subjectRows: Array<{ id: string; name: string; deadline: string | null }> = []
-  if (subjectIds.length > 0) {
-    const { data, error: subjectError } = await supabase
-      .from("subjects")
-      .select("id, name, deadline")
+    const topicIds = [...new Set(normalizedParams.map((param) => param.topic_id))]
+    const { data: topicRows, error: topicError } = await supabase
+      .from("topics")
+      .select("id, name, subject_id")
       .eq("user_id", user.id)
-      .in("id", subjectIds)
+      .in("id", topicIds)
 
-    if (subjectError) return { status: "ERROR", message: subjectError.message }
-    subjectRows = (data ?? []) as Array<{
-      id: string
-      name: string
-      deadline: string | null
-    }>
-  }
+    if (topicError) return { status: "ERROR", message: topicError.message }
 
-  const subjectMap = new Map((subjectRows ?? []).map((subject) => [subject.id, subject]))
+    const knownTopics = topicRows ?? []
+    const knownTopicIds = new Set(knownTopics.map((topic) => topic.id))
+    const knownTopicMap = new Map(knownTopics.map((topic) => [topic.id, topic]))
+    const topicNameMap = new Map(knownTopics.map((topic) => [topic.id, topic.name]))
 
-  for (const param of normalizedParams) {
-    const topic = knownTopicMap.get(param.topic_id)
-    if (!topic || !knownTopicIds.has(param.topic_id)) {
-      return { status: "ERROR", message: "A selected topic could not be found." }
+    const subjectIds = [...new Set(knownTopics.map((topic) => topic.subject_id))]
+    let subjectRows: Array<{ id: string; name: string; deadline: string | null }> = []
+    if (subjectIds.length > 0) {
+      const { data, error: subjectError } = await supabase
+        .from("subjects")
+        .select("id, name, deadline")
+        .eq("user_id", user.id)
+        .in("id", subjectIds)
+
+      if (subjectError) return { status: "ERROR", message: subjectError.message }
+      subjectRows = (data ?? []) as Array<{
+        id: string
+        name: string
+        deadline: string | null
+      }>
     }
 
-    if (param.depends_on.some((depId) => !knownTopicIds.has(depId))) {
-      return {
-        status: "ERROR",
-        message: "Dependencies must point to topics in the current plan.",
+    const subjectMap = new Map((subjectRows ?? []).map((subject) => [subject.id, subject]))
+
+    for (const param of normalizedParams) {
+      const topic = knownTopicMap.get(param.topic_id)
+      if (!topic || !knownTopicIds.has(param.topic_id)) {
+        return { status: "ERROR", message: "A selected topic could not be found." }
+      }
+
+      if (param.depends_on.some((depId) => !knownTopicIds.has(depId))) {
+        return {
+          status: "ERROR",
+          message: "Dependencies must point to topics in the current plan.",
+        }
+      }
+
+      const subject = subjectMap.get(topic.subject_id)
+      if (!subject) {
+        return {
+          status: "ERROR",
+          message: `Subject not found for topic "${topic.name}".`,
+        }
+      }
+
+      const subjectDeadline = normalizeOptionalDate(subject.deadline)
+      const topicStart = normalizeOptionalDate(param.earliest_start)
+      const topicDeadline = normalizeOptionalDate(param.deadline)
+
+      const topicDateWindowError = validateDateWindow(
+        topicStart,
+        topicDeadline,
+        `Chapter "${topic.name}" start date`,
+        "its deadline"
+      )
+      if (topicDateWindowError) {
+        return {
+          status: "ERROR",
+          message: topicDateWindowError,
+        }
+      }
+
+      if (subjectDeadline && topicDeadline && topicDeadline > subjectDeadline) {
+        return {
+          status: "ERROR",
+          message: `Chapter "${topic.name}" deadline cannot be after subject "${subject.name}" deadline.`,
+        }
       }
     }
 
-    const subject = subjectMap.get(topic.subject_id)
-    if (!subject) {
-      return {
-        status: "ERROR",
-        message: `Subject not found for topic "${topic.name}".`,
-      }
-    }
-
-    const subjectDeadline = normalizeOptionalDate(subject.deadline)
-    const topicStart = normalizeOptionalDate(param.earliest_start)
-    const topicDeadline = normalizeOptionalDate(param.deadline)
-
-    const topicDateWindowError = validateDateWindow(
-      topicStart,
-      topicDeadline,
-      `Chapter "${topic.name}" start date`,
-      "its deadline"
+    const cycle = findDependencyCycle(
+      new Map(normalizedParams.map((param) => [param.topic_id, param.depends_on]))
     )
-    if (topicDateWindowError) {
+
+    if (cycle) {
+      const cycleLabel = cycle
+        .map((topicId) => topicNameMap.get(topicId) ?? "Unknown topic")
+        .join(" -> ")
       return {
         status: "ERROR",
-        message: topicDateWindowError,
+        message: `Dependency loop detected: ${cycleLabel}. Remove one dependency and try again.`,
       }
     }
 
-    if (subjectDeadline && topicDeadline && topicDeadline > subjectDeadline) {
-      return {
-        status: "ERROR",
-        message: `Chapter "${topic.name}" deadline cannot be after subject "${subject.name}" deadline.`,
-      }
+    for (const param of normalizedParams) {
+      const { error } = await supabase
+        .from("topics")
+        .update({
+          estimated_hours: param.estimated_hours,
+          deadline: param.deadline,
+          earliest_start: param.earliest_start,
+          depends_on: param.depends_on,
+          session_length_minutes: param.session_length_minutes,
+          rest_after_days: param.rest_after_days,
+          max_sessions_per_day: param.max_sessions_per_day,
+          study_frequency: param.study_frequency,
+        })
+        .eq("id", param.topic_id)
+        .eq("user_id", user.id)
+
+      if (error) return { status: "ERROR", message: error.message }
     }
-  }
 
-  const cycle = findDependencyCycle(
-    new Map(normalizedParams.map((param) => [param.topic_id, param.depends_on]))
-  )
-
-  if (cycle) {
-    const cycleLabel = cycle
-      .map((topicId) => topicNameMap.get(topicId) ?? "Unknown topic")
-      .join(" -> ")
+    revalidatePath("/planner")
+    return { status: "SUCCESS" }
+  } catch (error) {
     return {
       status: "ERROR",
-      message: `Dependency loop detected: ${cycleLabel}. Remove one dependency and try again.`,
+      message: error instanceof Error ? error.message : "Unexpected error",
     }
   }
-
-  for (const param of normalizedParams) {
-    const { error } = await supabase
-      .from("topics")
-      .update({
-        estimated_hours: param.estimated_hours,
-        deadline: param.deadline,
-        earliest_start: param.earliest_start,
-        depends_on: param.depends_on,
-        session_length_minutes: param.session_length_minutes,
-        rest_after_days: param.rest_after_days,
-        max_sessions_per_day: param.max_sessions_per_day,
-        study_frequency: param.study_frequency,
-      })
-      .eq("id", param.topic_id)
-      .eq("user_id", user.id)
-
-    if (error) return { status: "ERROR", message: error.message }
-  }
-
-  revalidatePath("/planner")
-  return { status: "SUCCESS" }
 }
 
 export async function getPlanConfig(): Promise<GetPlanConfigResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { status: "UNAUTHORIZED" }
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  type PlannerSettingsRow = {
-    id: string
-    user_id: string
-    study_start_date: string
-    exam_date: string
-    weekday_capacity_minutes: number
-    weekend_capacity_minutes: number
-    max_active_subjects: number
-    day_of_week_capacity?: (number | null)[] | null
-    custom_day_capacity?: Record<string, number> | null
-    flexibility_minutes?: number
-    intake_import_mode?: IntakeImportMode | null
-  }
-
-  const primarySelect =
-    "id, user_id, study_start_date, exam_date, weekday_capacity_minutes, weekend_capacity_minutes, max_active_subjects, day_of_week_capacity, custom_day_capacity, flexibility_minutes, intake_import_mode"
-  const legacySelect =
-    "id, user_id, study_start_date, exam_date, weekday_capacity_minutes, weekend_capacity_minutes, max_active_subjects, day_of_week_capacity, custom_day_capacity, flexibility_minutes"
-
-  const { data: primaryData, error: primaryError } = await supabase
-    .from("planner_settings")
-    .select(primarySelect)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  let data: PlannerSettingsRow | null = primaryData as PlannerSettingsRow | null
-
-  if (primaryError) {
-    // Backward-compatible retry when intake_import_mode column is not yet available.
-    if (/intake_import_mode/i.test(primaryError.message)) {
-      const { data: legacyData, error: legacyError } = await supabase
-        .from("planner_settings")
-        .select(legacySelect)
-        .eq("user_id", user.id)
-        .maybeSingle()
-
-      if (legacyError) {
-        return { status: "ERROR", message: legacyError.message }
-      }
-
-      data = legacyData as PlannerSettingsRow | null
-    } else {
-      return { status: "ERROR", message: primaryError.message }
+    type PlannerSettingsRow = {
+      id: string
+      user_id: string
+      study_start_date: string
+      exam_date: string
+      weekday_capacity_minutes: number
+      weekend_capacity_minutes: number
+      max_active_subjects: number
+      day_of_week_capacity?: (number | null)[] | null
+      custom_day_capacity?: Record<string, number> | null
+      flexibility_minutes?: number
+      intake_import_mode?: IntakeImportMode | null
     }
-  }
 
-  if (!data) return { status: "SUCCESS", config: null }
+    const primarySelect =
+      "id, user_id, study_start_date, exam_date, weekday_capacity_minutes, weekend_capacity_minutes, max_active_subjects, day_of_week_capacity, custom_day_capacity, flexibility_minutes, intake_import_mode"
+    const legacySelect =
+      "id, user_id, study_start_date, exam_date, weekday_capacity_minutes, weekend_capacity_minutes, max_active_subjects, day_of_week_capacity, custom_day_capacity, flexibility_minutes"
 
-  const todayISO = getTodayLocalDate()
-
-  let normalizedStudyStart = normalizeLocalDate(data.study_start_date) ?? todayISO
-  let normalizedExamDate = normalizeLocalDate(data.exam_date)
-
-  if (normalizedStudyStart < todayISO) {
-    normalizedStudyStart = todayISO
-  }
-
-  if (!normalizedExamDate || normalizedExamDate <= normalizedStudyStart) {
-    normalizedExamDate = addDaysIsoDate(normalizedStudyStart, 90)
-  }
-
-  if (
-    normalizedStudyStart !== data.study_start_date ||
-    normalizedExamDate !== data.exam_date
-  ) {
-    await supabase
+    const { data: primaryData, error: primaryError } = await supabase
       .from("planner_settings")
-      .update({
+      .select(primarySelect)
+      .eq("user_id", user.id)
+      .maybeSingle()
+
+    let data: PlannerSettingsRow | null = primaryData as PlannerSettingsRow | null
+
+    if (primaryError) {
+      // Backward-compatible retry when intake_import_mode column is not yet available.
+      if (/intake_import_mode/i.test(primaryError.message)) {
+        const { data: legacyData, error: legacyError } = await supabase
+          .from("planner_settings")
+          .select(legacySelect)
+          .eq("user_id", user.id)
+          .maybeSingle()
+
+        if (legacyError) {
+          return { status: "ERROR", message: legacyError.message }
+        }
+
+        data = legacyData as PlannerSettingsRow | null
+      } else {
+        return { status: "ERROR", message: primaryError.message }
+      }
+    }
+
+    if (!data) return { status: "SUCCESS", config: null }
+
+    const todayISO = getTodayLocalDate()
+
+    let normalizedStudyStart = normalizeLocalDate(data.study_start_date) ?? todayISO
+    let normalizedExamDate = normalizeLocalDate(data.exam_date)
+
+    if (normalizedStudyStart < todayISO) {
+      normalizedStudyStart = todayISO
+    }
+
+    if (!normalizedExamDate || normalizedExamDate <= normalizedStudyStart) {
+      normalizedExamDate = addDaysIsoDate(normalizedStudyStart, 90)
+    }
+
+    if (
+      normalizedStudyStart !== data.study_start_date ||
+      normalizedExamDate !== data.exam_date
+    ) {
+      await supabase
+        .from("planner_settings")
+        .update({
+          study_start_date: normalizedStudyStart,
+          exam_date: normalizedExamDate,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", user.id)
+    }
+
+    return {
+      status: "SUCCESS",
+      config: {
+        ...(data as PlanConfig),
         study_start_date: normalizedStudyStart,
         exam_date: normalizedExamDate,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", user.id)
-  }
-
-  return {
-    status: "SUCCESS",
-    config: {
-      ...(data as PlanConfig),
-      study_start_date: normalizedStudyStart,
-      exam_date: normalizedExamDate,
-      plan_order: "balanced",
-      final_revision_days: 0,
-      buffer_percentage: 0,
-      plan_order_stack: null,
-      max_topics_per_subject_per_day: 1,
-      min_subject_gap_days: 0,
-      subject_ordering: null,
-      flexible_threshold: null,
-      intake_import_mode: normalizeIntakeImportMode(data.intake_import_mode),
-    },
+        plan_order: "balanced",
+        final_revision_days: 0,
+        buffer_percentage: 0,
+        plan_order_stack: null,
+        max_topics_per_subject_per_day: 1,
+        min_subject_gap_days: 0,
+        subject_ordering: null,
+        flexible_threshold: null,
+        intake_import_mode: normalizeIntakeImportMode(data.intake_import_mode),
+      },
+    }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
 }
 
 export async function getIntakeImportMode(): Promise<GetIntakeImportModeResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) return { status: "UNAUTHORIZED" }
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  const { data, error } = await supabase
-    .from("planner_settings")
-    .select("intake_import_mode")
-    .eq("user_id", user.id)
-    .maybeSingle()
+    const { data, error } = await supabase
+      .from("planner_settings")
+      .select("intake_import_mode")
+      .eq("user_id", user.id)
+      .maybeSingle()
 
-  if (error) {
-    return { status: "ERROR", message: error.message }
-  }
+    if (error) {
+      return { status: "ERROR", message: error.message }
+    }
 
-  return {
-    status: "SUCCESS",
-    mode: normalizeIntakeImportMode(data?.intake_import_mode),
+    return {
+      status: "SUCCESS",
+      mode: normalizeIntakeImportMode(data?.intake_import_mode),
+    }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
 }
 
 export async function saveIntakeImportMode(
   mode: IntakeImportMode
 ): Promise<SaveIntakeImportModeResponse> {
-  const normalizedMode = normalizeIntakeImportMode(mode)
+  try {
+    const normalizedMode = normalizeIntakeImportMode(mode)
 
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) return { status: "UNAUTHORIZED" }
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  const { data: existingSettings, error: existingError } = await supabase
-    .from("planner_settings")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (existingError) {
-    return { status: "ERROR", message: existingError.message }
-  }
-
-  if (existingSettings?.id) {
-    const { error: updateError } = await supabase
+    const { data: existingSettings, error: existingError } = await supabase
       .from("planner_settings")
-      .update({
-        intake_import_mode: normalizedMode,
-        updated_at: new Date().toISOString(),
-      })
+      .select("id")
       .eq("user_id", user.id)
+      .maybeSingle()
 
-    if (updateError) {
-      return { status: "ERROR", message: updateError.message }
+    if (existingError) {
+      return { status: "ERROR", message: existingError.message }
     }
-  } else {
-    const studyStart = todayIsoDate()
-    const examDate = addDaysIsoDate(studyStart, 90)
 
-    const { error: insertError } = await supabase
-      .from("planner_settings")
-      .insert({
-        user_id: user.id,
-        study_start_date: studyStart,
-        exam_date: examDate,
-        weekday_capacity_minutes: 180,
-        weekend_capacity_minutes: 240,
-        max_active_subjects: 0,
-        day_of_week_capacity: [null, null, null, null, null, null, null],
-        custom_day_capacity: {},
-        flexibility_minutes: 0,
-        intake_import_mode: normalizedMode,
-      })
+    if (existingSettings?.id) {
+      const { error: updateError } = await supabase
+        .from("planner_settings")
+        .update({
+          intake_import_mode: normalizedMode,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", user.id)
 
-    if (insertError) {
-      return { status: "ERROR", message: insertError.message }
+      if (updateError) {
+        return { status: "ERROR", message: updateError.message }
+      }
+    } else {
+      const studyStart = todayIsoDate()
+      const examDate = addDaysIsoDate(studyStart, 90)
+
+      const { error: insertError } = await supabase
+        .from("planner_settings")
+        .insert({
+          user_id: user.id,
+          study_start_date: studyStart,
+          exam_date: examDate,
+          weekday_capacity_minutes: 180,
+          weekend_capacity_minutes: 240,
+          max_active_subjects: 0,
+          day_of_week_capacity: [null, null, null, null, null, null, null],
+          custom_day_capacity: {},
+          flexibility_minutes: 0,
+          intake_import_mode: normalizedMode,
+        })
+
+      if (insertError) {
+        return { status: "ERROR", message: insertError.message }
+      }
+    }
+
+    revalidatePath("/planner")
+    return { status: "SUCCESS" }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
     }
   }
-
-  revalidatePath("/planner")
-  return { status: "SUCCESS" }
 }
 
 export async function savePlanConfig(
   config: PlanConfigInput
 ): Promise<SavePlanConfigResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { status: "UNAUTHORIZED" }
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  if (!config.study_start_date || !config.exam_date) {
-    return {
-      status: "ERROR",
-      message: "Start date and exam date are required.",
+    if (!config.study_start_date || !config.exam_date) {
+      return {
+        status: "ERROR",
+        message: "Start date and exam date are required.",
+      }
     }
-  }
-  if (!isISODate(config.study_start_date) || !isISODate(config.exam_date)) {
-    return {
-      status: "ERROR",
-      message: "Start date and exam date must be valid YYYY-MM-DD dates.",
+    if (!isISODate(config.study_start_date) || !isISODate(config.exam_date)) {
+      return {
+        status: "ERROR",
+        message: "Start date and exam date must be valid YYYY-MM-DD dates.",
+      }
     }
-  }
-  if (config.study_start_date >= config.exam_date) {
-    return {
-      status: "ERROR",
-      message: "Study start must be before exam date.",
+    if (config.study_start_date >= config.exam_date) {
+      return {
+        status: "ERROR",
+        message: "Study start must be before exam date.",
+      }
     }
-  }
-  if (
-    config.weekday_capacity_minutes < 0 ||
-    config.weekend_capacity_minutes < 0
-  ) {
-    return { status: "ERROR", message: "Capacity cannot be negative." }
-  }
+    if (
+      config.weekday_capacity_minutes < 0 ||
+      config.weekend_capacity_minutes < 0
+    ) {
+      return { status: "ERROR", message: "Capacity cannot be negative." }
+    }
 
-  const { data: existingSettings } = await supabase
-    .from("planner_settings")
-    .select("exam_date")
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  const previousExamDate = existingSettings?.exam_date ?? null
-
-  const upsertData: Record<string, unknown> = {
-    user_id: user.id,
-    study_start_date: config.study_start_date,
-    exam_date: config.exam_date,
-    weekday_capacity_minutes: config.weekday_capacity_minutes,
-    weekend_capacity_minutes: config.weekend_capacity_minutes,
-    max_active_subjects: Math.max(0, config.max_active_subjects ?? 0),
-    day_of_week_capacity:
-      config.day_of_week_capacity ?? [null, null, null, null, null, null, null],
-    custom_day_capacity: config.custom_day_capacity ?? {},
-    flexibility_minutes: Math.max(0, config.flexibility_minutes ?? 0),
-    updated_at: new Date().toISOString(),
-  }
-
-  console.log("Saving Step-2:", upsertData)
-
-  const { error } = await supabase
-    .from("planner_settings")
-    .upsert(upsertData, { onConflict: "user_id" })
-
-  if (error) {
-    console.log("DB response:", { status: "ERROR", message: error.message })
-    return { status: "ERROR", message: error.message }
-  }
-
-  console.log("DB response:", { status: "SUCCESS" })
-
-  // Topic deadlines matching the previous global deadline are treated as inherited.
-  // Clear them so topics continue inheriting from the latest global deadline.
-  if (
-    previousExamDate &&
-    previousExamDate !== config.exam_date
-  ) {
-    await supabase
-      .from("topics")
-      .update({ deadline: null })
+    const { data: existingSettings } = await supabase
+      .from("planner_settings")
+      .select("exam_date")
       .eq("user_id", user.id)
-      .eq("deadline", previousExamDate)
-  }
+      .maybeSingle()
 
-  revalidatePath("/planner")
-  return { status: "SUCCESS" }
+    const previousExamDate = existingSettings?.exam_date ?? null
+
+    const upsertData: Record<string, unknown> = {
+      user_id: user.id,
+      study_start_date: config.study_start_date,
+      exam_date: config.exam_date,
+      weekday_capacity_minutes: config.weekday_capacity_minutes,
+      weekend_capacity_minutes: config.weekend_capacity_minutes,
+      max_active_subjects: Math.max(0, config.max_active_subjects ?? 0),
+      day_of_week_capacity:
+        config.day_of_week_capacity ?? [null, null, null, null, null, null, null],
+      custom_day_capacity: config.custom_day_capacity ?? {},
+      flexibility_minutes: Math.max(0, config.flexibility_minutes ?? 0),
+      updated_at: new Date().toISOString(),
+    }
+
+    const { error } = await supabase
+      .from("planner_settings")
+      .upsert(upsertData, { onConflict: "user_id" })
+
+    if (error) {
+      return { status: "ERROR", message: error.message }
+    }
+
+    // Topic deadlines matching the previous global deadline are treated as inherited.
+    // Clear them so topics continue inheriting from the latest global deadline.
+    if (
+      previousExamDate &&
+      previousExamDate !== config.exam_date
+    ) {
+      await supabase
+        .from("topics")
+        .update({ deadline: null })
+        .eq("user_id", user.id)
+        .eq("deadline", previousExamDate)
+    }
+
+    revalidatePath("/planner")
+    return { status: "SUCCESS" }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
+  }
 }
 
 export async function getDraftFeasibility(
   params: PlannerParamValues[],
   config: PlannerConstraintValues
 ): Promise<GetDraftFeasibilityResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { status: "UNAUTHORIZED" }
-  }
+    if (!user) {
+      return { status: "UNAUTHORIZED" }
+    }
 
-  const activeParams = params.filter((param) => param.estimated_hours > 0)
-  const topicIds = [...new Set(activeParams.map((param) => param.topic_id))]
+    const activeParams = params.filter((param) => param.estimated_hours > 0)
+    const topicIds = [...new Set(activeParams.map((param) => param.topic_id))]
 
-  if (topicIds.length === 0) {
-    return { status: "SUCCESS", feasibility: emptyFeasibility() }
-  }
+    if (topicIds.length === 0) {
+      return { status: "SUCCESS", feasibility: emptyFeasibility() }
+    }
 
-  const { data: topicRows, error: topicError } = await supabase
-    .from("topics")
-    .select("id, subject_id, name")
-    .eq("user_id", user.id)
-    .in("id", topicIds)
-
-  if (topicError) {
-    return { status: "SUCCESS", feasibility: emptyFeasibility() }
-  }
-
-  const topics = (topicRows ?? []) as Pick<Topic, "id" | "subject_id" | "name">[]
-  const subjectIds = [...new Set(topics.map((topic) => topic.subject_id))]
-
-  let subjectRows: Array<{
-    id: string
-    name: string
-    deadline: string | null
-  }> = []
-  if (subjectIds.length > 0) {
-    const { data } = await supabase
-      .from("subjects")
-      .select("id, name, deadline")
+    const { data: topicRows, error: topicError } = await supabase
+      .from("topics")
+      .select("id, subject_id, name")
       .eq("user_id", user.id)
-      .eq("archived", false)
-      .in("id", subjectIds)
+      .in("id", topicIds)
 
-    subjectRows = (data ?? []) as Array<{
+    if (topicError) {
+      return { status: "SUCCESS", feasibility: emptyFeasibility() }
+    }
+
+    const topics = (topicRows ?? []) as Pick<Topic, "id" | "subject_id" | "name">[]
+    const subjectIds = [...new Set(topics.map((topic) => topic.subject_id))]
+
+    let subjectRows: Array<{
       id: string
       name: string
       deadline: string | null
-    }>
-  }
+    }> = []
+    if (subjectIds.length > 0) {
+      const { data } = await supabase
+        .from("subjects")
+        .select("id, name, deadline")
+        .eq("user_id", user.id)
+        .eq("archived", false)
+        .in("id", subjectIds)
 
-  const paramMap = new Map(activeParams.map((param) => [param.topic_id, param]))
-  const subjectMap = new Map(subjectRows.map((subject) => [subject.id, subject]))
-
-  const units: PlannableUnit[] = topics.flatMap((topic) => {
-    const param = paramMap.get(topic.id)
-    const subject = subjectMap.get(topic.subject_id)
-    if (!param || !subject || param.estimated_hours <= 0) {
-      return []
+      subjectRows = (data ?? []) as Array<{
+        id: string
+        name: string
+        deadline: string | null
+      }>
     }
 
-    const topicDeadline = normalizeOptionalDate(param.deadline)
-    const topicStart = normalizeOptionalDate(param.earliest_start)
+    const paramMap = new Map(activeParams.map((param) => [param.topic_id, param]))
+    const subjectMap = new Map(subjectRows.map((subject) => [subject.id, subject]))
 
-    return [
-      {
-        id: topic.id,
-        subject_id: topic.subject_id,
-        subject_name: subject?.name ?? "Unknown",
-        topic_name: topic.name,
-        estimated_minutes: Math.round(param.estimated_hours * 60),
-        session_length_minutes: param.session_length_minutes,
-        deadline: topicDeadline || normalizeOptionalDate(subject?.deadline) || config.exam_date,
-        earliest_start: topicStart || undefined,
-        depends_on: param.depends_on,
-        rest_after_days: param.rest_after_days ?? 0,
-        max_sessions_per_day: param.max_sessions_per_day,
-        study_frequency:
-          param.study_frequency === "spaced" ? "spaced" : "daily",
-      },
-    ]
-  })
+    const units: PlannableUnit[] = topics.flatMap((topic) => {
+      const param = paramMap.get(topic.id)
+      const subject = subjectMap.get(topic.subject_id)
+      if (!param || !subject || param.estimated_hours <= 0) {
+        return []
+      }
 
-  const offDays = new Set<string>()
+      const topicDeadline = normalizeOptionalDate(param.deadline)
+      const topicStart = normalizeOptionalDate(param.earliest_start)
 
-  return {
-    status: "SUCCESS",
-    feasibility: checkFeasibility(
-      units,
-      buildDraftConstraints(config),
-      offDays
-    ),
+      return [
+        {
+          id: topic.id,
+          subject_id: topic.subject_id,
+          subject_name: subject?.name ?? "Unknown",
+          topic_name: topic.name,
+          estimated_minutes: Math.round(param.estimated_hours * 60),
+          session_length_minutes: param.session_length_minutes,
+          deadline: topicDeadline || normalizeOptionalDate(subject?.deadline) || config.exam_date,
+          earliest_start: topicStart || undefined,
+          depends_on: param.depends_on,
+          rest_after_days: param.rest_after_days ?? 0,
+          max_sessions_per_day: param.max_sessions_per_day,
+          study_frequency:
+            param.study_frequency === "spaced" ? "spaced" : "daily",
+        },
+      ]
+    })
+
+    const offDays = new Set<string>()
+
+    return {
+      status: "SUCCESS",
+      feasibility: checkFeasibility(
+        units,
+        buildDraftConstraints(config),
+        offDays
+      ),
+    }
+  } catch {
+    return { status: "SUCCESS", feasibility: emptyFeasibility() }
   }
 }
 
 export async function reorderSubjects(
   updates: Array<{ id: string; sort_order: number }>
 ): Promise<ReorderSubjectsResponse> {
-  if (updates.length === 0) return { status: "SUCCESS" }
+  try {
+    if (updates.length === 0) return { status: "SUCCESS" }
 
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { status: "UNAUTHORIZED" }
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  for (const { id, sort_order } of updates) {
-    const { error } = await supabase
-      .from("subjects")
-      .update({ sort_order })
-      .eq("id", id)
-      .eq("user_id", user.id)
-    if (error) return { status: "ERROR", message: error.message }
+    for (const { id, sort_order } of updates) {
+      const { error } = await supabase
+        .from("subjects")
+        .update({ sort_order })
+        .eq("id", id)
+        .eq("user_id", user.id)
+      if (error) return { status: "ERROR", message: error.message }
+    }
+
+    return { status: "SUCCESS" }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
-
-  return { status: "SUCCESS" }
 }
 
 export async function reorderTopics(
   updates: Array<{ id: string; sort_order: number }>
 ): Promise<ReorderTopicsResponse> {
-  if (updates.length === 0) return { status: "SUCCESS" }
+  try {
+    if (updates.length === 0) return { status: "SUCCESS" }
 
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { status: "UNAUTHORIZED" }
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  for (const { id, sort_order } of updates) {
-    const { error } = await supabase
-      .from("topics")
-      .update({ sort_order })
-      .eq("id", id)
-      .eq("user_id", user.id)
-    if (error) return { status: "ERROR", message: error.message }
+    for (const { id, sort_order } of updates) {
+      const { error } = await supabase
+        .from("topics")
+        .update({ sort_order })
+        .eq("id", id)
+        .eq("user_id", user.id)
+      if (error) return { status: "ERROR", message: error.message }
+    }
+
+    return { status: "SUCCESS" }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
-
-  return { status: "SUCCESS" }
 }
 
 export async function saveSubjectDeadlines(
   updates: Array<{ id: string; deadline: string | null }>
 ): Promise<SaveSubjectDeadlinesResponse> {
-  if (updates.length === 0) return { status: "SUCCESS" }
+  try {
+    if (updates.length === 0) return { status: "SUCCESS" }
 
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { status: "UNAUTHORIZED" }
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  for (const { id, deadline } of updates) {
-    const { error } = await supabase
-      .from("subjects")
-      .update({ deadline: deadline || null })
-      .eq("id", id)
-      .eq("user_id", user.id)
-    if (error) return { status: "ERROR", message: error.message }
+    for (const { id, deadline } of updates) {
+      const { error } = await supabase
+        .from("subjects")
+        .update({ deadline: deadline || null })
+        .eq("id", id)
+        .eq("user_id", user.id)
+      if (error) return { status: "ERROR", message: error.message }
+    }
+
+    return { status: "SUCCESS" }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
-
-  return { status: "SUCCESS" }
 }
 

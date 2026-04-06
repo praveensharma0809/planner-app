@@ -53,7 +53,6 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
   const actionLockRef = useRef(false)
 
   function showMutationError(error: unknown, fallbackMessage: string) {
-    console.error(error)
     addToast(
       isLikelyNetworkError(error)
         ? "Network issue. Check connection."

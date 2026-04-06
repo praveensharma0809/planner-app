@@ -74,83 +74,90 @@ function getWeekRange(baseDate: Date) {
 export async function getScheduleWeekData(
   weekOfISO?: string
 ): Promise<GetScheduleWeekDataResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { status: "UNAUTHORIZED" }
-  }
+    if (!user) {
+      return { status: "UNAUTHORIZED" }
+    }
 
-  const baseDate = weekOfISO ? new Date(`${weekOfISO}T12:00:00`) : new Date()
-  if (isNaN(baseDate.getTime())) {
-    return { status: "INVALID_WEEK" }
-  }
+    const baseDate = weekOfISO ? new Date(`${weekOfISO}T12:00:00`) : new Date()
+    if (isNaN(baseDate.getTime())) {
+      return { status: "INVALID_WEEK" }
+    }
 
-  const { weekStartISO, weekEndISO } = getWeekRange(baseDate)
+    const { weekStartISO, weekEndISO } = getWeekRange(baseDate)
 
-  const [{ data: subjectRows, error: subjectError }, { data: taskRows, error: taskError }] = await Promise.all([
-    supabase
-      .from("subjects")
-      .select("id, name, sort_order")
-      .eq("user_id", user.id)
-      .eq("archived", false)
-        .not("name", "ilike", "others")
-        .not("name", "ilike", "__deprecated_others__")
-      .order("sort_order", { ascending: true }),
-    supabase
-      .from("tasks")
-      .select(
-        "id, subject_id, task_type, title, scheduled_date, duration_minutes, session_type, completed, task_source, plan_snapshot_id, session_number, total_sessions, created_at"
-      )
-      .eq("user_id", user.id)
-      .gte("scheduled_date", weekStartISO)
-      .lte("scheduled_date", weekEndISO)
-      .order("scheduled_date", { ascending: true })
-      .order("created_at", { ascending: true }),
-  ])
+    const [{ data: subjectRows, error: subjectError }, { data: taskRows, error: taskError }] = await Promise.all([
+      supabase
+        .from("subjects")
+        .select("id, name, sort_order")
+        .eq("user_id", user.id)
+        .eq("archived", false)
+          .not("name", "ilike", "others")
+          .not("name", "ilike", "__deprecated_others__")
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("tasks")
+        .select(
+          "id, subject_id, task_type, title, scheduled_date, duration_minutes, session_type, completed, task_source, plan_snapshot_id, session_number, total_sessions, created_at"
+        )
+        .eq("user_id", user.id)
+        .gte("scheduled_date", weekStartISO)
+        .lte("scheduled_date", weekEndISO)
+        .order("scheduled_date", { ascending: true })
+        .order("created_at", { ascending: true }),
+    ])
 
-  if (subjectError) {
-    return { status: "ERROR", message: subjectError.message }
-  }
+    if (subjectError) {
+      return { status: "ERROR", message: subjectError.message }
+    }
 
-  if (taskError) {
-    return { status: "ERROR", message: taskError.message }
-  }
+    if (taskError) {
+      return { status: "ERROR", message: taskError.message }
+    }
 
-  const subjects = (subjectRows ?? []) as SubjectRow[]
-  const tasks = ((taskRows ?? []) as ScheduleTaskRow[])
-    .filter((task) => !isCanonicalIntakeManualTask(task))
+    const subjects = (subjectRows ?? []) as SubjectRow[]
+    const tasks = ((taskRows ?? []) as ScheduleTaskRow[])
+      .filter((task) => !isCanonicalIntakeManualTask(task))
 
-  const subjectNameById = new Map(subjects.map((subject) => [subject.id, subject.name]))
+    const subjectNameById = new Map(subjects.map((subject) => [subject.id, subject.name]))
 
-  const resolvedTasks: ScheduleWeekTask[] = tasks.map((task) => ({
-    ...(task.task_type === "standalone" || !task.subject_id
-      ? { subject_id: null, subject_name: STANDALONE_SUBJECT_LABEL }
-      : { subject_id: task.subject_id, subject_name: subjectNameById.get(task.subject_id) ?? "Unknown subject" }),
-    is_planner_task: task.task_source === "plan",
-    id: task.id,
-    title: task.title,
-    scheduled_date: task.scheduled_date,
-    duration_minutes: task.duration_minutes,
-    session_type: task.session_type,
-    completed: task.completed,
-    plan_snapshot_id: task.plan_snapshot_id,
-    session_number: task.session_number,
-    total_sessions: task.total_sessions,
-    created_at: task.created_at,
-    task_type: task.task_type,
-  }))
+    const resolvedTasks: ScheduleWeekTask[] = tasks.map((task) => ({
+      ...(task.task_type === "standalone" || !task.subject_id
+        ? { subject_id: null, subject_name: STANDALONE_SUBJECT_LABEL }
+        : { subject_id: task.subject_id, subject_name: subjectNameById.get(task.subject_id) ?? "Unknown subject" }),
+      is_planner_task: task.task_source === "plan",
+      id: task.id,
+      title: task.title,
+      scheduled_date: task.scheduled_date,
+      duration_minutes: task.duration_minutes,
+      session_type: task.session_type,
+      completed: task.completed,
+      plan_snapshot_id: task.plan_snapshot_id,
+      session_number: task.session_number,
+      total_sessions: task.total_sessions,
+      created_at: task.created_at,
+      task_type: task.task_type,
+    }))
 
-  return {
-    status: "SUCCESS",
-    weekStartISO,
-    weekEndISO,
-    tasks: resolvedTasks,
-    subjects: subjects.map((subject) => ({
-      id: subject.id,
-      name: subject.name,
-    })),
+    return {
+      status: "SUCCESS",
+      weekStartISO,
+      weekEndISO,
+      tasks: resolvedTasks,
+      subjects: subjects.map((subject) => ({
+        id: subject.id,
+        name: subject.name,
+      })),
+    }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
 }

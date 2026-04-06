@@ -482,212 +482,223 @@ function addDays(isoDate: string, days: number) {
 }
 
 export async function getPlanHistory(): Promise<GetPlanHistoryResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { status: "UNAUTHORIZED" }
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  const { data, error } = await getPlanSnapshots(supabase, user.id, 20)
+    const { data, error } = await getPlanSnapshots(supabase, user.id, 20)
 
-  if (error) return { status: "SUCCESS", snapshots: [] }
+    if (error) return { status: "SUCCESS", snapshots: [] }
 
-  return { status: "SUCCESS", snapshots: (data ?? []) as PlanSnapshot[] }
+    return { status: "SUCCESS", snapshots: (data ?? []) as PlanSnapshot[] }
+  } catch {
+    return { status: "SUCCESS", snapshots: [] }
+  }
 }
 
 export async function generatePlanAction(
   input: GeneratePlanInput = {}
 ): Promise<GeneratePlanResponse> {
-  const startedAt = Date.now()
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    await trackServerEvent({
+  try {
+    const startedAt = Date.now()
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      await trackServerEvent({
+        supabase,
+        eventName: "planner.generate",
+        status: "error",
+        userId: null,
+        durationMs: durationSince(startedAt),
+        metadata: { reason: "unauthorized" },
+      })
+      return { status: "UNAUTHORIZED" }
+    }
+
+    const selectedTaskIds = normalizePlannerSelectedTaskIds(input.selectedTaskIds)
+
+    const track = async (
+      status: "success" | "warning" | "error",
+      metadata: Record<string, unknown>
+    ) => {
+      await trackServerEvent({
+        supabase,
+        eventName: "planner.generate",
+        status,
+        userId: user.id,
+        durationMs: durationSince(startedAt),
+        metadata,
+      })
+    }
+
+    const { data: config } = await getPlannerSettings(supabase, user.id)
+
+    if (!config) {
+      await track("error", { reason: "no_config" })
+      return { status: "NO_CONFIG" }
+    }
+    const planConfig = config as unknown as PlanConfig
+
+    const { data: subjects, error: subjectsError } = await getSubjectsForUser(
       supabase,
-      eventName: "planner.generate",
-      status: "error",
-      userId: null,
-      durationMs: durationSince(startedAt),
-      metadata: { reason: "unauthorized" },
-    })
-    return { status: "UNAUTHORIZED" }
-  }
+      user.id
+    )
 
-  const selectedTaskIds = normalizePlannerSelectedTaskIds(input.selectedTaskIds)
+    if (subjectsError) {
+      await track("error", { reason: "subjects_query_failed", message: subjectsError.message })
+      return { status: "ERROR", message: `subjects query failed: ${subjectsError.message}` }
+    }
 
-  const track = async (
-    status: "success" | "warning" | "error",
-    metadata: Record<string, unknown>
-  ) => {
-    await trackServerEvent({
-      supabase,
-      eventName: "planner.generate",
-      status,
-      userId: user.id,
-      durationMs: durationSince(startedAt),
-      metadata,
-    })
-  }
+    const activeSubjects = (subjects ?? []) as unknown as Array<{
+      id: string
+      name: string
+      sort_order: number
+      deadline?: string | null
+      archived?: boolean | null
+    }>
 
-  const { data: config } = await getPlannerSettings(supabase, user.id)
+    if (activeSubjects.length === 0) {
+      await track("warning", { reason: "no_active_subjects" })
+      return { status: "NO_TOPICS" }
+    }
 
-  if (!config) {
-    await track("error", { reason: "no_config" })
-    return { status: "NO_CONFIG" }
-  }
-  const planConfig = config as PlanConfig
+    const activeSubjectIds = new Set(activeSubjects.map((subject) => subject.id))
 
-  const { data: subjects, error: subjectsError } = await getSubjectsForUser(
-    supabase,
-    user.id
-  )
-
-  if (subjectsError) {
-    await track("error", { reason: "subjects_query_failed", message: subjectsError.message })
-    return { status: "ERROR", message: `subjects query failed: ${subjectsError.message}` }
-  }
-
-  const activeSubjects = (subjects ?? []) as Array<{
-    id: string
-    name: string
-    sort_order: number
-    deadline?: string | null
-    archived?: boolean | null
-  }>
-
-  if (activeSubjects.length === 0) {
-    await track("warning", { reason: "no_active_subjects" })
-    return { status: "NO_TOPICS" }
-  }
-
-  const activeSubjectIds = new Set(activeSubjects.map((subject) => subject.id))
-
-  const { data: topics, error: topicsError } = await getTopicsForUser(
-    supabase,
-    user.id,
-    TOPIC_SELECT,
-    undefined,
-    Array.from(activeSubjectIds)
-  )
-
-  if (topicsError) {
-    return { status: "ERROR", message: `topics query failed: ${topicsError.message}` }
-  }
-
-  if (!topics || topics.length === 0) {
-    await track("warning", { reason: "no_topics_raw" })
-    return { status: "NO_TOPICS" }
-  }
-
-  const {
-    subjectNameMap,
-    subjectOrderMap,
-    subjectDeadlineMap,
-    
-  } = buildSubjectMaps(
-    activeSubjects
-  )
-
-  const activeTopics = sortTopicsBySubjectOrder(
-    (topics as Topic[]).filter(
-      (topic) => activeSubjectIds.has(topic.subject_id) && topic.archived !== true
-    ),
-    subjectOrderMap
-  )
-
-  if (activeTopics.length === 0) {
-    await track("warning", { reason: "no_topics_active_subjects" })
-    return { status: "NO_TOPICS" }
-  }
-
-  const topicIds = activeTopics.map((topic) => topic.id)
-  const topicNameMap = new Map(activeTopics.map((topic) => [topic.id, topic.name]))
-  const [{ data: topicParamRows }, { data: topicTasks }] = await Promise.all([
-    getTopicParamsForUser(supabase, user.id, topicIds),
-    getOpenManualTasksByTopic(
+    const { data: topics, error: topicsError } = await getTopicsForUser(
       supabase,
       user.id,
+      TOPIC_SELECT,
       undefined,
-      topicIds,
-      selectedTaskIds.length > 0 ? selectedTaskIds : undefined
-    ),
-  ])
+      Array.from(activeSubjectIds)
+    )
 
-  const paramMap = buildTopicParamMap((topicParamRows ?? []) as Array<Record<string, unknown>>)
+    if (topicsError) {
+      return { status: "ERROR", message: `topics query failed: ${topicsError.message}` }
+    }
 
-  const topicTaskSourceMap = buildTaskSourceByTopic(
-    (topicTasks ?? []) as PlannerTaskSourceRow[]
-  )
+    if (!topics || topics.length === 0) {
+      await track("warning", { reason: "no_topics_raw" })
+      return { status: "NO_TOPICS" }
+    }
 
-  const units = buildUnitsFromActiveTopics({
-    activeTopics,
-    paramMap,
-    topicTaskSourceMap,
-    subjectNameMap,
-    subjectDeadlineMap,
-    examDate: planConfig.exam_date,
-  })
+    const {
+      subjectNameMap,
+      subjectOrderMap,
+      subjectDeadlineMap,
 
-  if (units.length === 0) {
-    await track("warning", {
-      reason: "no_tasks_to_schedule",
-      activeTopics: activeTopics.length,
+    } = buildSubjectMaps(
+      activeSubjects
+    )
+
+    const activeTopics = sortTopicsBySubjectOrder(
+      ((topics ?? []) as unknown as Topic[]).filter(
+        (topic) => activeSubjectIds.has(topic.subject_id) && topic.archived !== true
+      ),
+      subjectOrderMap
+    )
+
+    if (activeTopics.length === 0) {
+      await track("warning", { reason: "no_topics_active_subjects" })
+      return { status: "NO_TOPICS" }
+    }
+
+    const topicIds = activeTopics.map((topic) => topic.id)
+    const topicNameMap = new Map(activeTopics.map((topic) => [topic.id, topic.name]))
+    const [{ data: topicParamRows }, { data: topicTasks }] = await Promise.all([
+      getTopicParamsForUser(supabase, user.id, topicIds),
+      getOpenManualTasksByTopic(
+        supabase,
+        user.id,
+        undefined,
+        topicIds,
+        selectedTaskIds.length > 0 ? selectedTaskIds : undefined
+      ),
+    ])
+
+    const paramMap = buildTopicParamMap((topicParamRows ?? []) as Array<Record<string, unknown>>)
+
+    const topicTaskSourceMap = buildTaskSourceByTopic(
+      (topicTasks ?? []) as unknown as PlannerTaskSourceRow[]
+    )
+
+    const units = buildUnitsFromActiveTopics({
+      activeTopics,
+      paramMap,
+      topicTaskSourceMap,
+      subjectNameMap,
+      subjectDeadlineMap,
+      examDate: planConfig.exam_date,
     })
-    return { status: "NO_TOPICS" }
-  }
 
-  const result = generatePlan({
-    units,
-    constraints: buildConstraintsFromPlanConfig(planConfig),
-    offDays: new Set<string>(),
-  })
+    if (units.length === 0) {
+      await track("warning", {
+        reason: "no_tasks_to_schedule",
+        activeTopics: activeTopics.length,
+      })
+      return { status: "NO_TOPICS" }
+    }
 
-  const hasFeasibility =
-    result.status === "READY" ||
-    result.status === "INFEASIBLE" ||
-    result.status === "PARTIAL"
-  const hasSchedule = result.status === "READY" || result.status === "PARTIAL"
+    const result = generatePlan({
+      units,
+      constraints: buildConstraintsFromPlanConfig(planConfig),
+      offDays: new Set<string>(),
+    })
 
-  await track(result.status === "READY" ? "success" : "warning", {
-    resultStatus: result.status,
-    unitCount: units.length,
-    sessionCount: hasSchedule ? result.schedule.length : 0,
-    feasible: hasFeasibility ? result.feasibility.feasible : null,
-    droppedSessions: result.status === "PARTIAL" ? result.droppedSessions : 0,
-  })
+    const hasFeasibility =
+      result.status === "READY" ||
+      result.status === "INFEASIBLE" ||
+      result.status === "PARTIAL"
+    const hasSchedule = result.status === "READY" || result.status === "PARTIAL"
 
-  if (result.status === "READY" || result.status === "PARTIAL") {
-    const titledSchedule = result.schedule.map((session) => {
-      const topicName = topicNameMap.get(session.topic_id) ?? session.title
-      const sourceTasks = topicTaskSourceMap.get(session.topic_id) ?? []
-      const sourceTask = resolveSessionSourceTask(
-        sourceTasks,
-        session.session_number,
-        session.total_sessions
-      )
+    await track(result.status === "READY" ? "success" : "warning", {
+      resultStatus: result.status,
+      unitCount: units.length,
+      sessionCount: hasSchedule ? result.schedule.length : 0,
+      feasible: hasFeasibility ? result.feasibility.feasible : null,
+      droppedSessions: result.status === "PARTIAL" ? result.droppedSessions : 0,
+    })
 
-      return {
-        ...session,
-        title: resolveSessionTaskTitle(
-          topicName,
+    if (result.status === "READY" || result.status === "PARTIAL") {
+      const titledSchedule = result.schedule.map((session) => {
+        const topicName = topicNameMap.get(session.topic_id) ?? session.title
+        const sourceTasks = topicTaskSourceMap.get(session.topic_id) ?? []
+        const sourceTask = resolveSessionSourceTask(
           sourceTasks,
           session.session_number,
           session.total_sessions
-        ),
-        source_topic_task_id: sourceTask?.id ?? null,
-      }
-    })
+        )
 
-    if (result.status === "READY") {
+        return {
+          ...session,
+          title: resolveSessionTaskTitle(
+            topicName,
+            sourceTasks,
+            session.session_number,
+            session.total_sessions
+          ),
+          source_topic_task_id: sourceTask?.id ?? null,
+        }
+      })
+
+      if (result.status === "READY") {
+        return { ...result, schedule: titledSchedule }
+      }
+
       return { ...result, schedule: titledSchedule }
     }
 
-    return { ...result, schedule: titledSchedule }
+    return result
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
-
-  return result
 }
 
 export async function commitPlan(
@@ -695,234 +706,237 @@ export async function commitPlan(
   keepMode: KeepPreviousMode = "until",
   summary?: string
 ): Promise<CommitPlanResponse> {
-  const startedAt = Date.now()
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    await trackServerEvent({
-      supabase,
-      eventName: "planner.commit",
-      status: "error",
-      userId: null,
-      durationMs: durationSince(startedAt),
-      metadata: { reason: "unauthorized" },
-    })
-    return { status: "UNAUTHORIZED" }
-  }
-
-  const normalizedKeepMode = normalizeKeepMode(keepMode)
-
-  if (sessions.length === 0) {
-    await trackServerEvent({
-      supabase,
-      eventName: "planner.commit",
-      status: "warning",
-      userId: user.id,
-      durationMs: durationSince(startedAt),
-      metadata: {
-        reason: "empty_commit",
-        keepMode: normalizedKeepMode,
-        sessionCount: 0,
-      },
-    })
-    return {
-      status: "ERROR",
-      message: "Cannot commit empty plan",
+  try {
+    const startedAt = Date.now()
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      await trackServerEvent({
+        supabase,
+        eventName: "planner.commit",
+        status: "error",
+        userId: null,
+        durationMs: durationSince(startedAt),
+        metadata: { reason: "unauthorized" },
+      })
+      return { status: "UNAUTHORIZED" }
     }
-  }
 
-  const sanitizedSessionsResult = sanitizeSessionsForCommit(sessions)
-  if (!sanitizedSessionsResult.ok) {
-    await trackServerEvent({
-      supabase,
-      eventName: "planner.commit",
-      status: "warning",
-      userId: user.id,
-      durationMs: durationSince(startedAt),
-      metadata: {
-        reason: "invalid_session_payload",
-        keepMode: normalizedKeepMode,
-        sessionCount: sessions.length,
-      },
-    })
-    return {
-      status: "ERROR",
-      message: sanitizedSessionsResult.message,
-    }
-  }
+    const normalizedKeepMode = normalizeKeepMode(keepMode)
 
-  const sanitizedSessions = sanitizedSessionsResult.sessions
-  if (sanitizedSessions.length === 0) {
-    await trackServerEvent({
-      supabase,
-      eventName: "planner.commit",
-      status: "warning",
-      userId: user.id,
-      durationMs: durationSince(startedAt),
-      metadata: {
-        reason: "empty_commit",
-        keepMode: normalizedKeepMode,
-        sessionCount: 0,
-      },
-    })
-    return {
-      status: "ERROR",
-      message: "Cannot commit empty plan",
-    }
-  }
-
-  const generatedSessions = sanitizedSessions.filter((session) => !session.is_manual)
-  if (generatedSessions.length === 0) {
-    await trackServerEvent({
-      supabase,
-      eventName: "planner.commit",
-      status: "warning",
-      userId: user.id,
-      durationMs: durationSince(startedAt),
-      metadata: {
-        reason: "missing_generated_sessions",
-        keepMode: normalizedKeepMode,
-        sessionCount: sanitizedSessions.length,
-      },
-    })
-    return {
-      status: "ERROR",
-      message: "Missing required generated sessions",
-    }
-  }
-
-  const commitHash = buildCommitPayloadHash(user.id, sanitizedSessions)
-
-  const { data: config } = await getPlannerSettings(supabase, user.id)
-  const snapshotSummary = sanitizeSummary(summary, sanitizedSessions.length)
-
-  const newPlanStartDate =
-    sanitizedSessions.length > 0
-      ? sanitizedSessions.reduce(
-          (earliest, session) =>
-            session.scheduled_date < earliest ? session.scheduled_date : earliest,
-          sanitizedSessions[0].scheduled_date
-        )
-      : null
-
-  console.log("Sanitized sessions:", sanitizedSessions)
-
-  const { data, error } = await commitPlanAtomic(supabase, {
-    userId: user.id,
-    tasks: sanitizedSessions,
-    summary: snapshotSummary,
-    configSnapshot: config ?? {},
-    keepMode: normalizedKeepMode,
-    newPlanStartDate,
-    commitHash,
-  })
-
-  if (error) {
-    const mappedMessage = mapCommitRpcErrorMessage(error.message)
-    console.error("commitPlan error:", error.message)
-    await trackServerEvent({
-      supabase,
-      eventName: "planner.commit",
-      status: "error",
-      userId: user.id,
-      durationMs: durationSince(startedAt),
-      metadata: {
-        reason: "rpc_error",
-        keepMode: normalizedKeepMode,
-        sessionCount: sanitizedSessions.length,
-        message: error.message,
-        mappedMessage,
-      },
-    })
-    return {
-      status: "ERROR",
-      message: mappedMessage,
-    }
-  }
-
-  const resultRow = (Array.isArray(data) ? data[0] : data) as
-    | {
-        status?: string
-        task_count?: number
-        snapshot_id?: string
+    if (sessions.length === 0) {
+      await trackServerEvent({
+        supabase,
+        eventName: "planner.commit",
+        status: "warning",
+        userId: user.id,
+        durationMs: durationSince(startedAt),
+        metadata: {
+          reason: "empty_commit",
+          keepMode: normalizedKeepMode,
+          sessionCount: 0,
+        },
+      })
+      return {
+        status: "ERROR",
+        message: "Cannot commit empty plan",
       }
-    | null
-
-  const rpcStatus = typeof resultRow?.status === "string" ? resultRow.status : null
-
-  if (!resultRow || rpcStatus !== "SUCCESS") {
-    const mappedMessage = mapCommitRpcErrorMessage(rpcStatus)
-    await trackServerEvent({
-      supabase,
-      eventName: "planner.commit",
-      status: "error",
-      userId: user.id,
-      durationMs: durationSince(startedAt),
-      metadata: {
-        reason: "rpc_non_success",
-        keepMode: normalizedKeepMode,
-        sessionCount: sanitizedSessions.length,
-        rpcStatus,
-        mappedMessage,
-      },
-    })
-    return {
-      status: "ERROR",
-      message: mappedMessage,
     }
-  }
 
-  const taskCount = Number.isFinite(resultRow.task_count) ? Number(resultRow.task_count) : 0
-  const snapshotId = typeof resultRow.snapshot_id === "string" ? resultRow.snapshot_id : ""
-
-  if (!snapshotId) {
-    await trackServerEvent({
-      supabase,
-      eventName: "planner.commit",
-      status: "error",
-      userId: user.id,
-      durationMs: durationSince(startedAt),
-      metadata: {
-        reason: "rpc_malformed_result",
-        keepMode: normalizedKeepMode,
-        sessionCount: sanitizedSessions.length,
-        rpcStatus,
-      },
-    })
-    return {
-      status: "ERROR",
-      message: "Failed to commit plan: malformed_result",
+    const sanitizedSessionsResult = sanitizeSessionsForCommit(sessions)
+    if (!sanitizedSessionsResult.ok) {
+      await trackServerEvent({
+        supabase,
+        eventName: "planner.commit",
+        status: "warning",
+        userId: user.id,
+        durationMs: durationSince(startedAt),
+        metadata: {
+          reason: "invalid_session_payload",
+          keepMode: normalizedKeepMode,
+          sessionCount: sessions.length,
+        },
+      })
+      return {
+        status: "ERROR",
+        message: sanitizedSessionsResult.message,
+      }
     }
-  }
 
-  await normalizePlannerTaskSourceAfterCommit(supabase, user.id, snapshotId)
+    const sanitizedSessions = sanitizedSessionsResult.sessions
+    if (sanitizedSessions.length === 0) {
+      await trackServerEvent({
+        supabase,
+        eventName: "planner.commit",
+        status: "warning",
+        userId: user.id,
+        durationMs: durationSince(startedAt),
+        metadata: {
+          reason: "empty_commit",
+          keepMode: normalizedKeepMode,
+          sessionCount: 0,
+        },
+      })
+      return {
+        status: "ERROR",
+        message: "Cannot commit empty plan",
+      }
+    }
 
-  revalidatePath("/dashboard")
-  revalidatePath("/dashboard/calendar")
-  revalidatePath("/dashboard/timetable")
-  revalidatePath("/schedule")
-  revalidatePath("/planner")
+    const generatedSessions = sanitizedSessions.filter((session) => !session.is_manual)
+    if (generatedSessions.length === 0) {
+      await trackServerEvent({
+        supabase,
+        eventName: "planner.commit",
+        status: "warning",
+        userId: user.id,
+        durationMs: durationSince(startedAt),
+        metadata: {
+          reason: "missing_generated_sessions",
+          keepMode: normalizedKeepMode,
+          sessionCount: sanitizedSessions.length,
+        },
+      })
+      return {
+        status: "ERROR",
+        message: "Missing required generated sessions",
+      }
+    }
 
-  await trackServerEvent({
-    supabase,
-    eventName: "planner.commit",
-    status: "success",
-    userId: user.id,
-    durationMs: durationSince(startedAt),
-    metadata: {
+    const commitHash = buildCommitPayloadHash(user.id, sanitizedSessions)
+
+    const { data: config } = await getPlannerSettings(supabase, user.id)
+    const snapshotSummary = sanitizeSummary(summary, sanitizedSessions.length)
+
+    const newPlanStartDate =
+      sanitizedSessions.length > 0
+        ? sanitizedSessions.reduce(
+            (earliest, session) =>
+              session.scheduled_date < earliest ? session.scheduled_date : earliest,
+            sanitizedSessions[0].scheduled_date
+          )
+        : null
+
+    const { data, error } = await commitPlanAtomic(supabase, {
+      userId: user.id,
+      tasks: sanitizedSessions,
+      summary: snapshotSummary,
+      configSnapshot: config ?? {},
       keepMode: normalizedKeepMode,
-      sessionCount: sanitizedSessions.length,
+      newPlanStartDate,
+      commitHash,
+    })
+
+    if (error) {
+      const mappedMessage = mapCommitRpcErrorMessage(error.message)
+      await trackServerEvent({
+        supabase,
+        eventName: "planner.commit",
+        status: "error",
+        userId: user.id,
+        durationMs: durationSince(startedAt),
+        metadata: {
+          reason: "rpc_error",
+          keepMode: normalizedKeepMode,
+          sessionCount: sanitizedSessions.length,
+          message: error.message,
+          mappedMessage,
+        },
+      })
+      return {
+        status: "ERROR",
+        message: mappedMessage,
+      }
+    }
+
+    const resultRow = (Array.isArray(data) ? data[0] : data) as
+      | {
+          status?: string
+          task_count?: number
+          snapshot_id?: string
+        }
+      | null
+
+    const rpcStatus = typeof resultRow?.status === "string" ? resultRow.status : null
+
+    if (!resultRow || rpcStatus !== "SUCCESS") {
+      const mappedMessage = mapCommitRpcErrorMessage(rpcStatus)
+      await trackServerEvent({
+        supabase,
+        eventName: "planner.commit",
+        status: "error",
+        userId: user.id,
+        durationMs: durationSince(startedAt),
+        metadata: {
+          reason: "rpc_non_success",
+          keepMode: normalizedKeepMode,
+          sessionCount: sanitizedSessions.length,
+          rpcStatus,
+          mappedMessage,
+        },
+      })
+      return {
+        status: "ERROR",
+        message: mappedMessage,
+      }
+    }
+
+    const taskCount = Number.isFinite(resultRow.task_count) ? Number(resultRow.task_count) : 0
+    const snapshotId = typeof resultRow.snapshot_id === "string" ? resultRow.snapshot_id : ""
+
+    if (!snapshotId) {
+      await trackServerEvent({
+        supabase,
+        eventName: "planner.commit",
+        status: "error",
+        userId: user.id,
+        durationMs: durationSince(startedAt),
+        metadata: {
+          reason: "rpc_malformed_result",
+          keepMode: normalizedKeepMode,
+          sessionCount: sanitizedSessions.length,
+          rpcStatus,
+        },
+      })
+      return {
+        status: "ERROR",
+        message: "Failed to commit plan: malformed_result",
+      }
+    }
+
+    await normalizePlannerTaskSourceAfterCommit(supabase, user.id, snapshotId)
+
+    revalidatePath("/dashboard")
+    revalidatePath("/dashboard/calendar")
+    revalidatePath("/schedule")
+    revalidatePath("/planner")
+
+    await trackServerEvent({
+      supabase,
+      eventName: "planner.commit",
+      status: "success",
+      userId: user.id,
+      durationMs: durationSince(startedAt),
+      metadata: {
+        keepMode: normalizedKeepMode,
+        sessionCount: sanitizedSessions.length,
+        taskCount,
+        snapshotId,
+      },
+    })
+
+    return {
+      status: "SUCCESS",
       taskCount,
       snapshotId,
-    },
-  })
-
-  return {
-    status: "SUCCESS",
-    taskCount,
-    snapshotId,
+    }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
 }
 
@@ -930,521 +944,530 @@ export async function reoptimizePreviewPlan(
   reservedSessions: ScheduledSession[],
   input: ReoptimizePreviewInput = {}
 ): Promise<ReoptimizePreviewResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) return { status: "UNAUTHORIZED" }
+    if (!user) return { status: "UNAUTHORIZED" }
 
-  const selectedTaskIds = normalizePlannerSelectedTaskIds(input.selectedTaskIds)
+    const selectedTaskIds = normalizePlannerSelectedTaskIds(input.selectedTaskIds)
 
-  const { data: config } = await getPlannerSettings(supabase, user.id)
+    const { data: config } = await getPlannerSettings(supabase, user.id)
 
-  if (!config) {
-    return { status: "NO_CONFIG" }
-  }
+    if (!config) {
+      return { status: "NO_CONFIG" }
+    }
 
-  const planConfig = config as PlanConfig
+    const planConfig = config as unknown as PlanConfig
 
-  const { data: subjects, error: subjectsError } = await getSubjectsForUser(
-    supabase,
-    user.id
-  )
+    const { data: subjects, error: subjectsError } = await getSubjectsForUser(
+      supabase,
+      user.id
+    )
 
-  if (subjectsError) {
-    return { status: "NO_TOPICS" }
-  }
+    if (subjectsError) {
+      return { status: "NO_TOPICS" }
+    }
 
-  const activeSubjects = (subjects ?? []) as Array<{
-    id: string
-    name: string
-    sort_order: number
-    deadline?: string | null
-    archived?: boolean | null
-  }>
+    const activeSubjects = (subjects ?? []) as unknown as Array<{
+      id: string
+      name: string
+      sort_order: number
+      deadline?: string | null
+      archived?: boolean | null
+    }>
 
-  if (activeSubjects.length === 0) {
-    return { status: "NO_TOPICS" }
-  }
+    if (activeSubjects.length === 0) {
+      return { status: "NO_TOPICS" }
+    }
 
-  const {
-    subjectNameMap,
-    subjectOrderMap,
-    subjectDeadlineMap,
-    
-  } = buildSubjectMaps(activeSubjects)
-  const activeSubjectIds = new Set(activeSubjects.map((subject) => subject.id))
+    const {
+      subjectNameMap,
+      subjectOrderMap,
+      subjectDeadlineMap,
 
-  const { data: topics } = await getTopicsForUser(
-    supabase,
-    user.id,
-    TOPIC_SELECT,
-    undefined,
-    Array.from(activeSubjectIds)
-  )
+    } = buildSubjectMaps(activeSubjects)
+    const activeSubjectIds = new Set(activeSubjects.map((subject) => subject.id))
 
-  if (!topics || topics.length === 0) {
-    return { status: "NO_TOPICS" }
-  }
-
-  const activeTopics = sortTopicsBySubjectOrder(
-    (topics as Topic[]).filter(
-      (topic) => activeSubjectIds.has(topic.subject_id) && topic.archived !== true
-    ),
-    subjectOrderMap
-  )
-
-  if (activeTopics.length === 0) {
-    return { status: "NO_TOPICS" }
-  }
-
-  const topicIds = activeTopics.map((topic) => topic.id)
-  const [{ data: topicParamRows }, { data: topicTasks }] = await Promise.all([
-    getTopicParamsForUser(supabase, user.id, topicIds),
-    getOpenManualTasksByTopic(
+    const { data: topics } = await getTopicsForUser(
       supabase,
       user.id,
+      TOPIC_SELECT,
       undefined,
-      topicIds,
-      selectedTaskIds.length > 0 ? selectedTaskIds : undefined
-    ),
-  ])
-
-  const topicNameMap = new Map(activeTopics.map((topic) => [topic.id, topic.name]))
-  const paramMap = buildTopicParamMap((topicParamRows ?? []) as Array<Record<string, unknown>>)
-
-  const topicTaskSourceMap = buildTaskSourceByTopic(
-    (topicTasks ?? []) as PlannerTaskSourceRow[]
-  )
-
-  const reservedByDate = new Map<string, number>()
-  const reservedGeneratedMinutesByTopic = new Map<string, number>()
-  const reservedGeneratedCountByTopic = new Map<string, number>()
-
-  for (const session of reservedSessions) {
-    reservedByDate.set(
-      session.scheduled_date,
-      (reservedByDate.get(session.scheduled_date) ?? 0) + session.duration_minutes
+      Array.from(activeSubjectIds)
     )
 
-    if (session.is_manual) continue
-    reservedGeneratedMinutesByTopic.set(
-      session.topic_id,
-      (reservedGeneratedMinutesByTopic.get(session.topic_id) ?? 0) +
-        session.duration_minutes
-    )
-    reservedGeneratedCountByTopic.set(
-      session.topic_id,
-      (reservedGeneratedCountByTopic.get(session.topic_id) ?? 0) + 1
-    )
-  }
+    if (!topics || topics.length === 0) {
+      return { status: "NO_TOPICS" }
+    }
 
-  const { units, totalSessionsByTopic } = buildReoptimizeUnits({
-    activeTopics,
-    paramMap,
-    topicTaskSourceMap,
-    subjectNameMap,
-    subjectDeadlineMap,
-    examDate: planConfig.exam_date,
-    reservedGeneratedMinutesByTopic,
-  })
-
-  const offDays = new Set<string>()
-  const reservedSlots: ReservedSlot[] = Array.from(reservedByDate.entries()).map(
-    ([date, minutes]) => ({ date, minutes })
-  )
-
-  const regenerated = schedule(
-    units,
-    buildConstraintsFromPlanConfig(planConfig),
-    offDays,
-    reservedSlots
-  ).map((session) => {
-    const offset = reservedGeneratedCountByTopic.get(session.topic_id) ?? 0
-    const totalSessions =
-      totalSessionsByTopic.get(session.topic_id) ??
-      session.total_sessions + offset
-    const nextSessionNumber = session.session_number + offset
-    const topicName = topicNameMap.get(session.topic_id) ?? session.title
-    const sourceTasks = topicTaskSourceMap.get(session.topic_id) ?? []
-    const sourceTask = resolveSessionSourceTask(
-      sourceTasks,
-      nextSessionNumber,
-      totalSessions
+    const activeTopics = sortTopicsBySubjectOrder(
+      ((topics ?? []) as unknown as Topic[]).filter(
+        (topic) => activeSubjectIds.has(topic.subject_id) && topic.archived !== true
+      ),
+      subjectOrderMap
     )
 
-    return {
-      ...session,
-      title: resolveSessionTaskTitle(
-        topicName,
+    if (activeTopics.length === 0) {
+      return { status: "NO_TOPICS" }
+    }
+
+    const topicIds = activeTopics.map((topic) => topic.id)
+    const [{ data: topicParamRows }, { data: topicTasks }] = await Promise.all([
+      getTopicParamsForUser(supabase, user.id, topicIds),
+      getOpenManualTasksByTopic(
+        supabase,
+        user.id,
+        undefined,
+        topicIds,
+        selectedTaskIds.length > 0 ? selectedTaskIds : undefined
+      ),
+    ])
+
+    const topicNameMap = new Map(activeTopics.map((topic) => [topic.id, topic.name]))
+    const paramMap = buildTopicParamMap((topicParamRows ?? []) as Array<Record<string, unknown>>)
+
+    const topicTaskSourceMap = buildTaskSourceByTopic(
+      (topicTasks ?? []) as unknown as PlannerTaskSourceRow[]
+    )
+
+    const reservedByDate = new Map<string, number>()
+    const reservedGeneratedMinutesByTopic = new Map<string, number>()
+    const reservedGeneratedCountByTopic = new Map<string, number>()
+
+    for (const session of reservedSessions) {
+      reservedByDate.set(
+        session.scheduled_date,
+        (reservedByDate.get(session.scheduled_date) ?? 0) + session.duration_minutes
+      )
+
+      if (session.is_manual) continue
+      reservedGeneratedMinutesByTopic.set(
+        session.topic_id,
+        (reservedGeneratedMinutesByTopic.get(session.topic_id) ?? 0) +
+          session.duration_minutes
+      )
+      reservedGeneratedCountByTopic.set(
+        session.topic_id,
+        (reservedGeneratedCountByTopic.get(session.topic_id) ?? 0) + 1
+      )
+    }
+
+    const { units, totalSessionsByTopic } = buildReoptimizeUnits({
+      activeTopics,
+      paramMap,
+      topicTaskSourceMap,
+      subjectNameMap,
+      subjectDeadlineMap,
+      examDate: planConfig.exam_date,
+      reservedGeneratedMinutesByTopic,
+    })
+
+    const offDays = new Set<string>()
+    const reservedSlots: ReservedSlot[] = Array.from(reservedByDate.entries()).map(
+      ([date, minutes]) => ({ date, minutes })
+    )
+
+    const regenerated = schedule(
+      units,
+      buildConstraintsFromPlanConfig(planConfig),
+      offDays,
+      reservedSlots
+    ).map((session) => {
+      const offset = reservedGeneratedCountByTopic.get(session.topic_id) ?? 0
+      const totalSessions =
+        totalSessionsByTopic.get(session.topic_id) ??
+        session.total_sessions + offset
+      const nextSessionNumber = session.session_number + offset
+      const topicName = topicNameMap.get(session.topic_id) ?? session.title
+      const sourceTasks = topicTaskSourceMap.get(session.topic_id) ?? []
+      const sourceTask = resolveSessionSourceTask(
         sourceTasks,
         nextSessionNumber,
         totalSessions
-      ),
-      source_topic_task_id: sourceTask?.id ?? null,
-      session_number: nextSessionNumber,
-      total_sessions: totalSessions,
-      topic_completion_after:
-        totalSessions > 0
-          ? Math.round((nextSessionNumber / totalSessions) * 100) / 100
-          : session.topic_completion_after,
-      is_topic_final_session:
-        nextSessionNumber >= totalSessions || undefined,
+      )
+
+      return {
+        ...session,
+        title: resolveSessionTaskTitle(
+          topicName,
+          sourceTasks,
+          nextSessionNumber,
+          totalSessions
+        ),
+        source_topic_task_id: sourceTask?.id ?? null,
+        session_number: nextSessionNumber,
+        total_sessions: totalSessions,
+        topic_completion_after:
+          totalSessions > 0
+            ? Math.round((nextSessionNumber / totalSessions) * 100) / 100
+            : session.topic_completion_after,
+        is_topic_final_session:
+          nextSessionNumber >= totalSessions || undefined,
+      }
+    })
+
+    const combined = sortPreviewSessions([
+      ...reservedSessions.map((session) => ({
+        ...session,
+        is_pinned: session.is_pinned || session.is_manual || undefined,
+        is_manual: session.is_manual || undefined,
+      })),
+      ...regenerated,
+    ])
+
+    const placedCounts = new Map<string, number>()
+    for (const session of combined) {
+      if (session.is_manual) continue
+      placedCounts.set(session.topic_id, (placedCounts.get(session.topic_id) ?? 0) + 1)
     }
-  })
 
-  const combined = sortPreviewSessions([
-    ...reservedSessions.map((session) => ({
-      ...session,
-      is_pinned: session.is_pinned || session.is_manual || undefined,
-      is_manual: session.is_manual || undefined,
-    })),
-    ...regenerated,
-  ])
+    const droppedSessions = Array.from(totalSessionsByTopic.entries()).reduce(
+      (sum, [topicId, total]) => sum + Math.max(0, total - (placedCounts.get(topicId) ?? 0)),
+      0
+    )
 
-  const placedCounts = new Map<string, number>()
-  for (const session of combined) {
-    if (session.is_manual) continue
-    placedCounts.set(session.topic_id, (placedCounts.get(session.topic_id) ?? 0) + 1)
-  }
-
-  const droppedSessions = Array.from(totalSessionsByTopic.entries()).reduce(
-    (sum, [topicId, total]) => sum + Math.max(0, total - (placedCounts.get(topicId) ?? 0)),
-    0
-  )
-
-  return {
-    status: "SUCCESS",
-    schedule: combined,
-    droppedSessions,
+    return {
+      status: "SUCCESS",
+      schedule: combined,
+      droppedSessions,
+    }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
 }
 
 export async function rescheduleMissedPlan(): Promise<RescheduleMissedPlanResponse> {
-  const startedAt = Date.now()
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const startedAt = Date.now()
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    await trackServerEvent({
-      supabase,
-      eventName: "planner.reschedule_missed",
-      status: "error",
-      userId: null,
-      durationMs: durationSince(startedAt),
-      metadata: { reason: "unauthorized" },
-    })
-    return { status: "UNAUTHORIZED" }
-  }
-
-  const track = async (
-    status: "started" | "success" | "warning" | "error",
-    metadata: Record<string, unknown>
-  ) => {
-    await trackServerEvent({
-      supabase,
-      eventName: "planner.reschedule_missed",
-      status,
-      userId: user.id,
-      durationMs: durationSince(startedAt),
-      metadata,
-    })
-  }
-
-  await track("started", {})
-
-  const today = todayISO()
-
-  const { data: pendingGeneratedRows, error: pendingError } = await getPendingPlanTasks(
-    supabase,
-    user.id
-  )
-
-  if (pendingError) {
-    await track("error", {
-      reason: "pending_tasks_load_failed",
-      message: pendingError.message,
-    })
-    return { status: "ERROR", message: pendingError.message }
-  }
-
-  const pendingTasks = (pendingGeneratedRows ?? []) as TaskToMove[]
-  if (pendingTasks.length === 0) {
-    await track("warning", { reason: "no_pending_generated_tasks" })
-    return { status: "NO_PLAN_TASKS" }
-  }
-
-  const [
-    { data: profile },
-    { data: config },
-    { data: subjects },
-    { data: topics },
-    { data: topicParamRows },
-  ] = await getRescheduleContext(
-    supabase,
-    user.id,
-    PLANNER_SETTINGS_SELECT,
-    TOPIC_SELECT
-  )
-
-  const examDate =
-    config?.exam_date ??
-    (profile?.exam_date && profile.exam_date >= today
-      ? profile.exam_date
-      : addDays(today, 90))
-
-  if (examDate < today) {
-    await track("error", { reason: "exam_date_in_past", examDate, today })
-    return {
-      status: "NO_CAPACITY",
-      message: "Exam date is in the past. Update your deadline in settings first.",
-    }
-  }
-
-  const dailyMinutes = Math.max(15, profile?.daily_available_minutes ?? 120)
-  const planConfig = config as PlanConfig | null
-
-  const constraints: GlobalConstraints = {
-    study_start_date: today,
-    exam_date: examDate,
-    weekday_capacity_minutes: Math.max(
-      0,
-      planConfig?.weekday_capacity_minutes ?? dailyMinutes
-    ),
-    weekend_capacity_minutes: Math.max(
-      0,
-      planConfig?.weekend_capacity_minutes ?? dailyMinutes
-    ),
-    plan_order:
-      (planConfig?.plan_order as GlobalConstraints["plan_order"]) ?? "balanced",
-    final_revision_days: Math.max(0, planConfig?.final_revision_days ?? 0),
-    buffer_percentage: Math.max(
-      0,
-      Math.min(50, planConfig?.buffer_percentage ?? 0)
-    ),
-    max_active_subjects: Math.max(0, planConfig?.max_active_subjects ?? 0),
-    ...(planConfig?.day_of_week_capacity && {
-      day_of_week_capacity: planConfig.day_of_week_capacity,
-    }),
-    ...(planConfig?.custom_day_capacity && {
-      custom_day_capacity: planConfig.custom_day_capacity,
-    }),
-    ...(planConfig?.plan_order_stack && {
-      plan_order_stack:
-        planConfig.plan_order_stack as GlobalConstraints["plan_order_stack"],
-    }),
-    ...(planConfig?.flexibility_minutes != null && {
-      flexibility_minutes: planConfig.flexibility_minutes,
-    }),
-    ...(planConfig?.max_topics_per_subject_per_day != null && {
-      max_topics_per_subject_per_day:
-        planConfig.max_topics_per_subject_per_day,
-    }),
-    ...(planConfig?.min_subject_gap_days != null && {
-      min_subject_gap_days: planConfig.min_subject_gap_days,
-    }),
-    ...(planConfig?.subject_ordering && {
-      subject_ordering:
-        planConfig.subject_ordering as GlobalConstraints["subject_ordering"],
-    }),
-    ...(planConfig?.flexible_threshold && {
-      flexible_threshold: planConfig.flexible_threshold,
-    }),
-  }
-
-  const offDays = new Set<string>()
-  const daySlots = buildDaySlots(constraints, offDays)
-
-  if (daySlots.length === 0) {
-    await track("error", { reason: "no_day_slots", examDate, today })
-    return {
-      status: "NO_CAPACITY",
-      message: "No available study days found between today and your exam date.",
-    }
-  }
-
-  const { data: existingRows, error: existingError } = await getExistingTasksInRange(
-    supabase,
-    user.id,
-    today,
-    examDate
-  )
-
-  if (existingError) {
-    await track("error", {
-      reason: "existing_tasks_load_failed",
-      message: existingError.message,
-    })
-    return { status: "ERROR", message: existingError.message }
-  }
-
-  const reservedMinutesByDate = new Map<string, number>()
-  let keptCompletedCount = 0
-
-  for (const row of existingRows ?? []) {
-    if (row.task_source !== "plan" || row.completed) {
-      const used = reservedMinutesByDate.get(row.scheduled_date) ?? 0
-      reservedMinutesByDate.set(row.scheduled_date, used + row.duration_minutes)
-      if (row.completed) keptCompletedCount += 1
-    }
-  }
-
-  const reservedSlots: ReservedSlot[] = Array.from(
-    reservedMinutesByDate.entries()
-  ).map(([date, minutes]) => ({ date, minutes }))
-
-  const activeSubjects = ((subjects ?? []) as Array<{
-    id: string
-    name: string
-    sort_order: number
-    deadline?: string | null
-    archived?: boolean | null
-  }>).filter((subject) => subject.archived !== true)
-  const activeSubjectIds = new Set(activeSubjects.map((subject) => subject.id))
-
-  const { subjectNameMap, subjectOrderMap, subjectDeadlineMap } = buildSubjectMaps(
-    activeSubjects
-  )
-  const topicMap = new Map<string, Topic>()
-  for (const topic of sortTopicsBySubjectOrder(
-    ((topics ?? []) as Topic[]).filter(
-      (topic) => activeSubjectIds.has(topic.subject_id) && topic.archived !== true
-    ),
-    subjectOrderMap
-  )) {
-    topicMap.set(topic.id, topic)
-  }
-
-  const filteredPendingTasks = pendingTasks.filter(
-    (task) => activeSubjectIds.has(task.subject_id)
-  )
-
-  if (filteredPendingTasks.length === 0) {
-    await track("warning", {
-      reason: "no_pending_generated_tasks_after_archive_filter",
-      pendingTaskCount: pendingTasks.length,
-    })
-    return { status: "NO_PLAN_TASKS" }
-  }
-
-  const topicParamMap = buildTopicParamMap((topicParamRows ?? []) as Array<Record<string, unknown>>)
-
-  const { pendingUnits, pendingUnitMeta } = buildPendingUnitsAndMeta({
-    pendingTasks: filteredPendingTasks,
-    topicMap,
-    topicParamMap,
-    subjectNameMap,
-    subjectDeadlineMap,
-    examDate,
-    today,
-  })
-
-  const scheduledSessions = schedule(
-    pendingUnits,
-    constraints,
-    offDays,
-    reservedSlots
-  )
-  const maxAvailableSlot = daySlots.reduce(
-    (max, day) => Math.max(max, day.flexCapacity),
-    0
-  )
-
-  const { scheduled, scheduledCountByUnit } = mapScheduledToSnapshotTasks(
-    scheduledSessions,
-    pendingUnitMeta
-  )
-
-  const droppedReasons = buildDroppedReasons({
-    pendingUnitMeta,
-    scheduledCountByUnit,
-    maxAvailableSlot,
-  })
-
-  const unscheduledTaskCount = droppedReasons.reduce(
-    (sum, item) => sum + item.droppedSessions,
-    0
-  )
-
-  const { error: deleteError } = await deletePendingPlanTasks(supabase, user.id)
-
-  if (deleteError) {
-    await track("error", {
-      reason: "delete_old_generated_failed",
-      message: deleteError.message,
-    })
-    return { status: "ERROR", message: deleteError.message }
-  }
-
-  const { data: snapshotData } = await insertPlanSnapshot(supabase, {
-    user_id: user.id,
-    task_count: scheduled.length,
-    schedule_json: scheduled,
-    settings_snapshot: {
-      study_start_date: constraints.study_start_date,
-      exam_date: constraints.exam_date,
-      weekday_capacity_minutes: constraints.weekday_capacity_minutes,
-      weekend_capacity_minutes: constraints.weekend_capacity_minutes,
-      final_revision_days: constraints.final_revision_days,
-      buffer_percentage: constraints.buffer_percentage,
-      flexibility_minutes: constraints.flexibility_minutes,
-    },
-    summary: `Rescheduled ${filteredPendingTasks.length} pending plan sessions`,
-  })
-
-  const snapshotId = snapshotData?.id ?? null
-
-  if (scheduled.length > 0) {
-    const insertPayload: InsertTaskRow[] = scheduled.map((session) => ({
-      user_id: user.id,
-      task_type: "subject",
-      subject_id: session.subject_id,
-      topic_id: session.topic_id,
-      source_topic_task_id: session.source_topic_task_id ?? null,
-      title: session.title,
-      scheduled_date: session.scheduled_date,
-      duration_minutes: session.duration_minutes,
-      session_type: session.session_type,
-      session_number: session.session_number,
-      total_sessions: session.total_sessions,
-      completed: false,
-      task_source: "plan",
-      plan_snapshot_id: snapshotId,
-    }))
-
-    const { error: insertError } = await insertTasks(supabase, insertPayload)
-    if (insertError) {
-      await track("error", {
-        reason: "insert_rescheduled_failed",
-        message: insertError.message,
+    if (!user) {
+      await trackServerEvent({
+        supabase,
+        eventName: "planner.reschedule_missed",
+        status: "error",
+        userId: null,
+        durationMs: durationSince(startedAt),
+        metadata: { reason: "unauthorized" },
       })
-      return { status: "ERROR", message: insertError.message }
+      return { status: "UNAUTHORIZED" }
     }
-  }
 
-  revalidatePath("/dashboard")
-  revalidatePath("/dashboard/calendar")
-  revalidatePath("/dashboard/timetable")
-  revalidatePath("/schedule")
-  revalidatePath("/planner")
+    const track = async (
+      status: "started" | "success" | "warning" | "error",
+      metadata: Record<string, unknown>
+    ) => {
+      await trackServerEvent({
+        supabase,
+        eventName: "planner.reschedule_missed",
+        status,
+        userId: user.id,
+        durationMs: durationSince(startedAt),
+        metadata,
+      })
+    }
 
-  await track(unscheduledTaskCount > 0 ? "warning" : "success", {
-    pendingTaskCount: filteredPendingTasks.length,
-    movedTaskCount: scheduled.length,
-    unscheduledTaskCount,
-    keptCompletedCount,
-    droppedReasons,
-  })
+    await track("started", {})
 
-  return {
-    status: "SUCCESS",
-    movedTaskCount: scheduled.length,
-    unscheduledTaskCount,
-    keptCompletedCount,
-    droppedReasons,
+    const today = todayISO()
+
+    const { data: pendingGeneratedRows, error: pendingError } = await getPendingPlanTasks(
+      supabase,
+      user.id
+    )
+
+    if (pendingError) {
+      await track("error", {
+        reason: "pending_tasks_load_failed",
+        message: pendingError.message,
+      })
+      return { status: "ERROR", message: pendingError.message }
+    }
+
+    const pendingTasks = (pendingGeneratedRows ?? []) as TaskToMove[]
+    if (pendingTasks.length === 0) {
+      await track("warning", { reason: "no_pending_generated_tasks" })
+      return { status: "NO_PLAN_TASKS" }
+    }
+
+    const [
+      { data: config },
+      { data: subjects },
+      { data: topics },
+      { data: topicParamRows },
+    ] = await getRescheduleContext(
+      supabase,
+      user.id,
+      PLANNER_SETTINGS_SELECT,
+      TOPIC_SELECT
+    )
+
+    const plannerConfig = config as Partial<PlanConfig> | null
+    const examDate = plannerConfig?.exam_date ?? addDays(today, 90)
+
+    if (examDate < today) {
+      await track("error", { reason: "exam_date_in_past", examDate, today })
+      return {
+        status: "NO_CAPACITY",
+        message: "Exam date is in the past. Update your deadline in settings first.",
+      }
+    }
+
+    const dailyMinutes = 120
+    const planConfig = config as unknown as PlanConfig | null
+
+    const constraints: GlobalConstraints = {
+      study_start_date: today,
+      exam_date: examDate,
+      weekday_capacity_minutes: Math.max(
+        0,
+        planConfig?.weekday_capacity_minutes ?? dailyMinutes
+      ),
+      weekend_capacity_minutes: Math.max(
+        0,
+        planConfig?.weekend_capacity_minutes ?? dailyMinutes
+      ),
+      plan_order:
+        (planConfig?.plan_order as GlobalConstraints["plan_order"]) ?? "balanced",
+      final_revision_days: Math.max(0, planConfig?.final_revision_days ?? 0),
+      buffer_percentage: Math.max(
+        0,
+        Math.min(50, planConfig?.buffer_percentage ?? 0)
+      ),
+      max_active_subjects: Math.max(0, planConfig?.max_active_subjects ?? 0),
+      ...(planConfig?.day_of_week_capacity && {
+        day_of_week_capacity: planConfig.day_of_week_capacity,
+      }),
+      ...(planConfig?.custom_day_capacity && {
+        custom_day_capacity: planConfig.custom_day_capacity,
+      }),
+      ...(planConfig?.plan_order_stack && {
+        plan_order_stack:
+          planConfig.plan_order_stack as GlobalConstraints["plan_order_stack"],
+      }),
+      ...(planConfig?.flexibility_minutes != null && {
+        flexibility_minutes: planConfig.flexibility_minutes,
+      }),
+      ...(planConfig?.max_topics_per_subject_per_day != null && {
+        max_topics_per_subject_per_day:
+          planConfig.max_topics_per_subject_per_day,
+      }),
+      ...(planConfig?.min_subject_gap_days != null && {
+        min_subject_gap_days: planConfig.min_subject_gap_days,
+      }),
+      ...(planConfig?.subject_ordering && {
+        subject_ordering:
+          planConfig.subject_ordering as GlobalConstraints["subject_ordering"],
+      }),
+      ...(planConfig?.flexible_threshold && {
+        flexible_threshold: planConfig.flexible_threshold,
+      }),
+    }
+
+    const offDays = new Set<string>()
+    const daySlots = buildDaySlots(constraints, offDays)
+
+    if (daySlots.length === 0) {
+      await track("error", { reason: "no_day_slots", examDate, today })
+      return {
+        status: "NO_CAPACITY",
+        message: "No available study days found between today and your exam date.",
+      }
+    }
+
+    const { data: existingRows, error: existingError } = await getExistingTasksInRange(
+      supabase,
+      user.id,
+      today,
+      examDate
+    )
+
+    if (existingError) {
+      await track("error", {
+        reason: "existing_tasks_load_failed",
+        message: existingError.message,
+      })
+      return { status: "ERROR", message: existingError.message }
+    }
+
+    const reservedMinutesByDate = new Map<string, number>()
+    let keptCompletedCount = 0
+
+    for (const row of existingRows ?? []) {
+      if (row.task_source !== "plan" || row.completed) {
+        const used = reservedMinutesByDate.get(row.scheduled_date) ?? 0
+        reservedMinutesByDate.set(row.scheduled_date, used + row.duration_minutes)
+        if (row.completed) keptCompletedCount += 1
+      }
+    }
+
+    const reservedSlots: ReservedSlot[] = Array.from(
+      reservedMinutesByDate.entries()
+    ).map(([date, minutes]) => ({ date, minutes }))
+
+    const activeSubjects = ((subjects ?? []) as Array<{
+      id: string
+      name: string
+      sort_order: number
+      deadline?: string | null
+      archived?: boolean | null
+    }>).filter((subject) => subject.archived !== true)
+    const activeSubjectIds = new Set(activeSubjects.map((subject) => subject.id))
+
+    const { subjectNameMap, subjectOrderMap, subjectDeadlineMap } = buildSubjectMaps(
+      activeSubjects
+    )
+    const topicMap = new Map<string, Topic>()
+    for (const topic of sortTopicsBySubjectOrder(
+      ((topics ?? []) as Topic[]).filter(
+        (topic) => activeSubjectIds.has(topic.subject_id) && topic.archived !== true
+      ),
+      subjectOrderMap
+    )) {
+      topicMap.set(topic.id, topic)
+    }
+
+    const filteredPendingTasks = pendingTasks.filter(
+      (task) => activeSubjectIds.has(task.subject_id)
+    )
+
+    if (filteredPendingTasks.length === 0) {
+      await track("warning", {
+        reason: "no_pending_generated_tasks_after_archive_filter",
+        pendingTaskCount: pendingTasks.length,
+      })
+      return { status: "NO_PLAN_TASKS" }
+    }
+
+    const topicParamMap = buildTopicParamMap((topicParamRows ?? []) as Array<Record<string, unknown>>)
+
+    const { pendingUnits, pendingUnitMeta } = buildPendingUnitsAndMeta({
+      pendingTasks: filteredPendingTasks,
+      topicMap,
+      topicParamMap,
+      subjectNameMap,
+      subjectDeadlineMap,
+      examDate,
+      today,
+    })
+
+    const scheduledSessions = schedule(
+      pendingUnits,
+      constraints,
+      offDays,
+      reservedSlots
+    )
+    const maxAvailableSlot = daySlots.reduce(
+      (max, day) => Math.max(max, day.flexCapacity),
+      0
+    )
+
+    const { scheduled, scheduledCountByUnit } = mapScheduledToSnapshotTasks(
+      scheduledSessions,
+      pendingUnitMeta
+    )
+
+    const droppedReasons = buildDroppedReasons({
+      pendingUnitMeta,
+      scheduledCountByUnit,
+      maxAvailableSlot,
+    })
+
+    const unscheduledTaskCount = droppedReasons.reduce(
+      (sum, item) => sum + item.droppedSessions,
+      0
+    )
+
+    const { error: deleteError } = await deletePendingPlanTasks(supabase, user.id)
+
+    if (deleteError) {
+      await track("error", {
+        reason: "delete_old_generated_failed",
+        message: deleteError.message,
+      })
+      return { status: "ERROR", message: deleteError.message }
+    }
+
+    const { data: snapshotData } = await insertPlanSnapshot(supabase, {
+      user_id: user.id,
+      task_count: scheduled.length,
+      schedule_json: scheduled,
+      settings_snapshot: {
+        study_start_date: constraints.study_start_date,
+        exam_date: constraints.exam_date,
+        weekday_capacity_minutes: constraints.weekday_capacity_minutes,
+        weekend_capacity_minutes: constraints.weekend_capacity_minutes,
+        final_revision_days: constraints.final_revision_days,
+        buffer_percentage: constraints.buffer_percentage,
+        flexibility_minutes: constraints.flexibility_minutes,
+      },
+      summary: `Rescheduled ${filteredPendingTasks.length} pending plan sessions`,
+    })
+
+    const snapshotId = snapshotData?.id ?? null
+
+    if (scheduled.length > 0) {
+      const insertPayload: InsertTaskRow[] = scheduled.map((session) => ({
+        user_id: user.id,
+        task_type: "subject",
+        subject_id: session.subject_id,
+        topic_id: session.topic_id,
+        source_topic_task_id: session.source_topic_task_id ?? null,
+        title: session.title,
+        scheduled_date: session.scheduled_date,
+        duration_minutes: session.duration_minutes,
+        session_type: session.session_type,
+        session_number: session.session_number,
+        total_sessions: session.total_sessions,
+        completed: false,
+        task_source: "plan",
+        plan_snapshot_id: snapshotId,
+      }))
+
+      const { error: insertError } = await insertTasks(supabase, insertPayload)
+      if (insertError) {
+        await track("error", {
+          reason: "insert_rescheduled_failed",
+          message: insertError.message,
+        })
+        return { status: "ERROR", message: insertError.message }
+      }
+    }
+
+    revalidatePath("/dashboard")
+    revalidatePath("/dashboard/calendar")
+    revalidatePath("/schedule")
+    revalidatePath("/planner")
+
+    await track(unscheduledTaskCount > 0 ? "warning" : "success", {
+      pendingTaskCount: filteredPendingTasks.length,
+      movedTaskCount: scheduled.length,
+      unscheduledTaskCount,
+      keptCompletedCount,
+      droppedReasons,
+    })
+
+    return {
+      status: "SUCCESS",
+      movedTaskCount: scheduled.length,
+      unscheduledTaskCount,
+      keptCompletedCount,
+      droppedReasons,
+    }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
 }
 

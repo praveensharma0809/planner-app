@@ -16,62 +16,69 @@ export type UncompleteTaskResponse =
  * and could break things; we keep it simple).
  */
 export async function uncompleteTask(taskId: string) {
-  if (!taskId || typeof taskId !== "string") {
-    return { status: "NOT_FOUND" } satisfies UncompleteTaskResponse
-  }
+  try {
+    if (!taskId || typeof taskId !== "string") {
+      return { status: "NOT_FOUND" } satisfies UncompleteTaskResponse
+    }
 
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return { status: "UNAUTHORIZED" } satisfies UncompleteTaskResponse
-  }
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      return { status: "UNAUTHORIZED" } satisfies UncompleteTaskResponse
+    }
 
-  // Mark task incomplete — only if it is currently completed (idempotent guard).
-  const { data: updatedTask, error: taskError } = await supabase
-    .from("tasks")
-    .update({ completed: false })
-    .eq("id", taskId)
-    .eq("user_id", user.id)
-    .eq("completed", true)
-    .select("subject_id, task_source, source_topic_task_id")
-    .maybeSingle()
-
-  if (taskError) {
-    return {
-      status: "ERROR",
-      message: taskError.message,
-    } satisfies UncompleteTaskResponse
-  }
-
-  if (!updatedTask) {
-    return { status: "NOT_FOUND" } satisfies UncompleteTaskResponse
-  }
-
-  if (
-    updatedTask.task_source === "plan"
-    && typeof updatedTask.source_topic_task_id === "string"
-    && updatedTask.source_topic_task_id.length > 0
-  ) {
-    const { error: topicTaskError } = await supabase
-      .from("topic_tasks")
+    // Mark task incomplete - only if it is currently completed (idempotent guard).
+    const { data: updatedTask, error: taskError } = await supabase
+      .from("tasks")
       .update({ completed: false })
-      .eq("id", updatedTask.source_topic_task_id)
+      .eq("id", taskId)
       .eq("user_id", user.id)
+      .eq("completed", true)
+      .select("subject_id, task_source, source_topic_task_id")
+      .maybeSingle()
 
-    if (topicTaskError) {
+    if (taskError) {
       return {
         status: "ERROR",
-        message: topicTaskError.message,
+        message: taskError.message,
       } satisfies UncompleteTaskResponse
     }
-  }
 
-  revalidatePath("/dashboard/calendar")
-  revalidatePath("/dashboard")
-  revalidatePath("/schedule")
-  revalidatePath("/dashboard/subjects")
-  revalidatePath("/planner")
-  return { status: "SUCCESS" } satisfies UncompleteTaskResponse
+    if (!updatedTask) {
+      return { status: "NOT_FOUND" } satisfies UncompleteTaskResponse
+    }
+
+    if (
+      updatedTask.task_source === "plan"
+      && typeof updatedTask.source_topic_task_id === "string"
+      && updatedTask.source_topic_task_id.length > 0
+    ) {
+      const { error: topicTaskError } = await supabase
+        .from("topic_tasks")
+        .update({ completed: false })
+        .eq("id", updatedTask.source_topic_task_id)
+        .eq("user_id", user.id)
+
+      if (topicTaskError) {
+        return {
+          status: "ERROR",
+          message: topicTaskError.message,
+        } satisfies UncompleteTaskResponse
+      }
+    }
+
+    revalidatePath("/dashboard/calendar")
+    revalidatePath("/dashboard")
+    revalidatePath("/schedule")
+    revalidatePath("/dashboard/subjects")
+    revalidatePath("/planner")
+    return { status: "SUCCESS" } satisfies UncompleteTaskResponse
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    } satisfies UncompleteTaskResponse
+  }
 }

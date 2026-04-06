@@ -1,13 +1,24 @@
-# Database Schema (Final Baseline)
+﻿# Database Schema (Production Baseline)
 
-Last updated: 2026-04-04
-Latest migration: supabase/migrations/20260414_remove_legacy_order_fields.sql
+Last updated: 2026-04-06
+Latest migration: supabase/migrations/0001_production_schema.sql
 
 ## Scope
 
-This document describes the final runtime schema focused on planner data flow.
+This document describes the live Supabase schema for StudyHard.
 
 ## Tables
+
+### profiles
+
+Columns:
+- id: uuid, PK, FK -> auth.users(id) ON DELETE CASCADE
+- full_name: text, NOT NULL
+- phone: text, NULL
+- streak_current: integer, NOT NULL, default 0
+- streak_longest: integer, NOT NULL, default 0
+- streak_last_completed_date: date, NULL
+- created_at: timestamptz, NOT NULL, default now()
 
 ### subjects
 
@@ -23,9 +34,9 @@ Columns:
 
 Constraints:
 - primary key (id)
+- no_others_subject: lower(trim(name)) <> 'others'
 - unique active subject name per user via partial unique index:
   - unique (user_id, lower(name)) where archived = false
-- subjects_reserved_name_check: lower(trim(name)) <> 'others'
 
 Indexes:
 - idx_subjects_user_archived_sort (user_id, archived, sort_order)
@@ -87,6 +98,45 @@ Indexes:
 - idx_topic_tasks_user_subject (user_id, subject_id)
 - idx_topic_tasks_user_completed (user_id, completed)
 
+### planner_settings
+
+Columns:
+- id: uuid, PK, default gen_random_uuid()
+- user_id: uuid, NOT NULL, unique, FK -> auth.users(id) ON DELETE CASCADE
+- study_start_date: date, NOT NULL
+- exam_date: date, NOT NULL
+- weekday_capacity_minutes: integer, NOT NULL
+- weekend_capacity_minutes: integer, NOT NULL
+- max_active_subjects: integer, NOT NULL, default 0
+- day_of_week_capacity: jsonb, NULL
+- custom_day_capacity: jsonb, NULL
+- flexibility_minutes: integer, NOT NULL, default 0
+- max_daily_minutes: integer, NOT NULL, default 480
+- intake_import_mode: text, NOT NULL, default 'all'
+- created_at: timestamptz, NOT NULL, default now()
+- updated_at: timestamptz, NOT NULL, default now()
+
+### plan_snapshots
+
+Columns:
+- id: uuid, PK, default gen_random_uuid()
+- user_id: uuid, NOT NULL, FK -> auth.users(id) ON DELETE CASCADE
+- task_count: integer, NOT NULL, default 0
+- schedule_json: jsonb, NOT NULL, default []
+- settings_snapshot: jsonb, NOT NULL, default {}
+- summary: text, NULL
+- commit_hash: text, NULL
+- created_at: timestamptz, NOT NULL, default now()
+
+Constraints:
+- task_count >= 0
+- commit_hash is NULL or matches ^[0-9a-f]{64}$
+
+Indexes:
+- idx_plan_snapshots_user_created (user_id, created_at desc)
+- uq_plan_snapshots_user_commit_hash unique (user_id, commit_hash) where commit_hash is not null
+- idx_plan_snapshots_user_commit_hash_created (user_id, commit_hash, created_at desc) where commit_hash is not null
+
 ### tasks
 
 Columns:
@@ -113,9 +163,10 @@ Constraints:
 - duration_minutes > 0
 - session_type in ('core', 'revision', 'practice')
 - task_source in ('manual', 'plan')
-- task_type in ('subject', 'standalone')
-- (task_type = 'subject' and subject_id is not null) OR (task_type = 'standalone' and subject_id/topic_id/source_topic_task_id are null)
 - source_topic_task_id is null OR task_source = 'plan'
+- task_type in ('subject', 'standalone')
+- (task_type = 'subject' and subject_id is not null) OR (task_type = 'standalone' and subject_id is null)
+- standalone tasks must have topic_id and source_topic_task_id as null
 
 Indexes:
 - idx_tasks_user_date (user_id, scheduled_date)
@@ -125,154 +176,85 @@ Indexes:
 - idx_tasks_plan_snapshot_id (plan_snapshot_id)
 - idx_tasks_user_source_topic_task (user_id, source_topic_task_id)
 
-### plan_snapshots
+### off_days
 
 Columns:
-- id: uuid, PK, default gen_random_uuid()
+- id: uuid, PK
 - user_id: uuid, NOT NULL, FK -> auth.users(id) ON DELETE CASCADE
-- task_count: integer, NOT NULL, default 0
-- schedule_json: jsonb, NOT NULL, default []
-- settings_snapshot: jsonb, NOT NULL, default {}
-- summary: text, NULL
-- commit_hash: text, NULL
+- date: date, NOT NULL
+- reason: text, NULL
 - created_at: timestamptz, NOT NULL, default now()
 
 Constraints:
-- task_count >= 0
-- commit_hash is NULL or matches ^[0-9a-f]{64}$
+- unique (user_id, date)
+
+### ops_events
+
+Columns:
+- id: uuid, PK, default gen_random_uuid()
+- user_id: uuid, NULL, FK -> auth.users(id) ON DELETE SET NULL
+- event_name: text, NOT NULL
+- event_status: text, NOT NULL
+- duration_ms: integer, NULL
+- metadata: jsonb, NOT NULL, default {}
+- created_at: timestamptz, NOT NULL, default now()
+
+Constraints:
+- event_status in ('started', 'success', 'warning', 'error')
+- duration_ms is NULL or >= 0
 
 Indexes:
-- idx_plan_snapshots_user_created (user_id, created_at desc)
-- uq_plan_snapshots_user_commit_hash unique (user_id, commit_hash) where commit_hash is not null
-- idx_plan_snapshots_user_commit_hash_created (user_id, commit_hash, created_at desc) where commit_hash is not null
+- idx_ops_events_user_created (user_id, created_at desc)
+- idx_ops_events_name_created (event_name, created_at desc)
 
-## RPC: commit_plan_atomic_v2
+## RPCs
 
-Signature:
-- commit_plan_atomic_v2(
-  p_tasks jsonb,
-  p_snapshot_summary text,
-  p_config_snapshot jsonb,
-  p_keep_mode text,
-  p_new_plan_start_date date,
-  p_commit_hash text
-)
-returns table(status text, task_count integer, snapshot_id uuid)
-
-Parameter behavior:
-- p_tasks: array of session rows to insert into tasks
-- p_snapshot_summary: human-readable snapshot summary
-- p_config_snapshot: settings snapshot stored in plan_snapshots.settings_snapshot
-- p_keep_mode: one of future/until/none/merge (invalid values normalize to future)
-- p_new_plan_start_date: boundary date used by keep-mode deletion rules
-- p_commit_hash: required 64-char hex hash used for dedupe integrity
-
-Validation flow:
-1. Resolve auth.uid(); return UNAUTHORIZED row when no user.
-2. Validate p_commit_hash present and format-safe.
-3. Acquire advisory lock by (user_id + commit_hash).
-4. Reject duplicate commit hash for the same user.
-5. Validate payload:
-   - non-empty task array
-   - at least one generated (non-manual) session
-   - scheduled_date format YYYY-MM-DD
-   - duration > 0
-   - session_type in core/revision/practice
-   - valid session counters
-6. Apply keep-mode delete strategy on pending plan tasks.
-7. Insert plan_snapshots row with commit_hash.
-8. Parse and normalize task payload.
-9. Validate ownership/joins against subjects/topics/topic_tasks.
-10. Insert execution tasks.
-11. Verify inserted count equals requested count.
-12. Update plan_snapshots.task_count and return SUCCESS row.
-
-## RPC: commit_plan_atomic_v2_wrapper
+### commit_plan_atomic_v2
 
 Signature:
-- commit_plan_atomic_v2_wrapper(
-  p_tasks jsonb,
-  p_snapshot_summary text,
-  p_config_snapshot jsonb,
-  p_keep_mode text,
-  p_new_plan_start_date date
-)
+- commit_plan_atomic_v2(jsonb, text, jsonb, text, date, text)
 
 Behavior:
-- Computes sha256 hex commit hash from auth.uid + task payload.
-- Calls commit_plan_atomic_v2 with that computed hash.
+- Requires auth.uid()
+- Enforces commit hash format and dedupe
+- Validates payload fields and session counters
+- Applies keep_mode deletion strategy for pending planner tasks
+- Inserts plan snapshot and task rows atomically
+- Returns (status, task_count, snapshot_id)
 
-## commit_hash Rules
+### commit_plan_atomic_v2_wrapper
 
-- Format: must be exactly 64 lowercase hex chars.
-- Uniqueness: unique per user by (user_id, commit_hash) when commit_hash is not null.
-- Duplicate protection logic:
-  - function-level precheck raises duplicate_commit before insert
-  - unique index provides hard enforcement against race/replay
-4. Returns moved/unscheduled counts and dropped reasons.
+Signature:
+- commit_plan_atomic_v2_wrapper(jsonb, text, jsonb, text, date)
 
-## 6) Special DB Logic (Triggers, RPC, Middleware, Policies)
+Behavior:
+- Computes deterministic sha256 commit hash from auth.uid + payload
+- Delegates to commit_plan_atomic_v2
 
-### Triggers
-- set_updated_at() trigger function is attached to:
-  - subjects
-  - topics
-  - topic_tasks
-  - planner_settings
-  - tasks
-- Effect: updated_at is refreshed on UPDATE.
+### sync_topic_task_completion
 
-### RPC / transactional logic
-- commit_plan_atomic_v2(jsonb tasks, text summary, jsonb config, text keep_mode, date new_start, text commit_hash)
-  - SECURITY DEFINER
-  - Auth source is auth.uid()
-  - commit hash guard order:
-    - commit_hash_required
-    - commit hash format validation
-    - advisory lock acquisition
-    - duplicate hash guard (2-minute window)
-  - keep_mode behavior:
-    - none: delete all pending plan tasks
-    - future: delete pending plan tasks on/after new start
-    - until: delete pending plan tasks on/after new start
-    - merge: keep all pending plan tasks
-  - Inserts plan_snapshots row and inserts validated plan tasks.
-- commit_plan_atomic_v2_wrapper(jsonb tasks, text summary, jsonb config, text keep_mode, date new_start)
-  - SECURITY DEFINER
-  - Computes deterministic commit hash and calls the 6-arg v2 function.
-- Public RPC surface is minimal and non-ambiguous:
-  - commit_plan_atomic_v2(jsonb,text,jsonb,text,date,text)
-  - commit_plan_atomic_v2_wrapper(jsonb,text,jsonb,text,date)
+Signature:
+- sync_topic_task_completion(uuid, boolean)
 
-### Row-level security and auth model
-- RLS enabled on all app tables.
-- Ownership policies:
-  - profiles: auth.uid() = id
-  - other user-owned tables: auth.uid() = user_id
-- ops_events insert policy allows service_role or matching user ownership.
+Behavior:
+- Updates a topic_task completion state
+- Mirrors the state to related planned task rows
 
-### Application-level special rules
-- tasks.task_source must be only manual or plan.
-- source_topic_task_id is only valid for plan rows (check constraint).
-- commit hash deduplication is enforced through RPC validation + partial index.
-- completeTask streak update uses compare-and-set retries to avoid double increments under concurrent completion.
-- savePlanConfig and getTopicParams sanitize inherited topic deadlines by clearing topic.deadline to preserve inheritance behavior.
-- telemetry insert is optional and environment-gated (ENABLE_DB_TELEMETRY=true).
+## Triggers
 
-## 7) Maintenance Notes (How to keep this file current)
+set_updated_at() is attached before update on:
+- subjects
+- topics
+- topic_tasks
+- planner_settings
+- tasks
 
-When schema changes:
-1. Update Supabase migration SQL first.
-2. Update this file (db_schema.md) to reflect schema/contract changes.
-3. Update this file sections in order:
-   - Schema Definition
-   - Entity Relationships
-   - System Usage Map (new/changed file -> function -> operation)
-   - Special Logic
-4. Run contract guard tests and app tests.
+## Row-Level Security
 
-When runtime DB usage changes without schema changes:
-1. Update only System Usage Map and Data Flow sections.
-2. Keep operations verbs explicit (SELECT/INSERT/UPDATE/DELETE/UPSERT/RPC).
+RLS is enabled on:
+- profiles, subjects, topics, topic_tasks, planner_settings, plan_snapshots, tasks, off_days, ops_events
 
-This file is intended to be consumed by both developers and AI agents as the centralized DB context for this codebase.
+Policy model:
+- profiles ownership: auth.uid() = id
+- all user-owned planner tables: auth.uid() = user_id
+- ops_events insert allows null user_id or matching auth.uid()

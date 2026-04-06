@@ -23,7 +23,7 @@ export default function Home() {
 
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
-          .select("id, full_name, primary_exam, qualification, phone, daily_available_minutes, exam_date, created_at")
+          .select("id")
           .eq("id", user.id)
           .maybeSingle();
 

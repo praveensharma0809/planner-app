@@ -19,110 +19,130 @@ export interface SubjectProgress {
 
 export type GetSubjectProgressResponse =
   | { status: "UNAUTHORIZED" }
+  | { status: "ERROR"; message: string }
   | { status: "SUCCESS"; subjects: SubjectProgress[] }
 
 export async function getSubjectProgress(): Promise<GetSubjectProgressResponse> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { status: "UNAUTHORIZED" }
-  }
+    if (!user) {
+      return { status: "UNAUTHORIZED" }
+    }
 
-  const { data: subjects } = await supabase
-    .from("subjects")
-    .select("id, name")
-    .eq("user_id", user.id)
-    .eq("archived", false)
-    .not("name", "ilike", "others")
+    const { data: subjects, error: subjectsError } = await supabase
+      .from("subjects")
+      .select("id, name")
+      .eq("user_id", user.id)
+      .eq("archived", false)
+      .not("name", "ilike", "others")
       .not("name", "ilike", "__deprecated_others__")
-    .order("sort_order", { ascending: true })
+      .order("sort_order", { ascending: true })
 
-  if (!subjects || subjects.length === 0) {
-    return { status: "SUCCESS", subjects: [] }
-  }
-
-  const subjectIds = subjects.map((s) => s.id)
-
-  // Count topics per subject and track earliest per-subject deadline.
-  const { data: topics } = await supabase
-    .from("topics")
-    .select("id, subject_id, deadline")
-    .in("subject_id", subjectIds)
-
-  const topicsBySubject = new Map<string, string[]>()
-  const earliestDeadlineBySubject = new Map<string, string>()
-  for (const t of topics ?? []) {
-    const list = topicsBySubject.get(t.subject_id) ?? []
-    list.push(t.id)
-    topicsBySubject.set(t.subject_id, list)
-    if (t.deadline) {
-      const current = earliestDeadlineBySubject.get(t.subject_id)
-      if (!current || t.deadline < current) {
-        earliestDeadlineBySubject.set(t.subject_id, t.deadline)
-      }
+    if (subjectsError) {
+      return { status: "ERROR", message: subjectsError.message }
     }
-  }
 
-  // Count tasks per subject
-  const { data: tasks } = await supabase
-    .from("topic_tasks")
-    .select("subject_id, completed")
-    .eq("user_id", user.id)
-    .in("subject_id", subjectIds)
+    if (!subjects || subjects.length === 0) {
+      return { status: "SUCCESS", subjects: [] }
+    }
 
-  const taskCountBySubject = new Map<string, { total: number; completed: number }>()
-  for (const t of tasks ?? []) {
-    if (!t.subject_id) continue
-    const entry = taskCountBySubject.get(t.subject_id) ?? { total: 0, completed: 0 }
-    entry.total++
-    if (t.completed) entry.completed++
-    taskCountBySubject.set(t.subject_id, entry)
-  }
+    const subjectIds = subjects.map((s) => s.id)
 
-  const todayMs = new Date().setHours(0, 0, 0, 0)
+    // Count topics per subject and track earliest per-subject deadline.
+    const { data: topics, error: topicsError } = await supabase
+      .from("topics")
+      .select("id, subject_id, deadline")
+      .in("subject_id", subjectIds)
 
-  const result: SubjectProgress[] = subjects.map((s) => {
-    const topicIds = topicsBySubject.get(s.id) ?? []
-    const counts = taskCountBySubject.get(s.id) ?? { total: 0, completed: 0 }
-    const percent =
-      counts.total === 0
-        ? 0
-        : Math.round((counts.completed / counts.total) * 100)
-    const deadline = earliestDeadlineBySubject.get(s.id) ?? null
+    if (topicsError) {
+      return { status: "ERROR", message: topicsError.message }
+    }
 
-    let daysLeft: number | null = null
-    let health: SubjectProgress["health"] = "no_deadline"
-
-    if (deadline) {
-      const deadlineMs = new Date(deadline + "T23:59:59").getTime()
-      daysLeft = Math.ceil((deadlineMs - todayMs) / 86_400_000)
-
-      if (daysLeft < 0 && percent < 100) {
-        health = "overdue"
-      } else if (daysLeft <= 3 && percent < 80) {
-        health = "at_risk"
-      } else if (daysLeft <= 7 && percent < 60) {
-        health = "behind"
-      } else {
-        health = "on_track"
+    const topicsBySubject = new Map<string, string[]>()
+    const earliestDeadlineBySubject = new Map<string, string>()
+    for (const t of topics ?? []) {
+      const list = topicsBySubject.get(t.subject_id) ?? []
+      list.push(t.id)
+      topicsBySubject.set(t.subject_id, list)
+      if (t.deadline) {
+        const current = earliestDeadlineBySubject.get(t.subject_id)
+        if (!current || t.deadline < current) {
+          earliestDeadlineBySubject.set(t.subject_id, t.deadline)
+        }
       }
     }
 
+    // Count tasks per subject
+    const { data: tasks, error: tasksError } = await supabase
+      .from("topic_tasks")
+      .select("subject_id, completed")
+      .eq("user_id", user.id)
+      .in("subject_id", subjectIds)
+
+    if (tasksError) {
+      return { status: "ERROR", message: tasksError.message }
+    }
+
+    const taskCountBySubject = new Map<string, { total: number; completed: number }>()
+    for (const t of tasks ?? []) {
+      if (!t.subject_id) continue
+      const entry = taskCountBySubject.get(t.subject_id) ?? { total: 0, completed: 0 }
+      entry.total++
+      if (t.completed) entry.completed++
+      taskCountBySubject.set(t.subject_id, entry)
+    }
+
+    const todayMs = new Date().setHours(0, 0, 0, 0)
+
+    const result: SubjectProgress[] = subjects.map((s) => {
+      const topicIds = topicsBySubject.get(s.id) ?? []
+      const counts = taskCountBySubject.get(s.id) ?? { total: 0, completed: 0 }
+      const percent =
+        counts.total === 0
+          ? 0
+          : Math.round((counts.completed / counts.total) * 100)
+      const deadline = earliestDeadlineBySubject.get(s.id) ?? null
+
+      let daysLeft: number | null = null
+      let health: SubjectProgress["health"] = "no_deadline"
+
+      if (deadline) {
+        const deadlineMs = new Date(deadline + "T23:59:59").getTime()
+        daysLeft = Math.ceil((deadlineMs - todayMs) / 86_400_000)
+
+        if (daysLeft < 0 && percent < 100) {
+          health = "overdue"
+        } else if (daysLeft <= 3 && percent < 80) {
+          health = "at_risk"
+        } else if (daysLeft <= 7 && percent < 60) {
+          health = "behind"
+        } else {
+          health = "on_track"
+        }
+      }
+
+      return {
+        id: s.id,
+        name: s.name,
+        topic_count: topicIds.length,
+        total_tasks: counts.total,
+        completed_tasks: counts.completed,
+        earliest_deadline: deadline,
+        percent,
+        daysLeft,
+        health,
+      }
+    })
+
+    return { status: "SUCCESS", subjects: result }
+  } catch (error) {
     return {
-      id: s.id,
-      name: s.name,
-      topic_count: topicIds.length,
-      total_tasks: counts.total,
-      completed_tasks: counts.completed,
-      earliest_deadline: deadline,
-      percent,
-      daysLeft,
-      health,
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
     }
-  })
-
-  return { status: "SUCCESS", subjects: result }
+  }
 }

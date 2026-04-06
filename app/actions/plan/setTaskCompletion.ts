@@ -10,9 +10,16 @@ export type SetTaskCompletionResponse =
   | { status: "ERROR"; message: string }
 
 export async function setTaskCompletion(taskId: string, nextCompleted: boolean): Promise<SetTaskCompletionResponse> {
-  if (nextCompleted) {
-    return completeTask(taskId)
-  }
+  try {
+    if (nextCompleted) {
+      return completeTask(taskId)
+    }
 
-  return uncompleteTask(taskId)
+    return uncompleteTask(taskId)
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
+  }
 }

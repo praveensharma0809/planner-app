@@ -13,16 +13,26 @@ export function Checkbox({ label, description, className = "", id, ...props }: C
   const [bouncing, setBouncing] = useState(false)
 
   useEffect(() => {
+    let t0: number | null = null
+    let t1: number | null = null
+
     if (!prevCheckedRef.current && props.checked) {
-      prevCheckedRef.current = props.checked
-      const t0 = setTimeout(() => {
+      t0 = window.setTimeout(() => {
         setBouncing(true)
-        const t1 = setTimeout(() => setBouncing(false), 230)
-        return () => clearTimeout(t1)
+        t1 = window.setTimeout(() => setBouncing(false), 230)
       }, 0)
-      return () => clearTimeout(t0)
     }
+
     prevCheckedRef.current = props.checked
+
+    return () => {
+      if (t0 !== null) {
+        window.clearTimeout(t0)
+      }
+      if (t1 !== null) {
+        window.clearTimeout(t1)
+      }
+    }
   }, [props.checked])
 
   return (

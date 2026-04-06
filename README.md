@@ -46,6 +46,7 @@ npm run dev
 ```bash
 npm run typecheck
 npm run lint
+npm run check:hotspot-sizes
 npm run test
 npm run build
 ```

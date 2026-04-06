@@ -13,43 +13,50 @@ interface UpdateSubjectInput {
 }
 
 export async function updateSubject(input: UpdateSubjectInput) {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user) {
-    return { status: "UNAUTHORIZED" as const }
+    if (!user) {
+      return { status: "UNAUTHORIZED" as const }
+    }
+
+    const subjectName = input.name.trim()
+
+    if (!subjectName) {
+      return { status: "ERROR" as const, message: "Subject name is required." }
+    }
+
+    if (isReservedSubjectName(subjectName)) {
+      return { status: "ERROR" as const, message: "'Others' is reserved for standalone tasks." }
+    }
+
+    const deadline = normalizeOptionalDate(input.deadline)
+
+    const { error } = await supabase
+      .from("subjects")
+      .update({
+        name: subjectName,
+        sort_order: input.sort_order,
+        deadline,
+      })
+      .eq("id", input.id)
+      .eq("user_id", user.id)
+
+    if (error) {
+      return { status: "ERROR" as const, message: error.message }
+    }
+
+    revalidatePath("/dashboard/subjects")
+    revalidatePath("/dashboard")
+    revalidatePath("/planner")
+    return { status: "SUCCESS" as const }
+  } catch (error) {
+    return {
+      status: "ERROR" as const,
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
-
-  const subjectName = input.name.trim()
-
-  if (!subjectName) {
-    return { status: "ERROR" as const, message: "Subject name is required." }
-  }
-
-  if (isReservedSubjectName(subjectName)) {
-    return { status: "ERROR" as const, message: "'Others' is reserved for standalone tasks." }
-  }
-
-  const deadline = normalizeOptionalDate(input.deadline)
-
-  const { error } = await supabase
-    .from("subjects")
-    .update({
-      name: subjectName,
-      sort_order: input.sort_order,
-      deadline,
-    })
-    .eq("id", input.id)
-    .eq("user_id", user.id)
-
-  if (error) {
-    return { status: "ERROR" as const, message: error.message }
-  }
-
-  revalidatePath("/dashboard/subjects")
-  revalidatePath("/dashboard")
-  revalidatePath("/planner")
-  return { status: "SUCCESS" as const }
 }

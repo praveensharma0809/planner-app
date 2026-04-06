@@ -65,124 +65,131 @@ async function resolveSubjectId(
 export async function upsertScheduleTask(
   input: UpsertTaskInput
 ): Promise<UpsertScheduleTaskResponse> {
-  const title = input.title.trim()
+  try {
+    const title = input.title.trim()
 
-  if (!title) {
-    return { status: "INVALID_INPUT", message: "Title is required." }
-  }
-
-  if (!isISODate(input.scheduledDate)) {
-    return { status: "INVALID_INPUT", message: "A valid date is required." }
-  }
-
-  if (!Number.isFinite(input.durationMinutes) || input.durationMinutes < 15) {
-    return { status: "INVALID_INPUT", message: "Duration must be at least 15 minutes." }
-  }
-
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { status: "UNAUTHORIZED" }
-  }
-
-  const resolvedSubject = await resolveSubjectId(user.id, input.subjectId)
-  if (!resolvedSubject.ok) {
-    return { status: "ERROR", message: resolvedSubject.message }
-  }
-
-  const payload: {
-    title: string
-    task_type: "subject" | "standalone"
-    subject_id: string | null
-    scheduled_date: string
-    duration_minutes: number
-    topic_id?: null
-  } = {
-    title,
-    task_type: resolvedSubject.taskType,
-    subject_id: resolvedSubject.subjectId,
-    scheduled_date: input.scheduledDate,
-    duration_minutes: Math.round(input.durationMinutes),
-  }
-
-  if (resolvedSubject.taskType === "standalone") {
-    payload.topic_id = null
-  }
-
-  if (input.taskId) {
-    const { data: existingTask, error: existingTaskError } = await supabase
-      .from("tasks")
-      .select("id, task_source")
-      .eq("id", input.taskId)
-      .eq("user_id", user.id)
-      .maybeSingle()
-
-    if (existingTaskError) {
-      return { status: "ERROR", message: existingTaskError.message }
+    if (!title) {
+      return { status: "INVALID_INPUT", message: "Title is required." }
     }
 
-    if (!existingTask) {
-      return { status: "NOT_FOUND" }
+    if (!isISODate(input.scheduledDate)) {
+      return { status: "INVALID_INPUT", message: "A valid date is required." }
     }
 
-    if (existingTask.task_source === "plan" && resolvedSubject.taskType === "standalone") {
-      return {
-        status: "INVALID_INPUT",
-        message: "Planner-generated tasks must stay linked to a subject.",
+    if (!Number.isFinite(input.durationMinutes) || input.durationMinutes < 15) {
+      return { status: "INVALID_INPUT", message: "Duration must be at least 15 minutes." }
+    }
+
+    const supabase = await createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { status: "UNAUTHORIZED" }
+    }
+
+    const resolvedSubject = await resolveSubjectId(user.id, input.subjectId)
+    if (!resolvedSubject.ok) {
+      return { status: "ERROR", message: resolvedSubject.message }
+    }
+
+    const payload: {
+      title: string
+      task_type: "subject" | "standalone"
+      subject_id: string | null
+      scheduled_date: string
+      duration_minutes: number
+      topic_id?: null
+    } = {
+      title,
+      task_type: resolvedSubject.taskType,
+      subject_id: resolvedSubject.subjectId,
+      scheduled_date: input.scheduledDate,
+      duration_minutes: Math.round(input.durationMinutes),
+    }
+
+    if (resolvedSubject.taskType === "standalone") {
+      payload.topic_id = null
+    }
+
+    if (input.taskId) {
+      const { data: existingTask, error: existingTaskError } = await supabase
+        .from("tasks")
+        .select("id, task_source")
+        .eq("id", input.taskId)
+        .eq("user_id", user.id)
+        .maybeSingle()
+
+      if (existingTaskError) {
+        return { status: "ERROR", message: existingTaskError.message }
       }
+
+      if (!existingTask) {
+        return { status: "NOT_FOUND" }
+      }
+
+      if (existingTask.task_source === "plan" && resolvedSubject.taskType === "standalone") {
+        return {
+          status: "INVALID_INPUT",
+          message: "Planner-generated tasks must stay linked to a subject.",
+        }
+      }
+
+      const { data: updated, error: updateError } = await supabase
+        .from("tasks")
+        .update(payload)
+        .eq("id", input.taskId)
+        .eq("user_id", user.id)
+        .select("id")
+        .maybeSingle()
+
+      if (updateError) {
+        return { status: "ERROR", message: updateError.message }
+      }
+
+      if (!updated) {
+        return { status: "NOT_FOUND" }
+      }
+
+      revalidatePath("/schedule")
+      revalidatePath("/dashboard")
+      revalidatePath("/dashboard/calendar")
+
+      return { status: "SUCCESS", taskId: updated.id }
     }
 
-    const { data: updated, error: updateError } = await supabase
+    const { data: created, error: createError } = await supabase
       .from("tasks")
-      .update(payload)
-      .eq("id", input.taskId)
-      .eq("user_id", user.id)
+      .insert({
+        user_id: user.id,
+        title,
+        task_type: resolvedSubject.taskType,
+        subject_id: resolvedSubject.subjectId,
+        topic_id: null,
+        scheduled_date: input.scheduledDate,
+        duration_minutes: Math.round(input.durationMinutes),
+        session_type: "core",
+        completed: false,
+        task_source: "manual",
+        plan_snapshot_id: null,
+      })
       .select("id")
-      .maybeSingle()
+      .single()
 
-    if (updateError) {
-      return { status: "ERROR", message: updateError.message }
-    }
-
-    if (!updated) {
-      return { status: "NOT_FOUND" }
+    if (createError || !created) {
+      return { status: "ERROR", message: createError?.message ?? "Could not create task." }
     }
 
     revalidatePath("/schedule")
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/calendar")
 
-    return { status: "SUCCESS", taskId: updated.id }
+    return { status: "SUCCESS", taskId: created.id }
+  } catch (error) {
+    return {
+      status: "ERROR",
+      message: error instanceof Error ? error.message : "Unexpected error",
+    }
   }
-
-  const { data: created, error: createError } = await supabase
-    .from("tasks")
-    .insert({
-      user_id: user.id,
-      title,
-      task_type: resolvedSubject.taskType,
-      subject_id: resolvedSubject.subjectId,
-      topic_id: null,
-      scheduled_date: input.scheduledDate,
-      duration_minutes: Math.round(input.durationMinutes),
-      session_type: "core",
-      completed: false,
-      task_source: "manual",
-      plan_snapshot_id: null,
-    })
-    .select("id")
-    .single()
-
-  if (createError || !created) {
-    return { status: "ERROR", message: createError?.message ?? "Could not create task." }
-  }
-
-  revalidatePath("/schedule")
-  revalidatePath("/dashboard")
-  revalidatePath("/dashboard/calendar")
-
-  return { status: "SUCCESS", taskId: created.id }
 }

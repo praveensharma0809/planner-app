@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/app/components/Toast";
 import { addSubject } from "@/app/actions/subjects/addSubject";
+import { saveOnboardingProfile } from "@/app/actions/onboarding/saveProfile";
 
 interface SubjectDraft {
   name: string;
@@ -38,11 +39,17 @@ export default function OnboardingPage() {
         return;
       }
 
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("id")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
+
+      if (profileError) {
+        addToast("Unable to verify onboarding status. Please refresh and try again.", "error");
+        setLoading(false);
+        return;
+      }
 
       if (profile) {
         router.push("/dashboard");
@@ -52,7 +59,7 @@ export default function OnboardingPage() {
     };
 
     checkAuth();
-  }, [router]);
+  }, [addToast, router]);
 
   // Step 1 — Save profile
   const handleProfileSubmit = async (e: React.FormEvent) => {
@@ -60,20 +67,22 @@ export default function OnboardingPage() {
     setProfileSaving(true);
 
     try {
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
-      if (!user) return;
-
-      const { error } = await supabase.from("profiles").insert({
-        id: user.id,
+      const result = await saveOnboardingProfile({
         full_name: fullName,
       });
 
-      if (error) {
-        addToast(error.message, "error");
-      } else {
+      if (result.status === "SUCCESS") {
         setStep(2);
+        return;
       }
+
+      if (result.status === "UNAUTHORIZED") {
+        addToast("Session expired. Please log in again.", "error");
+        router.push("/auth/login");
+        return;
+      }
+
+      addToast(result.message, "error");
     } catch {
       addToast("Network error — please try again.", "error");
     } finally {
@@ -166,7 +175,7 @@ export default function OnboardingPage() {
 
               <button
                 type="submit"
-                disabled={profileSaving}
+                disabled={profileSaving || !fullName.trim()}
                 className="w-full p-3 rounded-xl btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {profileSaving ? "Saving…" : "Next →"}

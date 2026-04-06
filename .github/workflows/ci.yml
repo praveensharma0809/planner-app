@@ -9,7 +9,7 @@ on:
 
 jobs:
   checks:
-    name: Typecheck, Lint, Test, Build
+    name: CI Check
     runs-on: ubuntu-latest
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
@@ -29,17 +29,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Contract Guard
-        run: npm run test:contracts
-
-      - name: Test
-        run: npm run test
-
-      - name: Build
-        run: npm run build
+      - name: Run CI Check
+        run: npm run ci:check

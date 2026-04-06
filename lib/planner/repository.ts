@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 
-type SupabaseLike = any
+type SupabaseLike = Awaited<ReturnType<typeof createServerSupabaseClient>>
 
 export async function getPlanSnapshots(
   supabase: SupabaseLike,
@@ -153,12 +153,7 @@ export async function getRescheduleContext(
   plannerSettingsSelect: string,
   topicSelect: string
 ) {
-  const [profileRes, configRes, subjectsRes] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("daily_available_minutes, exam_date")
-      .eq("id", userId)
-      .maybeSingle(),
+  const [configRes, subjectsRes] = await Promise.all([
     supabase
       .from("planner_settings")
       .select(plannerSettingsSelect)
@@ -200,7 +195,7 @@ export async function getRescheduleContext(
       { data: [], error: null },
     ]
 
-  return [profileRes, configRes, subjectsRes, topicsRes, topicParamsRes]
+  return [configRes, subjectsRes, topicsRes, topicParamsRes]
 }
 
 export async function getExistingTasksInRange(

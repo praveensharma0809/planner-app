@@ -548,8 +548,12 @@ export function schedule(
   const subjectTopics = new Map<string, UnitState[]>()
   for (const state of states) {
     const subjectId = state.unit.subject_id
-    if (!subjectTopics.has(subjectId)) subjectTopics.set(subjectId, [])
-    subjectTopics.get(subjectId)!.push(state)
+    const existing = subjectTopics.get(subjectId)
+    if (existing) {
+      existing.push(state)
+      continue
+    }
+    subjectTopics.set(subjectId, [state])
   }
 
   const completedUnits = new Set<string>()

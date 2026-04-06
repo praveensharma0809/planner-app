@@ -1,12 +1,7 @@
 export interface Profile {
   id: string
   full_name: string | null
-  age?: number | null
-  primary_exam: string | null
-  qualification: string | null
   phone: string | null
-  daily_available_minutes: number
-  exam_date: string | null
   streak_current?: number
   streak_longest?: number
   streak_last_completed_date?: string | null
