@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 
 interface ModalProps {
   open: boolean
@@ -44,25 +45,25 @@ export function Modal({
     }
   }, [open, handleKey])
 
-  if (!open) return null
+  if (!open || typeof document === "undefined") return null
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[60]"
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm"
         onClick={backdropClose ? onClose : undefined}
         aria-hidden="true"
       />
 
       {/* Panel */}
       <div
-        className={`relative w-full ${sizeClass[size]} rounded-2xl border overflow-hidden animate-slide-in`}
+        className={`fixed left-1/2 top-1/2 z-[61] flex max-h-[90vh] w-[calc(100%-2rem)] ${sizeClass[size]} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border animate-slide-in`}
         style={{
           background: "var(--sh-card)",
           border: "1px solid var(--sh-border)",
@@ -96,8 +97,9 @@ export function Modal({
         )}
 
         {/* Body */}
-        <div className="p-6">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

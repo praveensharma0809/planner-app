@@ -321,6 +321,10 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     visibleTasks.length > 0 && visibleTasks.every((task) => selectedTaskIds.has(task.id))
 
   const selectedDetailTitle = selectedChapter?.name ?? "Overview"
+  const editingChapterArchived =
+    chapterDialog.mode === "edit"
+    && !!chapterDialog.targetId
+    && !!selectedSubject?.chapters.find((chapter) => chapter.id === chapterDialog.targetId)?.archived
 
   const bulkPreview = useMemo(() => {
     const baseName = bulkBaseName.trim()
@@ -376,6 +380,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   }
 
   function openEditChapter(chapterId: string, chapterName: string) {
+    setSelectedChapterId(chapterId)
     setChapterDialog({
       open: true,
       mode: "edit",
@@ -423,38 +428,25 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   async function handleArchiveChapter() {
     if (!selectedChapterId || pendingChapterId) return
 
-    setPendingChapterId(selectedChapterId)
-
-    try {
-      const result = await archiveChapter(selectedChapterId)
-
-      if (result.status === "SUCCESS") {
-        addToast("Chapter archived.", "success")
-        router.refresh()
-        return
-      }
-
-      if (result.status === "UNAUTHORIZED") {
-        addToast("Unauthorized", "error")
-        return
-      }
-
-      addToast(result.message, "error")
-    } finally {
-      setPendingChapterId(null)
-    }
+    await handleToggleChapterArchive(selectedChapterId, false)
   }
 
   async function handleUnarchiveChapter() {
     if (!selectedChapterId || pendingChapterId) return
 
-    setPendingChapterId(selectedChapterId)
+    await handleToggleChapterArchive(selectedChapterId, true)
+  }
+
+  async function handleToggleChapterArchive(chapterId: string, archived: boolean) {
+    if (pendingChapterId) return
+
+    setPendingChapterId(chapterId)
 
     try {
-      const result = await unarchiveChapter(selectedChapterId)
+      const result = archived ? await unarchiveChapter(chapterId) : await archiveChapter(chapterId)
 
       if (result.status === "SUCCESS") {
-        addToast("Chapter restored.", "success")
+        addToast(archived ? "Chapter restored." : "Chapter archived.", "success")
         router.refresh()
         return
       }
@@ -935,42 +927,31 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     <div className="page-root fade-in flex h-full min-h-0 w-full max-w-none flex-col overflow-hidden" style={{ paddingTop: 12, paddingBottom: 16 }}>
       <PageHeader title="Subjects" />
 
-      {displaySubjects.length === 0 ? (
-        <div className="empty-state">
-          <p className="text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
-            {showArchived ? "No archived subjects." : "No subjects yet."}
-          </p>
-          <p className="mt-1 text-sm" style={{ color: "var(--sh-text-muted)" }}>
-            {showArchived
-              ? "Archive a subject to see it in this view."
-              : "Create your first subject to start building your structure."}
-          </p>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            {!showArchived && (
-              <Button variant="primary" onClick={openCreateSubject}>
-                Add first subject
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              onClick={() => setShowArchived((value) => !value)}
-              size="sm"
-            >
-              {showArchived ? "Show Active Subjects" : "Archived Subjects"}
-            </Button>
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border p-3 sm:p-4"
+        style={{
+          borderColor: "var(--sh-border)",
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",
+          boxShadow: "var(--sh-shadow-sm)",
+        }}
+      >
+        {displaySubjects.length === 0 && (
+          <div
+            className="mb-3 rounded-xl border p-4"
+            style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
+          >
+            <p className="text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+              {showArchived ? "No archived subjects." : "No subjects yet."}
+            </p>
+            <p className="mt-1 text-sm" style={{ color: "var(--sh-text-muted)" }}>
+              {showArchived
+                ? "Archive a subject to see it in this view."
+                : "Create your first subject to start building your structure."}
+            </p>
           </div>
-        </div>
-      ) : (
-        <div
-          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border p-3 sm:p-4"
-          style={{
-            borderColor: "var(--sh-border)",
-            background:
-              "linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",
-            boxShadow: "var(--sh-shadow-sm)",
-          }}
-        >
+        )}
+
           <p className="mb-3 text-xs font-medium sm:hidden" style={{ color: "var(--sh-text-muted)" }}>
             Swipe horizontally between Subjects, Chapters, and the overview panel.
           </p>
@@ -1276,7 +1257,6 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
             </section>
           </div>
         </div>
-      )}
 
       <SubjectDrawer
         open={drawerOpen}
@@ -1300,6 +1280,18 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         onChange={(value) => setChapterDialog((previous) => ({ ...previous, value }))}
         onClose={() => setChapterDialog(CLOSED_DIALOG_STATE)}
         onSubmit={handleSaveChapter}
+        destructiveActionLabel={chapterDialog.mode === "edit"
+          ? (editingChapterArchived ? "Restore Chapter" : "Archive Chapter")
+          : undefined}
+        onDestructiveAction={chapterDialog.mode === "edit" && chapterDialog.targetId
+          ? () => {
+              void handleToggleChapterArchive(chapterDialog.targetId as string, editingChapterArchived)
+            }
+          : undefined}
+        destructiveDisabled={chapterDialog.mode !== "edit"
+          || !chapterDialog.targetId
+          || chapterDialogSaving
+          || pendingChapterId === chapterDialog.targetId}
       />
 
       <NameModal
@@ -1713,6 +1705,9 @@ interface NameModalProps {
   onChange: (value: string) => void
   onClose: () => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  destructiveActionLabel?: string
+  onDestructiveAction?: () => void
+  destructiveDisabled?: boolean
 }
 
 function NameModal({
@@ -1726,23 +1721,39 @@ function NameModal({
   onChange,
   onClose,
   onSubmit,
+  destructiveActionLabel,
+  onDestructiveAction,
+  destructiveDisabled = false,
 }: NameModalProps) {
   return (
     <Modal open={open} onClose={onClose} title={title} size="sm">
-      <form className="space-y-4" onSubmit={onSubmit}>
-        <Input
-          autoFocus
-          required
-          label={fieldLabel}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-        />
+      <form className="flex max-h-[calc(100vh-13rem)] flex-col" onSubmit={onSubmit}>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <Input
+            autoFocus
+            required
+            label={fieldLabel}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder={placeholder}
+          />
+        </div>
 
-        <div className="flex items-center justify-end gap-2">
+        <div className="mt-4 flex items-center justify-end gap-2 border-t pt-3" style={{ borderColor: "var(--sh-border)" }}>
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Cancel
           </Button>
+          {destructiveActionLabel && onDestructiveAction && (
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={onDestructiveAction}
+              disabled={destructiveDisabled}
+            >
+              {destructiveActionLabel}
+            </Button>
+          )}
           <Button type="submit" variant="primary" size="sm" disabled={loading}>
             {loading ? "Saving..." : submitLabel}
           </Button>

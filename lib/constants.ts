@@ -25,7 +25,7 @@ export const APP_LOCALE = "en-US"
 export const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 
 export const STANDALONE_SUBJECT_ID = "others"
-export const STANDALONE_SUBJECT_LABEL = "Others (Standalone)"
+export const STANDALONE_SUBJECT_LABEL = "Others"
 
 const RESERVED_SUBJECT_KEYWORD = "others"
 

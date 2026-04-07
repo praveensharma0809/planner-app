@@ -116,10 +116,10 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Main",
     items: [
       { href: "/dashboard",          label: "Overview",  icon: <OverviewIcon />,  exact: true },
+      { href: "/dashboard/subjects", label: "Subjects",  icon: <SubjectsIcon /> },
       { href: "/dashboard/calendar", label: "Calendar",  icon: <CalendarIcon /> },
       { href: "/schedule",           label: "Schedule",  icon: <ScheduleIcon /> },
       { href: "/planner",            label: "Planner",   icon: <PlannerIcon /> },
-      { href: "/dashboard/subjects", label: "Subjects",  icon: <SubjectsIcon /> },
     ],
   },
   {

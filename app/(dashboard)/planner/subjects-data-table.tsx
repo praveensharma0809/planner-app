@@ -165,7 +165,6 @@ type NameDialogState = {
 }
 
 type TaskCreateMode = "single" | "bulk"
-type NumberPlacement = "suffix" | "prefix"
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const
 
 const CLOSED_DIALOG_STATE: NameDialogState = {
@@ -176,6 +175,13 @@ const CLOSED_DIALOG_STATE: NameDialogState = {
   earliestStart: "",
   deadline: "",
   restAfterDays: "0",
+}
+
+const BULK_SERIES_DEFAULTS = {
+  startAt: 1,
+  numberPadding: 0,
+  separator: "-",
+  placement: "suffix" as const,
 }
 
 export function SubjectsDataTable({
@@ -219,10 +225,6 @@ export function SubjectsDataTable({
   const [singleTaskTitle, setSingleTaskTitle] = useState("")
   const [bulkBaseName, setBulkBaseName] = useState("")
   const [bulkCount, setBulkCount] = useState("5")
-  const [bulkStartAt, setBulkStartAt] = useState("1")
-  const [bulkNumberPadding, setBulkNumberPadding] = useState("0")
-  const [bulkSeparator, setBulkSeparator] = useState("-")
-  const [bulkPlacement, setBulkPlacement] = useState<NumberPlacement>("suffix")
 
   const [isManageOpen, setIsManageOpen] = useState(false)
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
@@ -613,29 +615,23 @@ export function SubjectsDataTable({
     if (!baseName) return []
 
     const count = clampInteger(Number.parseInt(bulkCount, 10) || 0, 1, 4)
-    const startAt = clampInteger(Number.parseInt(bulkStartAt, 10) || 1, 1, 9999)
-    const numberPadding = clampInteger(Number.parseInt(bulkNumberPadding, 10) || 0, 0, 6)
 
     return Array.from({ length: count }, (_, index) =>
       composeSeriesName(
         baseName,
-        startAt + index,
-        bulkPlacement,
-        bulkSeparator,
-        numberPadding
+        BULK_SERIES_DEFAULTS.startAt + index,
+        BULK_SERIES_DEFAULTS.placement,
+        BULK_SERIES_DEFAULTS.separator,
+        BULK_SERIES_DEFAULTS.numberPadding
       )
     )
-  }, [bulkBaseName, bulkCount, bulkStartAt, bulkNumberPadding, bulkPlacement, bulkSeparator])
+  }, [bulkBaseName, bulkCount])
 
   function resetTaskComposerFields() {
     setTaskCreateMode("single")
     setSingleTaskTitle("")
     setBulkBaseName("")
     setBulkCount("5")
-    setBulkStartAt("1")
-    setBulkNumberPadding("0")
-    setBulkSeparator("-")
-    setBulkPlacement("suffix")
   }
 
   function openCreateSubject() {
@@ -1164,21 +1160,9 @@ export function SubjectsDataTable({
       }
 
       const count = Number.parseInt(bulkCount, 10)
-      const startAt = Number.parseInt(bulkStartAt, 10)
-      const numberPadding = Number.parseInt(bulkNumberPadding, 10)
 
       if (!Number.isFinite(count) || count < 1) {
         addToast("Task count must be at least 1.", "error")
-        return
-      }
-
-      if (!Number.isFinite(startAt) || startAt < 1) {
-        addToast("Start number must be at least 1.", "error")
-        return
-      }
-
-      if (!Number.isFinite(numberPadding) || numberPadding < 0) {
-        addToast("Number padding must be 0 or more.", "error")
         return
       }
 
@@ -1186,10 +1170,10 @@ export function SubjectsDataTable({
         chapterId: selectedChapter.id,
         baseName,
         count,
-        startAt,
-        numberPadding,
-        separator: bulkSeparator,
-        placement: bulkPlacement,
+        startAt: BULK_SERIES_DEFAULTS.startAt,
+        numberPadding: BULK_SERIES_DEFAULTS.numberPadding,
+        separator: BULK_SERIES_DEFAULTS.separator,
+        placement: BULK_SERIES_DEFAULTS.placement,
       })
 
       if (result.status === "SUCCESS") {
@@ -2003,35 +1987,23 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
         />
       )}
 
-      {displaySubjects.length === 0 ? (
-        <div className="empty-state">
-          <p className="text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
-            {showArchived ? "No archived subjects." : "No active subjects."}
-          </p>
-          <p className="mt-1 text-sm" style={{ color: "var(--sh-text-muted)" }}>
-            {showArchived
-              ? "Archive a subject to see it in this view."
-              : "Create your first subject to start building your structure."}
-          </p>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            {!showArchived && (
-              <Button variant="primary" onClick={openCreateSubject} disabled={isMutating}>
-                Add first subject
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              onClick={() => setShowArchived((value) => !value)}
-              size="sm"
-              disabled={isMutating}
-            >
-              {showArchived ? "Show Active Subjects" : "Archived Subjects"}
-            </Button>
+      <div className="px-0.5 sm:px-0">
+        {displaySubjects.length === 0 && (
+          <div
+            className="mb-3 rounded-xl border p-4"
+            style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
+          >
+            <p className="text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+              {showArchived ? "No archived subjects." : "No active subjects."}
+            </p>
+            <p className="mt-1 text-sm" style={{ color: "var(--sh-text-muted)" }}>
+              {showArchived
+                ? "Archive a subject to see it in this view."
+                : "Create your first subject to start building your structure."}
+            </p>
           </div>
-        </div>
-      ) : (
-        <div className="px-0.5 sm:px-0">
+        )}
+
           <p className="mb-3 text-xs font-medium sm:hidden" style={{ color: "var(--sh-text-muted)" }}>
             Swipe horizontally between Subjects, Chapters, and the overview panel.
           </p>
@@ -2861,7 +2833,6 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
             </section>
           </div>
         </div>
-      )}
 
       <SubjectDrawer
         open={drawerOpen}
@@ -2887,88 +2858,90 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
         title={chapterDialog.mode === "create" ? "Add Chapter" : "Edit Chapter"}
         size="md"
       >
-        <form id="chapter-form" className="space-y-4" onSubmit={handleSaveChapter}>
-          <Input
-            autoFocus
-            required
-            label="Chapter Name"
-            value={chapterDialog.value}
-            onChange={(event) =>
-              setChapterDialog((previous) => ({
-                ...previous,
-                value: event.target.value,
-              }))
-            }
-            placeholder="e.g. Limits and Continuity"
-          />
+        <form id="chapter-form" className="flex max-h-[calc(100vh-13rem)] flex-col" onSubmit={handleSaveChapter}>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+            <Input
+              autoFocus
+              required
+              label="Chapter Name"
+              value={chapterDialog.value}
+              onChange={(event) =>
+                setChapterDialog((previous) => ({
+                  ...previous,
+                  value: event.target.value,
+                }))
+              }
+              placeholder="e.g. Limits and Continuity"
+            />
 
-          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                type="date"
+                label="Start Date"
+                value={chapterDialog.earliestStart ?? ""}
+                onChange={(event) =>
+                  setChapterDialog((previous) => ({
+                    ...previous,
+                    earliestStart: event.target.value,
+                  }))
+                }
+              />
+              <Input
+                type="date"
+                label="Deadline"
+                value={chapterDialog.deadline ?? ""}
+                onChange={(event) =>
+                  setChapterDialog((previous) => ({
+                    ...previous,
+                    deadline: event.target.value,
+                  }))
+                }
+              />
+            </div>
+
             <Input
-              type="date"
-              label="Start Date"
-              value={chapterDialog.earliestStart ?? ""}
+              type="number"
+              min={0}
+              label="Rest After Days"
+              value={chapterDialog.restAfterDays ?? "0"}
               onChange={(event) =>
                 setChapterDialog((previous) => ({
                   ...previous,
-                  earliestStart: event.target.value,
+                  restAfterDays: event.target.value,
                 }))
               }
             />
-            <Input
-              type="date"
-              label="Deadline"
-              value={chapterDialog.deadline ?? ""}
-              onChange={(event) =>
-                setChapterDialog((previous) => ({
-                  ...previous,
-                  deadline: event.target.value,
-                }))
-              }
-            />
+
+            {chapterDialog.mode === "edit" && chapterDialog.targetId && (
+              <div
+                className="rounded-lg border p-3"
+                style={{ borderColor: "rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.08)" }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-red-300">Danger Zone</p>
+                <p className="mt-1 text-xs text-red-200/80">
+                  Delete chapter and detach related tasks from this chapter.
+                </p>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => {
+                    const targetId = chapterDialog.targetId
+                    if (!targetId) return
+                    const targetName = chapterDialog.value.trim() || "Untitled chapter"
+                    setChapterDialog(CLOSED_DIALOG_STATE)
+                    void handleDeleteChapter(targetId, targetName)
+                  }}
+                  disabled={isMutating || chapterDialogSaving}
+                >
+                  Delete Chapter
+                </Button>
+              </div>
+            )}
           </div>
 
-          <Input
-            type="number"
-            min={0}
-            label="Rest After Days"
-            value={chapterDialog.restAfterDays ?? "0"}
-            onChange={(event) =>
-              setChapterDialog((previous) => ({
-                ...previous,
-                restAfterDays: event.target.value,
-              }))
-            }
-          />
-
-          {chapterDialog.mode === "edit" && chapterDialog.targetId && (
-            <div
-              className="rounded-lg border p-3"
-              style={{ borderColor: "rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.08)" }}
-            >
-              <p className="text-xs font-semibold uppercase tracking-wide text-red-300">Danger Zone</p>
-              <p className="mt-1 text-xs text-red-200/80">
-                Delete chapter and detach related tasks from this chapter.
-              </p>
-              <Button
-                type="button"
-                variant="danger"
-                size="sm"
-                className="mt-2"
-                onClick={() => {
-                  const targetId = chapterDialog.targetId
-                  if (!targetId) return
-                  const targetName = chapterDialog.value.trim() || "Untitled chapter"
-                  setChapterDialog(CLOSED_DIALOG_STATE)
-                  void handleDeleteChapter(targetId, targetName)
-                }}
-                disabled={isMutating || chapterDialogSaving}
-              >
-                Delete Chapter
-              </Button>
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-2">
+          <div className="mt-4 flex items-center justify-end gap-2 border-t pt-3" style={{ borderColor: "var(--sh-border)" }}>
             <Button
               type="button"
               variant="ghost"
@@ -3248,62 +3221,62 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
         title="Add Tasks"
         size="md"
       >
-        <form className="space-y-4" onSubmit={handleCreateTasks}>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setTaskCreateMode("single")}
-              className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-              style={{
-                borderColor:
-                  taskCreateMode === "single" ? "var(--sh-primary-glow)" : "var(--sh-border)",
-                color:
-                  taskCreateMode === "single" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-                background:
-                  taskCreateMode === "single" ? "var(--sh-primary-muted)" : "transparent",
-              }}
-              disabled={isMutating || taskComposerSaving}
-            >
-              Single Task
-            </button>
+        <form className="flex max-h-[calc(100vh-13rem)] flex-col" onSubmit={handleCreateTasks}>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setTaskCreateMode("single")}
+                className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
+                style={{
+                  borderColor:
+                    taskCreateMode === "single" ? "var(--sh-primary-glow)" : "var(--sh-border)",
+                  color:
+                    taskCreateMode === "single" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
+                  background:
+                    taskCreateMode === "single" ? "var(--sh-primary-muted)" : "transparent",
+                }}
+                disabled={isMutating || taskComposerSaving}
+              >
+                Single Task
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setTaskCreateMode("bulk")}
-              className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-              style={{
-                borderColor:
-                  taskCreateMode === "bulk" ? "var(--sh-primary-glow)" : "var(--sh-border)",
-                color:
-                  taskCreateMode === "bulk" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-                background:
-                  taskCreateMode === "bulk" ? "var(--sh-primary-muted)" : "transparent",
-              }}
-              disabled={isMutating || taskComposerSaving}
-            >
-              Bulk Series
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setTaskCreateMode("bulk")}
+                className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
+                style={{
+                  borderColor:
+                    taskCreateMode === "bulk" ? "var(--sh-primary-glow)" : "var(--sh-border)",
+                  color:
+                    taskCreateMode === "bulk" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
+                  background:
+                    taskCreateMode === "bulk" ? "var(--sh-primary-muted)" : "transparent",
+                }}
+                disabled={isMutating || taskComposerSaving}
+              >
+                Bulk Series
+              </button>
+            </div>
 
-          {taskCreateMode === "single" ? (
-            <Input
-              required
-              label="Task Title"
-              value={singleTaskTitle}
-              onChange={(event) => setSingleTaskTitle(event.target.value)}
-              placeholder="e.g. Lecture review"
-            />
-          ) : (
-            <div className="space-y-3">
+            {taskCreateMode === "single" ? (
               <Input
                 required
-                label="Base Name"
-                value={bulkBaseName}
-                onChange={(event) => setBulkBaseName(event.target.value)}
-                placeholder="e.g. Lecture"
+                label="Task Title"
+                value={singleTaskTitle}
+                onChange={(event) => setSingleTaskTitle(event.target.value)}
+                placeholder="e.g. Lecture review"
               />
+            ) : (
+              <div className="space-y-3">
+                <Input
+                  required
+                  label="Base Name"
+                  value={bulkBaseName}
+                  onChange={(event) => setBulkBaseName(event.target.value)}
+                  placeholder="e.g. Lecture"
+                />
 
-              <div className="grid gap-3 sm:grid-cols-2">
                 <Input
                   required
                   label="Count"
@@ -3313,77 +3286,25 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                   value={bulkCount}
                   onChange={(event) => setBulkCount(event.target.value)}
                 />
-                <Input
-                  required
-                  label="Start Number"
-                  type="number"
-                  min={1}
-                  max={10000}
-                  value={bulkStartAt}
-                  onChange={(event) => setBulkStartAt(event.target.value)}
-                />
-                <Input
-                  required
-                  label="Number Padding"
-                  type="number"
-                  min={0}
-                  max={6}
-                  value={bulkNumberPadding}
-                  onChange={(event) => setBulkNumberPadding(event.target.value)}
-                  hint="Adds leading zeros: 0 G�� Lecture-1, 1 G�� Lecture-01, 2 G�� Lecture-001"
-                />
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                    Number Placement
-                  </label>
-                  <select
-                    value={bulkPlacement}
-                    onChange={(event) =>
-                      setBulkPlacement(event.target.value === "prefix" ? "prefix" : "suffix")
-                    }
-                    className="ui-input"
+                {bulkPreview.length > 0 && (
+                  <div
+                    className="rounded-md border p-2.5"
+                    style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.015)" }}
                   >
-                    <option value="suffix">Lecture-1</option>
-                    <option value="prefix">1-Lecture</option>
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                    Separator (what goes between name and number)
-                  </label>
-                  <select
-                    value={bulkSeparator}
-                    onChange={(event) => setBulkSeparator(event.target.value)}
-                    className="ui-input"
-                  >
-                    <option value="-">Hyphen: Lecture-1</option>
-                    <option value=" ">Space: Lecture 1</option>
-                    <option value="_">Underscore: Lecture_1</option>
-                    <option value="">None: Lecture1</option>
-                    <option value="-+">Dot: Lecture-+1</option>
-                  </select>
-                </div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
+                      Preview
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--sh-text-secondary)" }}>
+                      {bulkPreview.join("  |  ")}
+                    </p>
+                  </div>
+                )}
               </div>
+            )}
+          </div>
 
-              {bulkPreview.length > 0 && (
-                <div
-                  className="rounded-md border p-2.5"
-                  style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.015)" }}
-                >
-                  <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                    Preview
-                  </p>
-                  <p className="mt-1 text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                    {bulkPreview.join("  |  ")}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-2">
+          <div className="mt-4 flex items-center justify-end gap-2 border-t pt-3" style={{ borderColor: "var(--sh-border)" }}>
             <Button
               type="button"
               variant="ghost"

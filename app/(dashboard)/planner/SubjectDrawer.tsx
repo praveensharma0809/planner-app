@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { createPortal } from "react-dom"
 import { useToast } from "@/app/components/Toast"
 import { addSubject } from "@/app/actions/subjects/addSubject"
 import { deleteSubject } from "@/app/actions/subjects/deleteSubject"
@@ -142,7 +143,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
     }
   }, [open, mode, subjectId, initialSubject, addToast])
 
-  if (!shouldRender) return null
+  if (!shouldRender || typeof document === "undefined") return null
 
   async function handleSaveSubject(e: React.FormEvent) {
     e.preventDefault()
@@ -255,7 +256,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
     }
   }
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <button
@@ -270,10 +271,10 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
         aria-label="Close drawer"
       />
 
-      {/* Slide-over panel */}
+      {/* Centered panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-full max-w-md z-50 flex flex-col overflow-y-auto shadow-2xl transform transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}
-        style={{ background: "var(--sh-card)", borderLeft: "1px solid var(--sh-border)" }}
+        className={`fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border shadow-2xl transition-all duration-300 ease-out ${open ? "scale-100 opacity-100 pointer-events-auto" : "scale-95 opacity-0 pointer-events-none"}`}
+        style={{ background: "var(--sh-card)", borderColor: "var(--sh-border)" }}
         role="dialog"
         aria-modal="true"
         aria-label={mode === "create" ? "Add New Subject" : "Edit Subject"}
@@ -301,7 +302,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
           </button>
         </div>
 
-        <div className="p-6 flex-1 overflow-y-auto space-y-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-6">
           <form id="subject-form" onSubmit={handleSaveSubject} className="space-y-5">
             <div>
               <label
@@ -401,6 +402,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }

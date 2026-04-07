@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { type ScheduleSubjectOption } from "@/app/actions/schedule/getWeekSchedule"
 import { STANDALONE_SUBJECT_ID } from "@/lib/constants"
 import { DAY_LABELS, DURATION_OPTIONS, formatDayDateLabel, formatDuration } from "./schedule-page.helpers"
@@ -87,11 +88,13 @@ export function AddEventModal({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  if (typeof document === "undefined") return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-50">
       <button
         type="button"
-        className="absolute inset-0 bg-black/55"
+        className="fixed inset-0 bg-black/55"
         onClick={() => {
           if (!isSaving) onClose()
         }}
@@ -99,7 +102,7 @@ export function AddEventModal({
       />
 
       <div
-        className="relative z-10 w-full max-w-md rounded-2xl border p-5"
+        className="fixed left-1/2 top-1/2 z-10 max-h-[90vh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border p-5"
         style={{
           background: "var(--sh-card)",
           borderColor: "var(--sh-border)",
@@ -182,7 +185,8 @@ export function AddEventModal({
           </button>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

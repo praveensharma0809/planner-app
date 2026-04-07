@@ -1,5 +1,7 @@
 ﻿"use client"
 
+import { createPortal } from "react-dom"
+
 import type {
   PlanIssue,
   PlanIssueAction,
@@ -46,7 +48,7 @@ export default function PlanIssueModal({
   onInlineConstraintChange,
   onRecheck,
 }: PlanIssueModalProps) {
-  if (!open) return null
+  if (!open || typeof document === "undefined") return null
 
   const criticalCount = issues.filter((issue) => issue.severity === "critical").length
   const warningCount = issues.length - criticalCount
@@ -54,9 +56,10 @@ export default function PlanIssueModal({
     ? Math.round(((issues.length - criticalCount) / issues.length) * 100)
     : 100
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6">
-      <div className="w-[70vw] max-w-5xl max-h-[84vh] overflow-hidden rounded-2xl border border-white/[0.10] bg-[#0f1116] shadow-2xl shadow-black/50">
+  return createPortal(
+    <div className="fixed inset-0 z-50">
+      <div className="fixed inset-0 bg-black/55" aria-hidden="true" />
+      <div className="fixed left-1/2 top-1/2 w-[70vw] max-w-5xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-white/[0.10] bg-[#0f1116] shadow-2xl shadow-black/50">
         <div className="px-6 py-4 border-b border-white/[0.08] bg-gradient-to-r from-white/[0.04] to-transparent">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -211,6 +214,7 @@ export default function PlanIssueModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

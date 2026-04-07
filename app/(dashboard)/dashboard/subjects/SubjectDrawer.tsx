@@ -1,10 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import { useToast } from "@/app/components/Toast"
 import { addSubject } from "@/app/actions/subjects/addSubject"
 import { updateSubject } from "@/app/actions/subjects/updateSubject"
 import { getSubjectById } from "@/app/actions/subjects/getSubjectById"
+import { toggleArchiveSubject } from "@/app/actions/subjects/toggleArchiveSubject"
 
 interface Props {
   open: boolean
@@ -19,20 +21,18 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
 
   const [name, setName] = useState("")
   const [loading, setLoading] = useState(false)
-  const [shouldRender, setShouldRender] = useState(open)
+  const [archiving, setArchiving] = useState(false)
+  const [subjectArchived, setSubjectArchived] = useState(false)
+
+  const busy = loading || archiving
 
   useEffect(() => {
-    if (open) {
-      setShouldRender(true)
-      document.body.style.overflow = "hidden"
-      return () => {
-        document.body.style.overflow = ""
-      }
-    }
+    if (!open) return
 
-    const timer = window.setTimeout(() => setShouldRender(false), 260)
-    document.body.style.overflow = ""
-    return () => window.clearTimeout(timer)
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = ""
+    }
   }, [open])
 
   useEffect(() => {
@@ -40,19 +40,21 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (busy) return
         onClose()
       }
     }
 
     document.addEventListener("keydown", onKeyDown)
     return () => document.removeEventListener("keydown", onKeyDown)
-  }, [open, onClose])
+  }, [busy, onClose, open])
 
   useEffect(() => {
     if (!open) return
 
     if (mode === "create") {
       setName("")
+      setSubjectArchived(false)
       return
     }
 
@@ -64,6 +66,8 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
 
         if (res.status === "SUCCESS") {
           setName(res.subject.name)
+          const nextArchived = Boolean((res.subject as { archived?: boolean }).archived)
+          setSubjectArchived(nextArchived)
         } else if (res.status === "UNAUTHORIZED") {
           addToast("Unauthorized", "error")
         } else {
@@ -77,7 +81,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
     }
   }, [open, mode, subjectId, addToast])
 
-  if (!shouldRender) return null
+  if (!open || typeof document === "undefined") return null
 
   async function handleSaveSubject(e: React.FormEvent) {
     e.preventDefault()
@@ -111,49 +115,80 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
     }
   }
 
-  return (
-    <>
-      {/* Backdrop */}
+  async function handleToggleArchive() {
+    if (mode !== "edit" || !subjectId || busy) return
+
+    const targetArchived = !subjectArchived
+    const confirmMessage = targetArchived
+      ? "Archive this subject?"
+      : "Restore this subject to active list?"
+
+    if (!window.confirm(confirmMessage)) return
+
+    setArchiving(true)
+    try {
+      const result = await toggleArchiveSubject(subjectId)
+      if (result.status !== "SUCCESS") {
+        addToast(result.status === "ERROR" ? result.message : "Unauthorized", "error")
+        return
+      }
+
+      setSubjectArchived(result.archived)
+      addToast(result.archived ? "Subject archived." : "Subject restored.", "success")
+      onSaved()
+    } finally {
+      setArchiving(false)
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50">
       <button
         type="button"
-        className={`fixed inset-0 z-40 transition-opacity duration-200 ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
-        style={{ background: "rgba(0,0,0,0.52)", backdropFilter: "blur(3px)" }}
-        onClick={onClose}
-        aria-label="Close drawer"
+        className="fixed inset-0 bg-black/55"
+        onClick={() => {
+          if (busy) return
+          onClose()
+        }}
+        disabled={busy}
+        aria-label="Close modal"
       />
 
-      {/* Slide-over panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-full max-w-md z-50 flex flex-col overflow-y-auto shadow-2xl transform transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}
-        style={{ background: "var(--sh-card)", borderLeft: "1px solid var(--sh-border)" }}
+        className="fixed left-1/2 top-1/2 z-10 flex max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border shadow-2xl"
+        style={{ background: "var(--sh-card)", borderColor: "var(--sh-border)" }}
         role="dialog"
         aria-modal="true"
         aria-label={mode === "create" ? "Add New Subject" : "Edit Subject"}
       >
         <div
-          className="flex items-center justify-between p-6 shrink-0"
+          className="flex items-center justify-between px-6 py-4"
           style={{ borderBottom: "1px solid var(--sh-border)" }}
         >
           <h2 className="text-xl font-semibold" style={{ color: "var(--sh-text-primary)" }}>
             {mode === "create" ? "Add New Subject" : "Edit Subject"}
           </h2>
           <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors focus-ring"
+            onClick={() => {
+              if (busy) return
+              onClose()
+            }}
+            disabled={busy}
+            className="h-8 w-8 rounded-lg transition-colors hover:bg-white/5"
             style={{ color: "var(--sh-text-muted)" }}
             aria-label="Close"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="mx-auto h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
 
-        <div className="p-6 flex-1 overflow-y-auto space-y-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
           <form id="subject-form" onSubmit={handleSaveSubject} className="space-y-5">
             <div>
               <label
-                className="block text-xs font-semibold uppercase tracking-wide mb-2"
+                className="mb-2 block text-xs font-semibold uppercase tracking-wide"
                 style={{ color: "var(--sh-text-muted)" }}
               >
                 Subject Name
@@ -165,6 +200,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
                 onChange={(event) => setName(event.target.value)}
                 placeholder="e.g. System Design, Calculus"
                 className="ui-input"
+                disabled={busy}
               />
             </div>
 
@@ -175,19 +211,37 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
         </div>
 
         <div
-          className="p-6 shrink-0"
+          className="flex items-center gap-2 p-6"
           style={{ borderTop: "1px solid var(--sh-border)", background: "var(--sh-card)" }}
         >
           <button
             form="subject-form"
             type="submit"
-            disabled={loading}
-            className="ui-btn ui-btn-primary ui-btn-md w-full justify-center disabled:opacity-50"
+            disabled={busy}
+            className="ui-btn ui-btn-primary ui-btn-md flex-1 justify-center disabled:opacity-50"
           >
             {loading ? "Saving…" : mode === "create" ? "Create Subject" : "Save Changes"}
           </button>
+
+          {mode === "edit" && (
+            <button
+              type="button"
+              onClick={() => {
+                void handleToggleArchive()
+              }}
+              disabled={busy}
+              className="ui-btn ui-btn-danger ui-btn-md flex-1 justify-center disabled:opacity-50"
+            >
+              {archiving
+                ? "Saving..."
+                : subjectArchived
+                  ? "Restore Subject"
+                  : "Archive Subject"}
+            </button>
+          )}
         </div>
       </div>
-    </>
+    </div>,
+    document.body
   )
 }
