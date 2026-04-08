@@ -245,7 +245,7 @@ export async function insertPlanSnapshot(
 
 export async function insertTasks(
   supabase: SupabaseLike,
-  payload: unknown
+  payload: any
 ) {
-  return supabase.from("tasks").insert(payload)
+  return supabase.from("tasks").insert(payload as any)
 }

@@ -188,12 +188,14 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
           <form id="subject-form" onSubmit={handleSaveSubject} className="space-y-5">
             <div>
               <label
+                htmlFor="dashboard-subject-name"
                 className="mb-2 block text-xs font-semibold uppercase tracking-wide"
                 style={{ color: "var(--sh-text-muted)" }}
               >
                 Subject Name
               </label>
               <input
+                id="dashboard-subject-name"
                 autoFocus
                 required
                 value={name}

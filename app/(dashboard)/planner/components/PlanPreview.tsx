@@ -932,6 +932,8 @@ export default function PlanPreview({
                                   }}
                                   className={`text-xs ${session.is_pinned ? "text-sky-300" : "text-white/35 hover:text-white/70"}`}
                                   title={session.is_pinned ? "Unpin session" : "Pin session"}
+                                  aria-label={session.is_pinned ? "Unpin session" : "Pin session"}
+                                  aria-pressed={session.is_pinned}
                                 >
                                   pin
                                 </button>
@@ -944,6 +946,8 @@ export default function PlanPreview({
                                 }}
                                 className={`text-xs ${isSwapSource ? "text-fuchsia-300" : "text-white/35 hover:text-white/70"}`}
                                 title="Swap with another session"
+                                aria-label="Swap with another session"
+                                aria-pressed={isSwapSource}
                               >
                                 swap
                               </button>
@@ -955,6 +959,7 @@ export default function PlanPreview({
                                 }}
                                 className="text-red-400/40 hover:text-red-400 text-xs"
                                 title="Remove from preview"
+                                aria-label="Remove session from preview"
                               >
                                 x
                               </button>

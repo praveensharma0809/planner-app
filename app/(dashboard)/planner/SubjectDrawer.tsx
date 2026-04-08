@@ -306,12 +306,14 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
           <form id="subject-form" onSubmit={handleSaveSubject} className="space-y-5">
             <div>
               <label
+                htmlFor="planner-subject-name"
                 className="block text-xs font-semibold uppercase tracking-wide mb-2"
                 style={{ color: "var(--sh-text-muted)" }}
               >
                 Subject Name
               </label>
               <input
+                id="planner-subject-name"
                 autoFocus
                 required
                 value={name}
@@ -325,12 +327,14 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
             <div className="grid gap-4 sm:grid-cols-1">
               <div>
                 <label
+                  htmlFor="planner-subject-deadline"
                   className="block text-xs font-semibold uppercase tracking-wide mb-2"
                   style={{ color: "var(--sh-text-muted)" }}
                 >
                   Deadline
                 </label>
                 <input
+                  id="planner-subject-deadline"
                   type="date"
                   value={deadline}
                   onChange={(event) => setDeadline(event.target.value)}
