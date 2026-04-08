@@ -245,7 +245,9 @@ export async function insertPlanSnapshot(
 
 export async function insertTasks(
   supabase: SupabaseLike,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload: any
 ) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return supabase.from("tasks").insert(payload as any)
 }
