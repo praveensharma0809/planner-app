@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
@@ -376,7 +376,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
               disabled={busy}
               className="ui-btn ui-btn-primary ui-btn-md w-full justify-center disabled:opacity-50"
             >
-              {loading ? "Saving…" : "Create Subject"}
+              {loading ? "Savingâ€¦" : "Create Subject"}
             </button>
           ) : (
             <div className="flex items-center gap-2">

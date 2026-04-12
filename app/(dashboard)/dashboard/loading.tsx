@@ -1,4 +1,4 @@
-export default function DashboardLoading() {
+﻿export default function DashboardLoading() {
   return (
     <div className="p-8 space-y-6 max-w-6xl mx-auto animate-pulse">
       {/* Header skeleton */}

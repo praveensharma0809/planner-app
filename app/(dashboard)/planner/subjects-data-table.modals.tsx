@@ -1,4 +1,4 @@
-import type { FormEvent } from "react"
+﻿import type { FormEvent } from "react"
 import type { ArchivedChapterListItem } from "@/app/actions/subjects/chapters"
 import { Button, Input, Modal } from "@/app/components/ui"
 
@@ -615,7 +615,7 @@ export function TaskComposerModal({
                   <option value=" ">Space: Lecture 1</option>
                   <option value="_">Underscore: Lecture_1</option>
                   <option value="">None: Lecture1</option>
-                  <option value="·">Dot: Lecture·1</option>
+                  <option value="Â·">Dot: LectureÂ·1</option>
                 </select>
               </div>
             </div>

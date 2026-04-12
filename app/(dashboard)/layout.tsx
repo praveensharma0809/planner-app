@@ -1,4 +1,4 @@
-import { AppShell } from "@/app/components/layout/AppShell"
+﻿import { AppShell } from "@/app/components/layout/AppShell"
 
 export default function DashboardGroupLayout({
   children,

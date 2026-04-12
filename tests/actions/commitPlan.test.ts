@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+﻿import { describe, it, expect, vi, beforeEach } from "vitest"
 import { createServerSupabaseClientMock } from "../utils/supabaseMock"
 import type { ScheduledSession } from "@/lib/planner/engine"
 

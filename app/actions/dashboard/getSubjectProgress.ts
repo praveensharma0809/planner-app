@@ -1,4 +1,4 @@
-"use server"
+﻿"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 
@@ -9,7 +9,7 @@ export interface SubjectProgress {
   total_tasks: number
   completed_tasks: number
   earliest_deadline: string | null
-  /** 0–100 */
+  /** 0â€“100 */
   percent: number
   /** days until earliest deadline (negative = overdue), null if no deadline */
   daysLeft: number | null

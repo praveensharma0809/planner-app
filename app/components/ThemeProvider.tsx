@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 
@@ -18,12 +18,12 @@ export function useTheme() {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "dark"
-    const stored = localStorage.getItem("studyhard-theme") as Theme | null
+    const stored = localStorage.getItem("StayPlanned-theme") as Theme | null
     return stored === "light" || stored === "dark" ? stored : "dark"
   })
 
   useEffect(() => {
-    localStorage.setItem("studyhard-theme", theme)
+    localStorage.setItem("StayPlanned-theme", theme)
     document.documentElement.setAttribute("data-theme", theme)
   }, [theme])
 

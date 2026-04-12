@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
@@ -1396,7 +1396,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                   max={6}
                   value={bulkNumberPadding}
                   onChange={(event) => setBulkNumberPadding(event.target.value)}
-                  hint="Adds leading zeros: 0 → Lecture-1, 1 → Lecture-01, 2 → Lecture-001"
+                  hint="Adds leading zeros: 0 â†’ Lecture-1, 1 â†’ Lecture-01, 2 â†’ Lecture-001"
                 />
 
                 <div className="flex flex-col gap-1.5">
@@ -1428,7 +1428,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                     <option value=" ">Space: Lecture 1</option>
                     <option value="_">Underscore: Lecture_1</option>
                     <option value="">None: Lecture1</option>
-                    <option value="·">Dot: Lecture·1</option>
+                    <option value="Â·">Dot: LectureÂ·1</option>
                   </select>
                 </div>
               </div>

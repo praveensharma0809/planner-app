@@ -1,6 +1,6 @@
-# StudyHard
+﻿# StayPlanned
 
-StudyHard is a planning app for deadline-driven preparation built on Next.js + Supabase.
+StayPlanned is a planning app for deadline-driven preparation built on Next.js + Supabase.
 
 ## Stack
 

@@ -1,4 +1,4 @@
-import Link from "next/link"
+﻿import Link from "next/link"
 import { getStreak } from "@/app/actions/dashboard/getStreak"
 import { getWeeklySnapshot } from "@/app/actions/dashboard/getWeeklySnapshot"
 import { getSubjectProgress, type SubjectProgress } from "@/app/actions/dashboard/getSubjectProgress"
@@ -205,7 +205,7 @@ export default async function DashboardPage() {
       id: `deadline-${subject.id}`,
       tone: subject.daysLeft === 0 ? "danger" as const : "warning" as const,
       title: subject.daysLeft === 0 ? `${subject.name} is due today` : `${subject.name} due soon`,
-      detail: `${Math.max(0, subject.total_tasks - subject.completed_tasks)} tasks left · ${formatDeadlineLabel(subject.daysLeft)}`,
+      detail: `${Math.max(0, subject.total_tasks - subject.completed_tasks)} tasks left Â· ${formatDeadlineLabel(subject.daysLeft)}`,
       action: null,
     })),
     ...(heavyTodayLoad
@@ -285,7 +285,7 @@ export default async function DashboardPage() {
                 <div className="dashboard-hero-label">Today&apos;s Progress</div>
                 <div className="dashboard-hero-main">
                   <span className="dashboard-hero-percent">
-                    {todayTasks.length === 0 ? "—" : todayProgressPercent}
+                    {todayTasks.length === 0 ? "â€”" : todayProgressPercent}
                     {todayTasks.length > 0 && <span className="dashboard-hero-unit">%</span>}
                   </span>
                   <span className="dashboard-hero-label-sub">{todayPaceLabel}</span>
@@ -347,7 +347,7 @@ export default async function DashboardPage() {
                   buttonClassName="ui-btn ui-btn-ghost ui-btn-sm"
                 />
                 <Link href="/dashboard/calendar" className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
-                  Calendar →
+                  Calendar â†’
                 </Link>
               </div>
             }
@@ -483,7 +483,7 @@ export default async function DashboardPage() {
                                 task.task_type === "standalone"
                                   ? STANDALONE_SUBJECT_LABEL
                                   : (task.subject_id ? subjectNameById.get(task.subject_id) : null) ?? "Unknown"
-                              ).slice(0, 10)} · {task.duration_minutes}m
+                              ).slice(0, 10)} Â· {task.duration_minutes}m
                             </span>
                             <form action={handleDelete}>
                               <input type="hidden" name="task_id" value={task.id} />
@@ -578,7 +578,7 @@ export default async function DashboardPage() {
             }
             action={
               <Link href="/dashboard/subjects" className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
-                All →
+                All â†’
               </Link>
             }
           >
@@ -610,7 +610,7 @@ export default async function DashboardPage() {
                             </Badge>
                           </div>
                           <p className="dashboard-subject-meta">
-                            {subject.completed_tasks}/{subject.total_tasks} • {subject.percent}%
+                            {subject.completed_tasks}/{subject.total_tasks} â€¢ {subject.percent}%
                           </p>
                         </div>
                       </div>

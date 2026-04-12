@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react"
 import { TOAST_DURATION_MS } from "@/lib/constants"
@@ -79,7 +79,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 className="text-white/50 hover:text-white transition-colors text-xs shrink-0"
                 aria-label="Dismiss"
               >
-                ✕
+                âœ•
               </button>
             </div>
           )

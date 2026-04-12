@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import {
   createContext,
@@ -17,7 +17,7 @@ const Topbar = dynamic(
   { ssr: false }
 )
 
-// ─── Context ──────────────────────────────────────────────────
+// â”€â”€â”€ Context â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface SidebarContextValue {
   /** Whether the sidebar is in icon-only (collapsed) mode on desktop */
@@ -41,18 +41,18 @@ export function useSidebar() {
   return useContext(SidebarContext)
 }
 
-// ─── AppShell ─────────────────────────────────────────────────
+// â”€â”€â”€ AppShell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
- * AppShell — the root layout wrapper for all authenticated pages.
+ * AppShell â€” the root layout wrapper for all authenticated pages.
  *
  * Structure:
- *   ├── Ambient mesh background
- *   ├── Mobile overlay (backdrop)
- *   ├── Sidebar (fixed left, collapsible)
- *   └── Shell body
- *       ├── Topbar (sticky top)
- *       └── <main> scrollable content area
+ *   â”œâ”€â”€ Ambient mesh background
+ *   â”œâ”€â”€ Mobile overlay (backdrop)
+ *   â”œâ”€â”€ Sidebar (fixed left, collapsible)
+ *   â””â”€â”€ Shell body
+ *       â”œâ”€â”€ Topbar (sticky top)
+ *       â””â”€â”€ <main> scrollable content area
  *
  * Usage:
  *   <AppShell>
@@ -114,7 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {/* Ambient gradient background */}
           <div className="mesh-bg" aria-hidden="true" />
 
-          {/* Mobile overlay — covers content behind open sidebar */}
+          {/* Mobile overlay â€” covers content behind open sidebar */}
           <div
             className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300 ${
               mobileOpen

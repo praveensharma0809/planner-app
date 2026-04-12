@@ -1,4 +1,4 @@
-type OpsEventStatus = "started" | "success" | "error" | "warning"
+﻿type OpsEventStatus = "started" | "success" | "error" | "warning"
 
 type Primitive = string | number | boolean | null
 

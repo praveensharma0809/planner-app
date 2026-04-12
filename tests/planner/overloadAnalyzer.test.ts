@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+﻿import { describe, it, expect } from "vitest"
 import { checkFeasibility } from "@/lib/planner/engine"
 import type { GlobalConstraints, PlannableUnit } from "@/lib/planner/engine"
 

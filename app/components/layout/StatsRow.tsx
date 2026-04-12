@@ -1,4 +1,4 @@
-export interface StatItem {
+﻿export interface StatItem {
   label: string
   value: string | number
   /** Tailwind color class, e.g. "bg-indigo-400" */
@@ -12,7 +12,7 @@ interface StatsRowProps {
 }
 
 /**
- * StatsRow — a row of compact stat chips shown below the PageHeader.
+ * StatsRow â€” a row of compact stat chips shown below the PageHeader.
  *
  * Usage:
  *   <StatsRow stats={[{ label: "streak", value: "7", dotColor: "bg-orange-400" }]} />

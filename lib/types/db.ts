@@ -1,4 +1,4 @@
-export interface Profile {
+﻿export interface Profile {
   id: string
   full_name: string | null
   phone: string | null

@@ -1,4 +1,4 @@
-"use server"
+﻿"use server"
 
 import { createHash } from "crypto"
 import { revalidatePath } from "next/cache"

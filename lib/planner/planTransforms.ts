@@ -1,4 +1,4 @@
-import type { PlannableUnit, ScheduledSession } from "@/lib/planner/engine"
+﻿import type { PlannableUnit, ScheduledSession } from "@/lib/planner/engine"
 import { inferSessionLengthMinutes } from "@/lib/planner/draft"
 import type { Topic } from "@/lib/types/db"
 

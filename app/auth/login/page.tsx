@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -44,7 +44,7 @@ export default function LoginPage() {
           <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl shadow-indigo-500/20">
             <span className="text-xl font-black text-white">S</span>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight gradient-text">StudyHard</h1>
+          <h1 className="text-3xl font-bold tracking-tight gradient-text">StayPlanned</h1>
           <p className="text-sm text-white/40">Sign in to continue</p>
         </div>
 

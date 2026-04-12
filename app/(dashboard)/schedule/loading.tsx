@@ -1,4 +1,4 @@
-export default function ScheduleLoading() {
+﻿export default function ScheduleLoading() {
   return (
     <div className="page-root animate-pulse flex h-full min-h-0 flex-col overflow-hidden">
       <div className="mb-4 flex items-center justify-between gap-3">

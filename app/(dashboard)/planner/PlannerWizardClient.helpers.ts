@@ -1,4 +1,4 @@
-import { getStructure } from "@/app/actions/planner/setup"
+﻿import { getStructure } from "@/app/actions/planner/setup"
 import {
   inferSessionLengthMinutes,
   type PlannerConstraintValues as ConstraintValues,

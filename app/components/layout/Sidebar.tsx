@@ -1,12 +1,13 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState, type ReactNode } from "react"
 import { createBrowserClient } from "@supabase/ssr"
 import { useSidebar } from "./AppShell"
 
-// ─── SVG icon primitive ───────────────────────────────────────
+// â”€â”€â”€ SVG icon primitive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function Icon({ children }: { children: ReactNode }) {
   return (
@@ -27,7 +28,7 @@ function Icon({ children }: { children: ReactNode }) {
   )
 }
 
-// ─── Icons ────────────────────────────────────────────────────
+// â”€â”€â”€ Icons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const OverviewIcon = () => (
   <Icon>
@@ -94,7 +95,7 @@ const LogOutIcon = () => (
   </Icon>
 )
 
-// ─── Navigation data ──────────────────────────────────────────
+// â”€â”€â”€ Navigation data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type NavItem = {
   href: string
@@ -131,7 +132,7 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ]
 
-// ─── NavItem element ──────────────────────────────────────────
+// â”€â”€â”€ NavItem element â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function NavItemRow({
   item,
@@ -151,7 +152,7 @@ function NavItemRow({
     return (
       <div
         className={`${baseClass} sidebar-nav-item cursor-not-allowed opacity-35`}
-        title={collapsed ? `${item.label} — coming soon` : undefined}
+        title={collapsed ? `${item.label} â€” coming soon` : undefined}
       >
         {item.icon}
         {!collapsed && <span className="truncate">{item.label}</span>}
@@ -164,7 +165,7 @@ function NavItemRow({
         {collapsed && (
           <span className="sidebar-tooltip pointer-events-none">
             {item.label}
-            <span className="ml-1.5 opacity-50 text-[10px]">· soon</span>
+            <span className="ml-1.5 opacity-50 text-[10px]">Â· soon</span>
           </span>
         )}
       </div>
@@ -192,7 +193,7 @@ function NavItemRow({
   )
 }
 
-// ─── Sidebar user footer ──────────────────────────────────────
+// â”€â”€â”€ Sidebar user footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function SidebarFooter({ collapsed }: { collapsed: boolean }) {
   const router = useRouter()
@@ -223,7 +224,7 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
     }
   }
 
-  const initial = email ? email[0].toUpperCase() : "·"
+  const initial = email ? email[0].toUpperCase() : "Â·"
 
   return (
     <div className="sidebar-footer">
@@ -237,7 +238,7 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
           <>
             <div className="flex-1 min-w-0">
               <p className="sidebar-user-email truncate text-[12.5px]" title={email ?? ""}>
-                {email ?? "—"}
+                {email ?? "â€”"}
               </p>
               <p className="sidebar-user-plan text-[11px] mt-0.5">Free plan</p>
             </div>
@@ -273,7 +274,7 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
   )
 }
 
-// ─── Sidebar ──────────────────────────────────────────────────
+// â”€â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function Sidebar() {
   const { collapsed, mobileOpen, toggleCollapse, closeMobile } = useSidebar()
@@ -293,19 +294,19 @@ export function Sidebar() {
         .join(" ")}
       aria-label="Primary navigation"
     >
-      {/* ── Header: logo + collapse toggle ── */}
+      {/* â”€â”€ Header: logo + collapse toggle â”€â”€ */}
       <div className="sidebar-header">
         <Link
           href="/dashboard"
           className="sidebar-logo group"
-          aria-label="StudyHard home"
+          aria-label="StayPlanned home"
           onClick={closeMobile}
         >
-          <div className="sidebar-logo-mark">
-            <span>S</span>
+          <div className="flex-shrink-0 w-[26px] h-[26px] rounded-md overflow-hidden grid place-items-center bg-transparent">
+            <Image src="/logo.png" alt="StayPlanned Logo" width={26} height={26} className="w-full h-full object-cover" />
           </div>
           {!collapsed && (
-            <span className="sidebar-logo-text">StudyHard</span>
+            <span className="sidebar-logo-text">StayPlanned</span>
           )}
         </Link>
 
@@ -320,7 +321,7 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* ── Navigation ── */}
+      {/* â”€â”€ Navigation â”€â”€ */}
       <nav
         className="flex flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3"
         aria-label="App navigation"
@@ -357,7 +358,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* ── Footer: user info + sign out ── */}
+      {/* â”€â”€ Footer: user info + sign out â”€â”€ */}
       <SidebarFooter collapsed={collapsed} />
     </aside>
   )

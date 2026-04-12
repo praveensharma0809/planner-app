@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+﻿import type { ReactNode } from "react"
 
 interface PageHeaderProps {
   title: string
@@ -8,14 +8,14 @@ interface PageHeaderProps {
 }
 
 /**
- * PageHeader — consistent top-of-page heading used on every screen.
+ * PageHeader â€” consistent top-of-page heading used on every screen.
  *
  * Usage:
  *   <PageHeader
  *     eyebrow="Overview"
  *     title="Dashboard"
  *     subtitle="Your study progress at a glance."
- *     actions={<Button>…</Button>}
+ *     actions={<Button>â€¦</Button>}
  *   />
  */
 export function PageHeader({ title, eyebrow, subtitle, actions }: PageHeaderProps) {

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
@@ -458,7 +458,7 @@ export function MonthView({
 
             {selectedTasks.length === 0 ? (
               <div className="text-center py-10">
-                <div className="text-5xl mb-3 opacity-20">☀</div>
+                <div className="text-5xl mb-3 opacity-20">â˜€</div>
                 <p className="text-sm" style={{ color: "var(--sh-text-muted)" }}>
                   No tasks scheduled for this day.
                 </p>
