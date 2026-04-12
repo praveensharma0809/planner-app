@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useMemo, useState } from "react"
 import { usePathname } from "next/navigation"
@@ -17,7 +17,7 @@ import {
   type PlannerWizardProgress,
 } from "@/app/(dashboard)/planner/wizard-state"
 
-// ─── Icons ────────────────────────────────────────────────────
+// â”€â”€â”€ Icons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function MenuIcon() {
   return (
@@ -39,7 +39,7 @@ function MenuIcon() {
   )
 }
 
-// ─── Page title resolver ──────────────────────────────────────
+// â”€â”€â”€ Page title resolver â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const ROUTE_TITLES: Array<{ pattern: RegExp; title: string }> = [
   { pattern: /^\/dashboard$/,               title: "Overview"   },
@@ -54,13 +54,13 @@ const ROUTE_TITLES: Array<{ pattern: RegExp; title: string }> = [
 ]
 
 function resolvePageTitle(pathname: string): string {
-  return ROUTE_TITLES.find(({ pattern }) => pattern.test(pathname))?.title ?? "StudyHard"
+  return ROUTE_TITLES.find(({ pattern }) => pattern.test(pathname))?.title ?? "StayPlanned"
 }
 
-// ─── Topbar ───────────────────────────────────────────────────
+// â”€â”€â”€ Topbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
- * Topbar — sticky horizontal bar rendered at the top of the shell body.
+ * Topbar â€” sticky horizontal bar rendered at the top of the shell body.
  *
  * Contains:
  *   - Mobile hamburger menu button

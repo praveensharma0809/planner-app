@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+﻿import type { ReactNode } from "react"
 
 export type BadgeVariant = "default" | "primary" | "success" | "warning" | "danger" | "accent"
 export type BadgeSize    = "sm" | "md" | "lg"

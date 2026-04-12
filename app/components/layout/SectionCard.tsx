@@ -1,21 +1,21 @@
-import type { ReactNode } from "react"
+﻿import type { ReactNode } from "react"
 
 interface SectionCardProps {
   title?: ReactNode
   action?: ReactNode
   children: ReactNode
   className?: string
-  /** Omit the default body padding — useful when content has its own layout */
+  /** Omit the default body padding â€” useful when content has its own layout */
   noPadding?: boolean
 }
 
 /**
- * SectionCard — the standard named card section used across all pages.
+ * SectionCard â€” the standard named card section used across all pages.
  *
  * Usage:
  *   <SectionCard
  *     title="Today's Tasks"
- *     action={<Link href="…">See all</Link>}
+ *     action={<Link href="â€¦">See all</Link>}
  *   >
  *     content here
  *   </SectionCard>

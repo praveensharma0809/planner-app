@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
@@ -82,7 +82,7 @@ export function PlanHistory({
         </div>
         {showPlannerLinks && (
           <Link href="/planner" className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
-            New Plan →
+            New Plan â†’
           </Link>
         )}
       </div>
@@ -98,7 +98,7 @@ export function PlanHistory({
             <p className="text-sm font-semibold mt-4" style={{ color: "var(--sh-text-primary)" }}>{emptyMessage}</p>
             {showPlannerLinks ? (
               <Link href="/planner" className="inline-block mt-2 text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium">
-                Create your first plan →
+                Create your first plan â†’
               </Link>
             ) : (
               <p className="text-[11px] mt-2" style={{ color: "var(--sh-text-muted)" }}>{emptyHint}</p>

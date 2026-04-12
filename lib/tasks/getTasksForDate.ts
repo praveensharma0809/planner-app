@@ -1,4 +1,4 @@
-type DateLike = Date | string
+﻿type DateLike = Date | string
 
 type TaskWithScheduledDate = {
   scheduled_date: string | null | undefined

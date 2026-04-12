@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+﻿import { describe, it, expect } from "vitest"
 import { generatePlan } from "@/lib/planner/engine"
 import type { GlobalConstraints, PlannableUnit } from "@/lib/planner/engine"
 
@@ -49,7 +49,7 @@ describe("generatePlan", () => {
       offDays: new Set<string>(),
     })
 
-    // Zero capacity → no day slots → 0 sessions → INFEASIBLE
+    // Zero capacity â†’ no day slots â†’ 0 sessions â†’ INFEASIBLE
     expect(result.status).toBe("INFEASIBLE")
     if (result.status === "INFEASIBLE") {
       expect(result.feasibility.globalGap).toBeGreaterThan(0)

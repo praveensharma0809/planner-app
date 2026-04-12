@@ -1,7 +1,7 @@
-export type ProgressVariant = "default" | "success" | "warning" | "danger"
+﻿export type ProgressVariant = "default" | "success" | "warning" | "danger"
 
 interface ProgressProps {
-  value: number // 0–100
+  value: number // 0â€“100
   variant?: ProgressVariant
   height?: number
   className?: string

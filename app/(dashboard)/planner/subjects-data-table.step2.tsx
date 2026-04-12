@@ -1,4 +1,4 @@
-import { Button, Input } from "@/app/components/ui"
+﻿import { Button, Input } from "@/app/components/ui"
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const
 
@@ -232,7 +232,7 @@ export function Step2ConstraintsSection({
                             }}
                             title={[
                               hasCustom ? `${constraintsDraft.custom_day_capacity[isoDate]} min capacity` : "No custom capacity",
-                            ].join(" • ")}
+                            ].join(" â€¢ ")}
                           >
                             {isoDate.slice(-2)}
                           </button>

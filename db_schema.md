@@ -5,7 +5,7 @@ Latest migration: supabase/migrations/0001_production_schema.sql
 
 ## Scope
 
-This document describes the live Supabase schema for StudyHard.
+This document describes the live Supabase schema for StayPlanned.
 
 ## Tables
 

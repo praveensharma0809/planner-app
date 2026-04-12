@@ -1,4 +1,4 @@
-export interface PlannerWizardProgress {
+﻿export interface PlannerWizardProgress {
   phase: number
   maxPhase: number
 }

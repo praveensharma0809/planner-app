@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
 import {
@@ -2680,7 +2680,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                                 }}
                                 title={[
                                   hasCustom ? `${constraintsDraft.custom_day_capacity[isoDate]} min capacity` : "No custom capacity",
-                                ].join(" G�� ")}
+                                ].join(" Gï¿½ï¿½ ")}
                               >
                                 {isoDate.slice(-2)}
                               </button>

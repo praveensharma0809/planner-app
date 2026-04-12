@@ -1,4 +1,4 @@
-import { vi } from "vitest"
+﻿import { vi } from "vitest"
 
 // Centralized Supabase mock so tests can safely import server actions
 export const createServerSupabaseClientMock = vi.fn()

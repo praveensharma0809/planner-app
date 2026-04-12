@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+﻿import { describe, it, expect } from "vitest"
 import { buildDaySlots, schedule } from "@/lib/planner/engine"
 import type { GlobalConstraints, PlannableUnit } from "@/lib/planner/engine"
 
@@ -277,7 +277,7 @@ describe("schedule", () => {
 
   it("interleaves sessions across subjects each day", () => {
     // Two subjects, one topic each, 2 sessions needed per topic.
-    // Daily capacity: 120 min → fits 2 × 60-min sessions.
+    // Daily capacity: 120 min â†’ fits 2 Ã— 60-min sessions.
     // Expect both subjects to appear on the same day (interleaved).
     const subjectA = buildUnit({
       id: "a-topic",
@@ -324,7 +324,7 @@ describe("schedule", () => {
     })
 
     const result = schedule([unit], baseConstraints, new Set<string>())
-    // Orphan dep should be cleaned — unit should still be scheduled
+    // Orphan dep should be cleaned â€” unit should still be scheduled
     expect(result.length).toBe(1)
     expect(result[0].topic_id).toBe("topic-1")
   })
@@ -345,7 +345,7 @@ describe("schedule", () => {
     const unit = buildUnit({
       id: "topic-1",
       estimated_minutes: 300,
-      session_length_minutes: 300, // 5 hours — bigger than any day's 120 min
+      session_length_minutes: 300, // 5 hours â€” bigger than any day's 120 min
       deadline: "2024-01-05",
     })
 
@@ -355,7 +355,7 @@ describe("schedule", () => {
       new Set<string>()
     )
 
-    // Session is too large for any day — should produce no sessions without hanging
+    // Session is too large for any day â€” should produce no sessions without hanging
     expect(result.length).toBe(0)
   })
 
@@ -370,7 +370,7 @@ describe("schedule", () => {
     const unit2 = buildUnit({ id: "dup", estimated_minutes: 120 })
 
     const result = schedule([unit1, unit2], baseConstraints, new Set<string>())
-    // Only the first should be kept (60 min → 1 session)
+    // Only the first should be kept (60 min â†’ 1 session)
     expect(result.length).toBe(1)
   })
 
@@ -378,7 +378,7 @@ describe("schedule", () => {
     // Topic 1: needs 3 sessions (180 min), deadline Jan 3
     // Topic 2: needs 1 session (60 min), deadline Jan 2
     // Daily capacity: 60 min
-    // Main pass: Jan 1 → T1(1/3), Jan 2 → T1(2/3), Jan 3 → T1(3/3)
+    // Main pass: Jan 1 â†’ T1(1/3), Jan 2 â†’ T1(2/3), Jan 3 â†’ T1(3/3)
     // Topic 2 missed its deadline (Jan 2) because Topic 1 was in progress.
     // Overflow should place Topic 2 on Jan 4 (after T1 completes).
     const topic1 = buildUnit({
@@ -415,7 +415,7 @@ describe("schedule", () => {
   })
 
   it("does not overflow a single topic past its deadline", () => {
-    // Single topic that simply can't fit — no sequencing conflict → no overflow
+    // Single topic that simply can't fit â€” no sequencing conflict â†’ no overflow
     const result = schedule(
       [buildUnit({ estimated_minutes: 300, deadline: "2024-01-02" })],
       { ...baseConstraints, weekday_capacity_minutes: 60, weekend_capacity_minutes: 60 },

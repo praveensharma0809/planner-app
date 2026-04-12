@@ -1,4 +1,4 @@
-export default function CalendarLoading() {
+﻿export default function CalendarLoading() {
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto animate-pulse">
       <header className="flex flex-col gap-4">

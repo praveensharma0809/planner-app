@@ -1,4 +1,4 @@
-export default function SettingsLoading() {
+﻿export default function SettingsLoading() {
   return (
     <div className="page-root flex h-full min-h-0 w-full flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-y-auto">

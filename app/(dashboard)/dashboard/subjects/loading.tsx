@@ -1,4 +1,4 @@
-export default function SubjectsLoading() {
+﻿export default function SubjectsLoading() {
   return (
     <div className="page-root max-w-none">
       <div className="mb-6 space-y-2 animate-pulse">

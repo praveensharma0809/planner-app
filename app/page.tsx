@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 export default function Home() {
@@ -23,7 +24,7 @@ export default function Home() {
 
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
-          .select("id")
+          .select("id, onboarding_completed")
           .eq("id", user.id)
           .maybeSingle();
 
@@ -36,6 +37,12 @@ export default function Home() {
         }
 
         if (!profile) {
+          if (!cancelled) router.replace("/onboarding");
+          return;
+        }
+
+        // Show onboarding tutorial if not completed yet
+        if (!profile.onboarding_completed) {
           if (!cancelled) router.replace("/onboarding");
           return;
         }
@@ -59,10 +66,10 @@ export default function Home() {
     <div className="min-h-screen flex items-center justify-center mesh-bg text-white">
       <div className="mesh-bg" />
       <div className="text-center space-y-3 relative z-10">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/25">
-          <span className="text-white font-bold text-xl">S</span>
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto overflow-hidden shadow-lg shadow-indigo-500/25">
+          <Image src="/logo.png" alt="StayPlanned Logo" width={64} height={64} className="object-cover" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight gradient-text">StudyHard</h1>
+        <h1 className="text-2xl font-bold tracking-tight gradient-text">StayPlanned</h1>
         <p className="text-sm text-white/30">{error ?? "Loading..."}</p>
       </div>
     </div>
