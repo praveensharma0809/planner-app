@@ -458,7 +458,7 @@ export function MonthView({
 
             {selectedTasks.length === 0 ? (
               <div className="text-center py-10">
-                <div className="text-5xl mb-3 opacity-20">â˜€</div>
+                <div className="text-5xl mb-3 opacity-20">☀</div>
                 <p className="text-sm" style={{ color: "var(--sh-text-muted)" }}>
                   No tasks scheduled for this day.
                 </p>

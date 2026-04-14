@@ -79,7 +79,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 className="text-white/50 hover:text-white transition-colors text-xs shrink-0"
                 aria-label="Dismiss"
               >
-                âœ•
+                ✕
               </button>
             </div>
           )

@@ -12,7 +12,7 @@ interface StatsRowProps {
 }
 
 /**
- * StatsRow â€” a row of compact stat chips shown below the PageHeader.
+ * StatsRow — a row of compact stat chips shown below the PageHeader.
  *
  * Usage:
  *   <StatsRow stats={[{ label: "streak", value: "7", dotColor: "bg-orange-400" }]} />

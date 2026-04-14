@@ -376,7 +376,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
               disabled={busy}
               className="ui-btn ui-btn-primary ui-btn-md w-full justify-center disabled:opacity-50"
             >
-              {loading ? "Savingâ€¦" : "Create Subject"}
+              {loading ? "Saving…" : "Create Subject"}
             </button>
           ) : (
             <div className="flex items-center gap-2">

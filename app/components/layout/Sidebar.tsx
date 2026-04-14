@@ -7,7 +7,7 @@ import { useEffect, useState, type ReactNode } from "react"
 import { createBrowserClient } from "@supabase/ssr"
 import { useSidebar } from "./AppShell"
 
-// â”€â”€â”€ SVG icon primitive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── SVG icon primitive ───────────────────────────────────────
 
 function Icon({ children }: { children: ReactNode }) {
   return (
@@ -28,7 +28,7 @@ function Icon({ children }: { children: ReactNode }) {
   )
 }
 
-// â”€â”€â”€ Icons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Icons ────────────────────────────────────────────────────
 
 const OverviewIcon = () => (
   <Icon>
@@ -95,7 +95,7 @@ const LogOutIcon = () => (
   </Icon>
 )
 
-// â”€â”€â”€ Navigation data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Navigation data ──────────────────────────────────────────
 
 type NavItem = {
   href: string
@@ -132,7 +132,7 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ]
 
-// â”€â”€â”€ NavItem element â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── NavItem element ──────────────────────────────────────────
 
 function NavItemRow({
   item,
@@ -152,7 +152,7 @@ function NavItemRow({
     return (
       <div
         className={`${baseClass} sidebar-nav-item cursor-not-allowed opacity-35`}
-        title={collapsed ? `${item.label} â€” coming soon` : undefined}
+        title={collapsed ? `${item.label} — coming soon` : undefined}
       >
         {item.icon}
         {!collapsed && <span className="truncate">{item.label}</span>}
@@ -165,7 +165,7 @@ function NavItemRow({
         {collapsed && (
           <span className="sidebar-tooltip pointer-events-none">
             {item.label}
-            <span className="ml-1.5 opacity-50 text-[10px]">Â· soon</span>
+            <span className="ml-1.5 opacity-50 text-[10px]">· soon</span>
           </span>
         )}
       </div>
@@ -193,7 +193,7 @@ function NavItemRow({
   )
 }
 
-// â”€â”€â”€ Sidebar user footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Sidebar user footer ──────────────────────────────────────
 
 function SidebarFooter({ collapsed }: { collapsed: boolean }) {
   const router = useRouter()
@@ -224,7 +224,7 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
     }
   }
 
-  const initial = email ? email[0].toUpperCase() : "Â·"
+  const initial = email ? email[0].toUpperCase() : "·"
 
   return (
     <div className="sidebar-footer">
@@ -238,7 +238,7 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
           <>
             <div className="flex-1 min-w-0">
               <p className="sidebar-user-email truncate text-[12.5px]" title={email ?? ""}>
-                {email ?? "â€”"}
+                {email ?? "—"}
               </p>
               <p className="sidebar-user-plan text-[11px] mt-0.5">Free plan</p>
             </div>
@@ -274,7 +274,7 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
   )
 }
 
-// â”€â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Sidebar ──────────────────────────────────────────────────
 
 export function Sidebar() {
   const { collapsed, mobileOpen, toggleCollapse, closeMobile } = useSidebar()
@@ -294,7 +294,7 @@ export function Sidebar() {
         .join(" ")}
       aria-label="Primary navigation"
     >
-      {/* â”€â”€ Header: logo + collapse toggle â”€â”€ */}
+      {/* ── Header: logo + collapse toggle ── */}
       <div className="sidebar-header">
         <Link
           href="/dashboard"
@@ -321,7 +321,7 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* â”€â”€ Navigation â”€â”€ */}
+      {/* ── Navigation ── */}
       <nav
         className="flex flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3"
         aria-label="App navigation"
@@ -358,7 +358,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* â”€â”€ Footer: user info + sign out â”€â”€ */}
+      {/* ── Footer: user info + sign out ── */}
       <SidebarFooter collapsed={collapsed} />
     </aside>
   )

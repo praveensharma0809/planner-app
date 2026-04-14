@@ -49,7 +49,7 @@ describe("generatePlan", () => {
       offDays: new Set<string>(),
     })
 
-    // Zero capacity â†’ no day slots â†’ 0 sessions â†’ INFEASIBLE
+    // Zero capacity → no day slots → 0 sessions → INFEASIBLE
     expect(result.status).toBe("INFEASIBLE")
     if (result.status === "INFEASIBLE") {
       expect(result.feasibility.globalGap).toBeGreaterThan(0)

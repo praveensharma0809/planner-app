@@ -8,14 +8,14 @@ interface PageHeaderProps {
 }
 
 /**
- * PageHeader â€” consistent top-of-page heading used on every screen.
+ * PageHeader — consistent top-of-page heading used on every screen.
  *
  * Usage:
  *   <PageHeader
  *     eyebrow="Overview"
  *     title="Dashboard"
  *     subtitle="Your study progress at a glance."
- *     actions={<Button>â€¦</Button>}
+ *     actions={<Button>…</Button>}
  *   />
  */
 export function PageHeader({ title, eyebrow, subtitle, actions }: PageHeaderProps) {

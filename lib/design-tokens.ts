@@ -1,12 +1,12 @@
 ﻿/**
- * StayPlanned â€” Design Tokens
+ * StayPlanned — Design Tokens
  *
  * Single source of truth for colors, spacing, radii, and shadow scales.
  * CSS variable counterparts are declared in app/globals.css under the
  * `--sh-*` and `--sidebar-*` namespaces.
  */
 
-// â”€â”€â”€ Colors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Colors ───────────────────────────────────────────────────
 
 export const colors = {
   bg: {
@@ -61,7 +61,7 @@ export const colors = {
   },
 } as const
 
-// â”€â”€â”€ Spacing (4 px grid) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Spacing (4 px grid) ──────────────────────────────────────
 
 export const spacing = {
   '0':  '0px',
@@ -79,7 +79,7 @@ export const spacing = {
   '24': '96px',
 } as const
 
-// â”€â”€â”€ Border Radius â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Border Radius ────────────────────────────────────────────
 
 export const radius = {
   sm:   '6px',
@@ -90,7 +90,7 @@ export const radius = {
   full: '9999px',
 } as const
 
-// â”€â”€â”€ Shadows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Shadows ──────────────────────────────────────────────────
 
 export const shadow = {
   sm:      '0 1px 3px rgba(0, 0, 0, 0.30)',
@@ -103,7 +103,7 @@ export const shadow = {
   danger:  '0 4px 12px rgba(239, 68, 68, 0.25)',
 } as const
 
-// â”€â”€â”€ Composite export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Composite export ─────────────────────────────────────────
 
 const tokens = { colors, spacing, radius, shadow }
 export default tokens

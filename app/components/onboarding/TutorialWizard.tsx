@@ -7,9 +7,9 @@ import { completeOnboarding } from "@/app/actions/onboarding/completeOnboarding"
 import "./onboarding.css";
 
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   Step data â€” 6 steps as agreed
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─────────────────────────────────────────────────────────
+   Step data — 6 steps as agreed
+   ───────────────────────────────────────────────────────── */
 
 interface CalloutChip {
   emoji: string;
@@ -49,17 +49,17 @@ const STEPS: TutorialStep[] = [
     description:
       "Everything starts here. Add your Subjects, break them into Chapters, and add Tasks inside each chapter. This three-level structure is the foundation of your entire study plan.",
     bullets: [
-      "Subject â†’ The broad area (e.g. Maths, Physics)",
-      "Chapter â†’ A specific topic inside a subject (e.g. Calculus)",
-      "Task â†’ An individual study session (e.g. Lecture-1, 150 min)",
+      "Subject → The broad area (e.g. Maths, Physics)",
+      "Chapter → A specific topic inside a subject (e.g. Calculus)",
+      "Task → An individual study session (e.g. Lecture-1, 150 min)",
     ],
     callouts: [
-      { emoji: "ðŸ“š", text: 'Subject = "Maths"' },
-      { emoji: "ðŸ“–", text: 'Chapter = "Calculus"' },
-      { emoji: "âœ…", text: 'Task = "Lecture-1 (150 min)"' },
+      { emoji: "📚", text: 'Subject = "Maths"' },
+      { emoji: "📖", text: 'Chapter = "Calculus"' },
+      { emoji: "✅", text: 'Task = "Lecture-1 (150 min)"' },
     ],
     image: "/onboarding/subjects.png",
-    imageAlt: "Subjects page â€” three-pane structure",
+    imageAlt: "Subjects page — three-pane structure",
   },
   {
     id: 3,
@@ -68,17 +68,17 @@ const STEPS: TutorialStep[] = [
     description:
       "Once your subjects are set up, open the Planner. It works in three phases to build your optimal schedule automatically.",
     bullets: [
-      "Phase 1 (Intake) â€” Review your subjects and chapters. Set chapter dependencies like 'Basics before Trees'.",
-      "Phase 2 (Preview) â€” The AI generates a full schedule. Pin sessions, adjust, or re-optimize.",
-      "Phase 3 (Confirm) â€” Commit the plan. Sessions become real tasks on your calendar.",
+      "Phase 1 (Intake) — Review your subjects and chapters. Set chapter dependencies like 'Basics before Trees'.",
+      "Phase 2 (Preview) — The AI generates a full schedule. Pin sessions, adjust, or re-optimize.",
+      "Phase 3 (Confirm) — Commit the plan. Sessions become real tasks on your calendar.",
     ],
     callouts: [
-      { emoji: "âš™ï¸", text: "Phase 1: Configure" },
-      { emoji: "ðŸ‘ï¸", text: "Phase 2: AI Schedule" },
-      { emoji: "âœ…", text: "Phase 3: Commit" },
+      { emoji: "⚙️", text: "Phase 1: Configure" },
+      { emoji: "👁️", text: "Phase 2: AI Schedule" },
+      { emoji: "✅", text: "Phase 3: Commit" },
     ],
     image: "/onboarding/planner.png",
-    imageAlt: "Planner page â€” Phase 1 Intake view",
+    imageAlt: "Planner page — Phase 1 Intake view",
   },
   {
     id: 4,
@@ -87,18 +87,18 @@ const STEPS: TutorialStep[] = [
     description:
       "The Dashboard is your daily command center. Every morning it shows you exactly what needs attention.",
     bullets: [
-      "Today's Progress â€” see your completion percentage and time remaining",
-      "Today's Tasks â€” check off tasks as you study. Quick-add new ones anytime.",
-      "Alerts â€” overdue work, deadline risks, streak warnings",
-      "Subjects â€” a health snapshot showing each subject's status",
+      "Today's Progress — see your completion percentage and time remaining",
+      "Today's Tasks — check off tasks as you study. Quick-add new ones anytime.",
+      "Alerts — overdue work, deadline risks, streak warnings",
+      "Subjects — a health snapshot showing each subject's status",
     ],
     callouts: [
-      { emoji: "ðŸŽ¯", text: "Quick-add tasks anytime" },
-      { emoji: "ðŸ”¥", text: "Streak tracker" },
-      { emoji: "âš ï¸", text: "Smart alerts" },
+      { emoji: "🎯", text: "Quick-add tasks anytime" },
+      { emoji: "🔥", text: "Streak tracker" },
+      { emoji: "⚠️", text: "Smart alerts" },
     ],
     image: "/onboarding/dashboard.png",
-    imageAlt: "Dashboard â€” daily command center",
+    imageAlt: "Dashboard — daily command center",
   },
   {
     id: 5,
@@ -107,18 +107,18 @@ const STEPS: TutorialStep[] = [
     description:
       "See your entire study plan at a glance. The Schedule page shows your weekly view, and the Calendar gives you a broader monthly perspective.",
     bullets: [
-      "Weekly view â€” see all sessions day by day, edit or delete inline",
-      "Filter by subject â€” focus on what matters with one-tap chips",
-      "Add Events â€” add ad-hoc study sessions or personal events",
-      "Monthly view â€” identify overloaded days and plan ahead",
+      "Weekly view — see all sessions day by day, edit or delete inline",
+      "Filter by subject — focus on what matters with one-tap chips",
+      "Add Events — add ad-hoc study sessions or personal events",
+      "Monthly view — identify overloaded days and plan ahead",
     ],
     callouts: [
-      { emoji: "ðŸ“…", text: "Weekly schedule" },
-      { emoji: "ðŸ—“ï¸", text: "Monthly calendar" },
-      { emoji: "âž•", text: "Add events manually" },
+      { emoji: "📅", text: "Weekly schedule" },
+      { emoji: "🗓️", text: "Monthly calendar" },
+      { emoji: "➕", text: "Add events manually" },
     ],
     image: "/onboarding/schedule.png",
-    imageAlt: "Schedule â€” weekly calendar view",
+    imageAlt: "Schedule — weekly calendar view",
   },
   {
     id: 6,
@@ -138,9 +138,9 @@ const STEPS: TutorialStep[] = [
 
 const TOTAL_STEPS = STEPS.length;
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ─────────────────────────────────────────────────────────
    Component
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ───────────────────────────────────────────────────────── */
 
 export default function TutorialWizard() {
   const router = useRouter();
@@ -153,7 +153,7 @@ export default function TutorialWizard() {
   const isFirst = currentStep === 0;
   const isLast = currentStep === TOTAL_STEPS - 1;
 
-  /* â”€â”€ Transition helpers â”€â”€ */
+  /* ── Transition helpers ── */
   const transitionTo = useCallback(
     (nextIndex: number, dir: "forward" | "backward") => {
       if (isAnimating) return;
@@ -190,13 +190,13 @@ export default function TutorialWizard() {
     [currentStep, transitionTo]
   );
 
-  /* â”€â”€ Completion handlers â”€â”€ */
+  /* ── Completion handlers ── */
   const markComplete = useCallback(async () => {
     setIsSaving(true);
     try {
       await completeOnboarding();
     } catch {
-      // Non-critical â€” don't block navigation
+      // Non-critical — don't block navigation
     } finally {
       setIsSaving(false);
     }
@@ -212,7 +212,7 @@ export default function TutorialWizard() {
     router.push("/dashboard/subjects");
   }, [markComplete, router]);
 
-  /* â”€â”€ Keyboard nav â”€â”€ */
+  /* ── Keyboard nav ── */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight" || e.key === "Enter") {
@@ -226,7 +226,7 @@ export default function TutorialWizard() {
     return () => window.removeEventListener("keydown", handler);
   }, [handleNext, handleBack, handleSkip, isLast]);
 
-  /* â”€â”€ Animation class helper â”€â”€ */
+  /* ── Animation class helper ── */
   const contentAnimClass = isAnimating
     ? direction === "forward"
       ? "onb-exit-left"
@@ -241,7 +241,7 @@ export default function TutorialWizard() {
 
   return (
     <div className="onb-root">
-      {/* â”€â”€ Left Pane â”€â”€ */}
+      {/* ── Left Pane ── */}
       <div className="onb-left">
         {/* Progress dots */}
         <div className="onb-progress">
@@ -280,7 +280,7 @@ export default function TutorialWizard() {
               {step.bullets.map((bullet, i) => (
                 <li key={i} className="onb-bullet">
                   <span className="onb-bullet-icon">
-                    {isLast ? `${i + 1}` : "â†’"}
+                    {isLast ? `${i + 1}` : "→"}
                   </span>
                   <span>{bullet}</span>
                 </li>
@@ -308,7 +308,7 @@ export default function TutorialWizard() {
             className="onb-skip-btn"
             disabled={isSaving}
           >
-            {isSaving ? "Savingâ€¦" : "Skip tutorial"}
+            {isSaving ? "Saving…" : "Skip tutorial"}
           </button>
 
           <div className="onb-nav-btns">
@@ -329,7 +329,7 @@ export default function TutorialWizard() {
                 className="onb-finish-btn"
                 disabled={isSaving}
               >
-                {isSaving ? "Savingâ€¦" : "Go to Subjects"}
+                {isSaving ? "Saving…" : "Go to Subjects"}
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
@@ -346,7 +346,7 @@ export default function TutorialWizard() {
         </div>
       </div>
 
-      {/* â”€â”€ Right Pane â”€â”€ */}
+      {/* ── Right Pane ── */}
       <div className="onb-right">
         {/* Ambient glow */}
         <div className="onb-glow onb-glow-1" />
@@ -381,7 +381,7 @@ export default function TutorialWizard() {
                   <circle cx="12" cy="12" r="10" strokeWidth="1.5" />
                 </svg>
               </div>
-              <p className="onb-celebration-text">Ready to StayPlanned ðŸŽ¯</p>
+              <p className="onb-celebration-text">Ready to StayPlanned 🎯</p>
             </div>
           ) : (
             /* Welcome visual for first step */
@@ -397,19 +397,19 @@ export default function TutorialWizard() {
               </p>
               <div className="onb-welcome-features">
                 <div className="onb-welcome-feature">
-                  <div className="onb-welcome-feature-icon">ðŸ“š</div>
+                  <div className="onb-welcome-feature-icon">📚</div>
                   <span>Subjects & Tasks</span>
                 </div>
                 <div className="onb-welcome-feature">
-                  <div className="onb-welcome-feature-icon">ðŸ¤–</div>
+                  <div className="onb-welcome-feature-icon">🤖</div>
                   <span>AI Scheduling</span>
                 </div>
                 <div className="onb-welcome-feature">
-                  <div className="onb-welcome-feature-icon">ðŸ“Š</div>
+                  <div className="onb-welcome-feature-icon">📊</div>
                   <span>Progress Tracking</span>
                 </div>
                 <div className="onb-welcome-feature">
-                  <div className="onb-welcome-feature-icon">ðŸ”¥</div>
+                  <div className="onb-welcome-feature-icon">🔥</div>
                   <span>Daily Streaks</span>
                 </div>
               </div>

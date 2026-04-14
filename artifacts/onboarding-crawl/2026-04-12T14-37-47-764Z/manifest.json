@@ -1,0 +1,71 @@
+{
+  "baseUrl": "http://localhost:3000",
+  "runStamp": "2026-04-12T14-37-47-764Z",
+  "screenshotDir": "C:\\Users\\Lenono\\Desktop\\planner-app\\artifacts\\onboarding-crawl\\2026-04-12T14-37-47-764Z",
+  "totalScreenshots": 9,
+  "captures": [
+    {
+      "fileName": "01-login-page.png",
+      "action": "Opened /auth/login",
+      "note": "Login page initial state",
+      "url": "http://localhost:3000/auth/login",
+      "capturedAt": "2026-04-12T14:37:49.343Z"
+    },
+    {
+      "fileName": "02-login-filled.png",
+      "action": "Filled credentials",
+      "note": "Credentials entered before sign in",
+      "url": "http://localhost:3000/auth/login",
+      "capturedAt": "2026-04-12T14:37:49.464Z"
+    },
+    {
+      "fileName": "03-onboarding-step-1.png",
+      "action": "Opened /onboarding",
+      "note": "Onboarding step 1 initial view",
+      "url": "http://localhost:3000/onboarding",
+      "capturedAt": "2026-04-12T14:37:51.651Z"
+    },
+    {
+      "fileName": "04-onboarding-step-2.png",
+      "action": "Clicked Next",
+      "note": "Reached onboarding step 2 of 6",
+      "url": "http://localhost:3000/onboarding",
+      "capturedAt": "2026-04-12T14:37:52.148Z"
+    },
+    {
+      "fileName": "05-onboarding-step-3.png",
+      "action": "Clicked Next",
+      "note": "Reached onboarding step 3 of 6",
+      "url": "http://localhost:3000/onboarding",
+      "capturedAt": "2026-04-12T14:37:52.611Z"
+    },
+    {
+      "fileName": "06-onboarding-step-4.png",
+      "action": "Clicked Next",
+      "note": "Reached onboarding step 4 of 6",
+      "url": "http://localhost:3000/onboarding",
+      "capturedAt": "2026-04-12T14:37:52.993Z"
+    },
+    {
+      "fileName": "07-onboarding-step-5.png",
+      "action": "Clicked Next",
+      "note": "Reached onboarding step 5 of 6",
+      "url": "http://localhost:3000/onboarding",
+      "capturedAt": "2026-04-12T14:37:53.433Z"
+    },
+    {
+      "fileName": "08-onboarding-step-6.png",
+      "action": "Clicked Next",
+      "note": "Reached onboarding step 6 of 6",
+      "url": "http://localhost:3000/onboarding",
+      "capturedAt": "2026-04-12T14:37:53.889Z"
+    },
+    {
+      "fileName": "09-onboarding-step-5-after-back.png",
+      "action": "Clicked Back",
+      "note": "Returned to step 5 using Back button",
+      "url": "http://localhost:3000/onboarding",
+      "capturedAt": "2026-04-12T14:37:54.354Z"
+    }
+  ]
+}

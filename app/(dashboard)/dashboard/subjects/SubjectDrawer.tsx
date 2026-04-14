@@ -220,7 +220,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
             disabled={busy}
             className="ui-btn ui-btn-primary ui-btn-md flex-1 justify-center disabled:opacity-50"
           >
-            {loading ? "Savingâ€¦" : mode === "create" ? "Create Subject" : "Save Changes"}
+            {loading ? "Saving…" : mode === "create" ? "Create Subject" : "Save Changes"}
           </button>
 
           {mode === "edit" && (

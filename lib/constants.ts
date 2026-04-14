@@ -1,4 +1,4 @@
-﻿// â”€â”€ Shared application constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+﻿// Shared application constants
 
 export const APP_NAME = "StayPlanned"
 

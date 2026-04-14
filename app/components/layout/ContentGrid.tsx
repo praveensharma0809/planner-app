@@ -15,12 +15,12 @@ const layoutMap: Record<GridLayout, string> = {
 }
 
 /**
- * ContentGrid â€” a responsive page-level grid wrapper.
+ * ContentGrid — a responsive page-level grid wrapper.
  *
  * Layouts:
- *   "2col"       â€” 2 equal columns
- *   "3col"       â€” 3 equal columns
- *   "main-aside" â€” 2/3 + 1/3 at xl, stacked below
+ *   "2col"       — 2 equal columns
+ *   "3col"       — 3 equal columns
+ *   "main-aside" — 2/3 + 1/3 at xl, stacked below
  *
  * Usage:
  *   <ContentGrid layout="main-aside">

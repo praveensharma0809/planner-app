@@ -17,7 +17,7 @@ import {
   type PlannerWizardProgress,
 } from "@/app/(dashboard)/planner/wizard-state"
 
-// â”€â”€â”€ Icons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Icons ────────────────────────────────────────────────────
 
 function MenuIcon() {
   return (
@@ -39,7 +39,7 @@ function MenuIcon() {
   )
 }
 
-// â”€â”€â”€ Page title resolver â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Page title resolver ──────────────────────────────────────
 
 const ROUTE_TITLES: Array<{ pattern: RegExp; title: string }> = [
   { pattern: /^\/dashboard$/,               title: "Overview"   },
@@ -57,10 +57,10 @@ function resolvePageTitle(pathname: string): string {
   return ROUTE_TITLES.find(({ pattern }) => pattern.test(pathname))?.title ?? "StayPlanned"
 }
 
-// â”€â”€â”€ Topbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Topbar ───────────────────────────────────────────────────
 
 /**
- * Topbar â€” sticky horizontal bar rendered at the top of the shell body.
+ * Topbar — sticky horizontal bar rendered at the top of the shell body.
  *
  * Contains:
  *   - Mobile hamburger menu button

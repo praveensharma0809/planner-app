@@ -232,7 +232,7 @@ export function Step2ConstraintsSection({
                             }}
                             title={[
                               hasCustom ? `${constraintsDraft.custom_day_capacity[isoDate]} min capacity` : "No custom capacity",
-                            ].join(" â€¢ ")}
+                            ].join(" • ")}
                           >
                             {isoDate.slice(-2)}
                           </button>

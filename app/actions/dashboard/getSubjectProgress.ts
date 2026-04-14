@@ -9,7 +9,7 @@ export interface SubjectProgress {
   total_tasks: number
   completed_tasks: number
   earliest_deadline: string | null
-  /** 0â€“100 */
+  /** 0–100 */
   percent: number
   /** days until earliest deadline (negative = overdue), null if no deadline */
   daysLeft: number | null
