@@ -47,3 +47,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Instagram marketing assets (never push)
+Instagram/
+
+# Local Remotion scaffolds
+my-video/
+test-help-dir/
+
+# Local AI/tooling workspaces
+.claude/
+
+# Local analysis outputs
+report.md
+

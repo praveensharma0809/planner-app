@@ -26,6 +26,8 @@ import { deleteSubject } from "@/app/actions/subjects/deleteSubject"
 import { toggleArchiveSubject } from "@/app/actions/subjects/toggleArchiveSubject"
 import { useSidebar } from "@/app/components/layout/AppShell"
 import { PageHeader } from "@/app/components/layout/PageHeader"
+import { FlowTutorialButton } from "@/app/components/onboarding/FlowTutorialButton"
+import { SUBJECTS_FLOW_SLIDES } from "@/app/components/onboarding/flowSlides"
 import { useToast } from "@/app/components/Toast"
 import { Button, Input, Modal } from "@/app/components/ui"
 import { SubjectDrawer } from "./SubjectDrawer"
@@ -925,7 +927,16 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
   return (
     <div className="page-root fade-in flex h-full min-h-0 w-full max-w-none flex-col overflow-hidden" style={{ paddingTop: 12, paddingBottom: 16 }}>
-      <PageHeader title="Subjects" />
+      <PageHeader
+        title="Subjects"
+        actions={(
+          <FlowTutorialButton
+            title="Subjects Tutorial"
+            flowLabel="Subjects Flow"
+            slides={SUBJECTS_FLOW_SLIDES}
+          />
+        )}
+      />
 
       <div
         className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border p-3 sm:p-4"

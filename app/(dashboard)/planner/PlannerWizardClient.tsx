@@ -733,18 +733,20 @@ export default function PlannerWizardClient({
               </div>
             )}
 
-            {phase === 2 && phaseTwoHeaderChips.length > 0 && (
-              <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5">
-                {phaseTwoHeaderChips.map((chip) => (
-                  <span
-                    key={chip}
-                    className="text-[11px] px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/[0.08] text-white/60"
-                  >
-                    {chip}
-                  </span>
-                ))}
-              </div>
-            )}
+            <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5">
+              {phase === 2 && phaseTwoHeaderChips.length > 0 && (
+                <>
+                  {phaseTwoHeaderChips.map((chip) => (
+                    <span
+                      key={chip}
+                      className="text-[11px] px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/[0.08] text-white/60"
+                    >
+                      {chip}
+                    </span>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
         </div>
 

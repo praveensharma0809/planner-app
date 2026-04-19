@@ -1,5 +1,5 @@
 ﻿/**
- * StayPlanned — Design Tokens
+ * PrepVeda — Design Tokens
  *
  * Single source of truth for colors, spacing, radii, and shadow scales.
  * CSS variable counterparts are declared in app/globals.css under the
@@ -107,3 +107,4 @@ export const shadow = {
 
 const tokens = { colors, spacing, radius, shadow }
 export default tokens
+

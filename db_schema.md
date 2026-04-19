@@ -5,7 +5,7 @@ Latest migration: supabase/migrations/0001_production_schema.sql
 
 ## Scope
 
-This document describes the live Supabase schema for StayPlanned.
+This document describes the live Supabase schema for PrepVeda.
 
 ## Tables
 
@@ -258,3 +258,4 @@ Policy model:
 - profiles ownership: auth.uid() = id
 - all user-owned planner tables: auth.uid() = user_id
 - ops_events insert allows null user_id or matching auth.uid()
+

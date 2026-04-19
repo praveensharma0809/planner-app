@@ -9,6 +9,8 @@ import { setTaskCompletion } from "@/app/actions/plan/setTaskCompletion"
 import { rescheduleTask } from "@/app/actions/plan/rescheduleTask"
 import { deleteScheduleTask } from "@/app/actions/schedule/deleteScheduleTask"
 import { useToast } from "@/app/components/Toast"
+import { FlowTutorialButton } from "@/app/components/onboarding/FlowTutorialButton"
+import { SCHEDULE_CALENDAR_FLOW_SLIDES } from "@/app/components/onboarding/flowSlides"
 import { Badge, Modal } from "@/app/components/ui"
 import { PageHeader } from "@/app/components/layout/PageHeader"
 import { AddTaskButton } from "@/app/components/tasks/AddTaskButton"
@@ -241,36 +243,44 @@ export function MonthView({
         <PageHeader
           title="Calendar"
           actions={
-            <div
-              className="flex items-center gap-1 rounded-xl px-3 py-1.5"
-              style={{ background: "var(--sh-card)", border: "1px solid var(--sh-border)" }}
-            >
-              <Link
-                href={`/dashboard/calendar?month=${prevMonth}`}
-                className="p-1.5 rounded-lg transition-colors"
-                style={{ color: "var(--sh-text-muted)" }}
-                aria-label="Previous month"
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <FlowTutorialButton
+                title="Schedule & Calendar Tutorial"
+                flowLabel="Schedule & Calendar Flow"
+                slides={SCHEDULE_CALENDAR_FLOW_SLIDES}
+              />
+
+              <div
+                className="flex items-center gap-1 rounded-xl px-3 py-1.5"
+                style={{ background: "var(--sh-card)", border: "1px solid var(--sh-border)" }}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <polyline points="15 18 9 12 15 6" />
-                </svg>
-              </Link>
-              <span
-                className="text-sm font-semibold min-w-[148px] text-center px-1"
-                style={{ color: "var(--sh-text-primary)" }}
-              >
-                {monthLabel}
-              </span>
-              <Link
-                href={`/dashboard/calendar?month=${nextMonth}`}
-                className="p-1.5 rounded-lg transition-colors"
-                style={{ color: "var(--sh-text-muted)" }}
-                aria-label="Next month"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </Link>
+                <Link
+                  href={`/dashboard/calendar?month=${prevMonth}`}
+                  className="p-1.5 rounded-lg transition-colors"
+                  style={{ color: "var(--sh-text-muted)" }}
+                  aria-label="Previous month"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                </Link>
+                <span
+                  className="text-sm font-semibold min-w-[148px] text-center px-1"
+                  style={{ color: "var(--sh-text-primary)" }}
+                >
+                  {monthLabel}
+                </span>
+                <Link
+                  href={`/dashboard/calendar?month=${nextMonth}`}
+                  className="p-1.5 rounded-lg transition-colors"
+                  style={{ color: "var(--sh-text-muted)" }}
+                  aria-label="Next month"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </Link>
+              </div>
             </div>
           }
         />

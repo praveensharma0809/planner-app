@@ -16,6 +16,11 @@ import {
   saveWizardProgress,
   type PlannerWizardProgress,
 } from "@/app/(dashboard)/planner/wizard-state"
+import { FlowTutorialButton } from "@/app/components/onboarding/FlowTutorialButton"
+import {
+  PLANNER_FLOW_SLIDES,
+  SCHEDULE_CALENDAR_FLOW_SLIDES,
+} from "@/app/components/onboarding/flowSlides"
 
 // ─── Icons ────────────────────────────────────────────────────
 
@@ -54,7 +59,7 @@ const ROUTE_TITLES: Array<{ pattern: RegExp; title: string }> = [
 ]
 
 function resolvePageTitle(pathname: string): string {
-  return ROUTE_TITLES.find(({ pattern }) => pattern.test(pathname))?.title ?? "StayPlanned"
+  return ROUTE_TITLES.find(({ pattern }) => pattern.test(pathname))?.title ?? "PrepVeda"
 }
 
 // ─── Topbar ───────────────────────────────────────────────────
@@ -71,6 +76,8 @@ export function Topbar() {
   const { state: scheduleTopbar } = useScheduleTopbar()
   const pathname = usePathname()
   const pageTitle = resolvePageTitle(pathname)
+  const hideTopbarOnRoute =
+    pathname.startsWith("/dashboard/calendar") || pathname.startsWith("/dashboard/subjects")
   const isPlannerRoute = pathname.startsWith("/planner")
   const isScheduleRoute = pathname.startsWith("/schedule")
   const showScheduleControls = isScheduleRoute && scheduleTopbar.enabled
@@ -132,6 +139,10 @@ export function Topbar() {
     window.dispatchEvent(new CustomEvent(PLANNER_WIZARD_RESET_EVENT))
   }
 
+  if (hideTopbarOnRoute) {
+    return null
+  }
+
   if (showScheduleControls && !isPlannerRoute) {
     return (
       <header className="topbar-root topbar-root-schedule" role="banner">
@@ -150,6 +161,16 @@ export function Topbar() {
             <h1 className="topbar-page-title schedule-topbar-title" title={scheduleTopbar.weekRangeTitle}>
               {scheduleTopbar.weekRangeTitle}
             </h1>
+          </div>
+
+          <div className="flex items-center justify-end">
+            <FlowTutorialButton
+              title="Schedule & Calendar Tutorial"
+              flowLabel="Schedule & Calendar Flow"
+              slides={SCHEDULE_CALENDAR_FLOW_SLIDES}
+              buttonVariant="ghost"
+              buttonSize="sm"
+            />
           </div>
 
         </div>
@@ -207,6 +228,14 @@ export function Topbar() {
           >
             Reset
           </button>
+
+          <FlowTutorialButton
+            title="Planner Tutorial"
+            flowLabel="Planner Flow"
+            slides={PLANNER_FLOW_SLIDES}
+            buttonVariant="ghost"
+            buttonSize="sm"
+          />
         </>
       )}
 
@@ -296,3 +325,4 @@ function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
     </div>
   )
 }
+

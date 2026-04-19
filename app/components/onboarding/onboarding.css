@@ -1,6 +1,8 @@
 ﻿
 /* ── Root layout ─────────────────────────────────────────── */
 .onb-root {
+  --onb-left-pane-width: 35%;
+  --onb-right-pane-width: 65%;
   display: flex;
   width: 100vw;
   height: 100dvh;
@@ -12,7 +14,7 @@
 
 /* ── Left pane ───────────────────────────────────────────── */
 .onb-left {
-  width: 50%;
+  width: var(--onb-left-pane-width);
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -29,7 +31,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 480px;
+  max-width: 440px;
 }
 
 .onb-step-label {
@@ -76,7 +78,7 @@
   flex-direction: column;
   justify-content: center;
   gap: 20px;
-  max-width: 480px;
+  max-width: 440px;
   padding: 32px 0;
 }
 
@@ -185,7 +187,7 @@
   justify-content: space-between;
   padding-top: 24px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  max-width: 480px;
+  max-width: 440px;
 }
 
 [data-theme="light"] .onb-nav {
@@ -302,7 +304,7 @@
 
 /* ── Right pane ──────────────────────────────────────────── */
 .onb-right {
-  width: 50%;
+  width: var(--onb-right-pane-width);
   height: 100%;
   display: flex;
   align-items: center;
@@ -359,10 +361,20 @@
   padding: 40px;
 }
 
+.onb-right-flow {
+  align-items: stretch;
+}
+
+.onb-visual-flow {
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 38px 34px 18px;
+}
+
 /* ── Screenshot frame ────────────────────────────────────── */
 .onb-screenshot-frame {
   width: 100%;
-  max-width: 720px;
+  max-width: 900px;
   border-radius: 14px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -371,6 +383,10 @@
     0 20px 60px rgba(0, 0, 0, 0.50),
     0 0 0 1px rgba(255, 255, 255, 0.04),
     0 0 80px -20px var(--sh-primary-glow);
+}
+
+.onb-screenshot-frame-hero {
+  max-width: 1080px;
 }
 
 [data-theme="light"] .onb-screenshot-frame {
@@ -411,6 +427,161 @@
   width: 100%;
   height: auto;
   display: block;
+}
+
+.onb-sequence-layout {
+  width: 100%;
+  max-width: 980px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.onb-sequence-copy {
+  min-height: 88px;
+  padding: 2px 4px 0;
+}
+
+.onb-sequence-kicker {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sh-primary-light);
+}
+
+.onb-sequence-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--sh-text-primary);
+}
+
+.onb-sequence-description {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--sh-text-secondary);
+}
+
+.onb-screenshot-frame-flow {
+  max-width: 870px;
+  margin-top: 14px;
+}
+
+.onb-sequence-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  animation: onb-sequence-fade-in 0.28s ease both;
+}
+
+@keyframes onb-sequence-fade-in {
+  from { opacity: 0.1; transform: scale(0.996); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.onb-sequence-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding: 2px 2px 0;
+}
+
+.onb-sequence-progress {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 9px;
+  background: rgba(8, 10, 18, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+[data-theme="light"] .onb-sequence-progress {
+  background: rgba(255, 255, 255, 0.86);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.onb-sequence-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sh-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+[data-theme="light"] .onb-sequence-nav-btn {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.onb-sequence-nav-btn:hover {
+  border-color: var(--sh-primary-glow);
+  background: rgba(124, 108, 255, 0.08);
+  color: var(--sh-text-primary);
+}
+
+.onb-sequence-meta {
+  flex-shrink: 0;
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sh-text-secondary);
+  white-space: nowrap;
+}
+
+.onb-sequence-bars {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.onb-sequence-bar {
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  height: 3px;
+  border-radius: 999px;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.2);
+  transition: background-color 0.2s ease;
+}
+
+[data-theme="light"] .onb-sequence-bar {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.onb-sequence-bar-active {
+  background: var(--sh-primary);
+}
+
+.onb-sequence-bar-done {
+  background: rgba(124, 108, 255, 0.52);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-sequence-img {
+    animation: none;
+  }
 }
 
 /* ── Welcome visual (step 1) ─────────────────────────────── */
@@ -656,6 +827,41 @@
     padding: 20px;
   }
 
+  .onb-visual-flow {
+    padding: 18px 20px 12px;
+  }
+
+  .onb-sequence-layout {
+    gap: 8px;
+  }
+
+  .onb-sequence-copy {
+    min-height: 70px;
+  }
+
+  .onb-sequence-title {
+    font-size: 16px;
+  }
+
+  .onb-sequence-description {
+    font-size: 12px;
+  }
+
+  .onb-sequence-controls {
+    gap: 6px;
+  }
+
+  .onb-sequence-progress {
+    padding: 4px 7px;
+    gap: 6px;
+  }
+
+  .onb-sequence-nav-btn {
+    height: 28px;
+    padding: 0 8px;
+    font-size: 10.5px;
+  }
+
   .onb-welcome-features {
     grid-template-columns: 1fr;
     gap: 10px;
@@ -689,6 +895,40 @@
 
   .onb-right {
     height: 35vh;
+  }
+
+  .onb-sequence-description {
+    display: none;
+  }
+
+  .onb-sequence-kicker {
+    font-size: 10px;
+  }
+
+  .onb-sequence-title {
+    font-size: 14px;
+  }
+
+  .onb-sequence-controls {
+    gap: 6px;
+    padding-top: 1px;
+  }
+
+  .onb-sequence-progress {
+    gap: 5px;
+    padding: 4px 6px;
+  }
+
+  .onb-sequence-meta {
+    font-size: 9px;
+    letter-spacing: 0.03em;
+  }
+
+  .onb-sequence-nav-btn {
+    height: 26px;
+    min-width: 50px;
+    justify-content: center;
+    padding: 0 7px;
   }
 
   .onb-nav {

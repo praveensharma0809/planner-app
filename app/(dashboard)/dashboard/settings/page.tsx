@@ -45,7 +45,7 @@ export default async function SettingsPage() {
           <section className="space-y-5 rounded-2xl border border-white/[0.09] bg-[linear-gradient(180deg,rgba(255,255,255,0.05)_0%,rgba(255,255,255,0.025)_100%)] p-5 shadow-[0_12px_28px_rgba(0,0,0,0.28)] backdrop-blur-xl sm:p-6">
             <header className="space-y-1">
               <h2 className="text-lg font-semibold text-white/90">Tutorial</h2>
-              <p className="text-sm text-white/45">Go through the onboarding tutorial to learn how to use StayPlanned.</p>
+              <p className="text-sm text-white/45">Go through the onboarding tutorial to learn how to use PrepVeda.</p>
             </header>
             <div>
               <a
@@ -61,3 +61,4 @@ export default async function SettingsPage() {
     </div>
   )
 }
+

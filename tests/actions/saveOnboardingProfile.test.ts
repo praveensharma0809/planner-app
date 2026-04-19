@@ -7,22 +7,10 @@ vi.mock("next/cache", () => ({
   revalidatePath: revalidatePathMock,
 }))
 
-describe("saveOnboardingProfile", () => {
+describe("completeOnboarding", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
-  })
-
-  it("returns validation error when full name is blank", async () => {
-    const { saveOnboardingProfile } = await import("@/app/actions/onboarding/saveProfile")
-
-    const result = await saveOnboardingProfile({ full_name: "   " })
-
-    expect(result).toEqual({
-      status: "ERROR",
-      message: "Full name is required.",
-    })
-    expect(createServerSupabaseClientMock).not.toHaveBeenCalled()
   })
 
   it("returns UNAUTHORIZED when user is missing", async () => {
@@ -34,22 +22,22 @@ describe("saveOnboardingProfile", () => {
     }
 
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
-    const { saveOnboardingProfile } = await import("@/app/actions/onboarding/saveProfile")
+    const { completeOnboarding } = await import("@/app/actions/onboarding/completeOnboarding")
 
-    const result = await saveOnboardingProfile({ full_name: "Alex" })
+    const result = await completeOnboarding()
 
     expect(result).toEqual({ status: "UNAUTHORIZED" })
     expect(supabase.from).not.toHaveBeenCalled()
   })
 
-  it("upserts the profile and revalidates onboarding routes", async () => {
-    const single = vi.fn().mockResolvedValue({ data: { id: "user-1" }, error: null })
-    const select = vi.fn(() => ({ single }))
-    const upsert = vi.fn(() => ({ select }))
+  it("upserts onboarding completion and revalidates routes", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null })
 
     const supabase = {
       auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-1", email: "alex@example.com" } },
+        }),
       },
       from: vi.fn((table: string) => {
         if (table !== "profiles") {
@@ -61,15 +49,16 @@ describe("saveOnboardingProfile", () => {
     }
 
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
-    const { saveOnboardingProfile } = await import("@/app/actions/onboarding/saveProfile")
+    const { completeOnboarding } = await import("@/app/actions/onboarding/completeOnboarding")
 
-    const result = await saveOnboardingProfile({ full_name: "  Alex Doe  " })
+    const result = await completeOnboarding()
 
     expect(result).toEqual({ status: "SUCCESS" })
     expect(upsert).toHaveBeenCalledWith(
       {
         id: "user-1",
-        full_name: "Alex Doe",
+        full_name: "alex",
+        onboarding_completed: true,
       },
       { onConflict: "id" }
     )
@@ -78,29 +67,40 @@ describe("saveOnboardingProfile", () => {
     expect(revalidatePathMock).toHaveBeenCalledWith("/dashboard")
   })
 
-  it("returns a safe message when write fails", async () => {
-    const single = vi.fn().mockResolvedValue({
-      data: null,
-      error: { message: "null value in column \"primary_exam\" violates not-null constraint" },
+  it("returns a safe message when upsert fails", async () => {
+    const upsert = vi.fn().mockResolvedValue({
+      error: { message: "db write failed" },
     })
-    const select = vi.fn(() => ({ single }))
-    const upsert = vi.fn(() => ({ select }))
 
     const supabase = {
       auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-1", email: "alex@example.com" } },
+        }),
       },
       from: vi.fn(() => ({ upsert })),
     }
 
     createServerSupabaseClientMock.mockResolvedValue(supabase as never)
-    const { saveOnboardingProfile } = await import("@/app/actions/onboarding/saveProfile")
+    const { completeOnboarding } = await import("@/app/actions/onboarding/completeOnboarding")
 
-    const result = await saveOnboardingProfile({ full_name: "Alex Doe" })
+    const result = await completeOnboarding()
 
     expect(result).toEqual({
       status: "ERROR",
-      message: "Could not save your profile right now. Please try again.",
+      message: "Could not mark onboarding as complete. Please try again.",
+    })
+  })
+
+  it("returns thrown error message from catch block", async () => {
+    createServerSupabaseClientMock.mockRejectedValue(new Error("boom"))
+    const { completeOnboarding } = await import("@/app/actions/onboarding/completeOnboarding")
+
+    const result = await completeOnboarding()
+
+    expect(result).toEqual({
+      status: "ERROR",
+      message: "boom",
     })
   })
 })

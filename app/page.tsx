@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -67,11 +67,12 @@ export default function Home() {
       <div className="mesh-bg" />
       <div className="text-center space-y-3 relative z-10">
         <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto overflow-hidden shadow-lg shadow-indigo-500/25">
-          <Image src="/logo.png" alt="StayPlanned Logo" width={64} height={64} className="object-cover" />
+          <Image src="/logo.png" alt="PrepVeda Logo" width={64} height={64} className="object-cover" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight gradient-text">StayPlanned</h1>
+        <h1 className="text-2xl font-bold tracking-tight gradient-text">PrepVeda</h1>
         <p className="text-sm text-white/30">{error ?? "Loading..."}</p>
       </div>
     </div>
   );
 }
+

@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StayPlanned",
+  title: "PrepVeda",
   description: "Plan, schedule, and execute your high-stakes goals with capacity-aware task management.",
 };
 
@@ -38,3 +38,4 @@ export default function RootLayout({
     </html>
   );
 }
+

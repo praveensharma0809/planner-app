@@ -18,12 +18,12 @@ export function useTheme() {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "dark"
-    const stored = localStorage.getItem("StayPlanned-theme") as Theme | null
+    const stored = localStorage.getItem("PrepVeda-theme") as Theme | null
     return stored === "light" || stored === "dark" ? stored : "dark"
   })
 
   useEffect(() => {
-    localStorage.setItem("StayPlanned-theme", theme)
+    localStorage.setItem("PrepVeda-theme", theme)
     document.documentElement.setAttribute("data-theme", theme)
   }, [theme])
 
@@ -38,3 +38,4 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     </ThemeContext.Provider>
   )
 }
+

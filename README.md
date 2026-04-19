@@ -1,6 +1,6 @@
-﻿# StayPlanned
+﻿# PrepVeda
 
-StayPlanned is a planning app for deadline-driven preparation built on Next.js + Supabase.
+PrepVeda is a planning app for deadline-driven preparation built on Next.js + Supabase.
 
 ## Stack
 
@@ -63,8 +63,10 @@ npm run ci:check
 
 ## Migration baseline
 
-- `supabase/migrations/20260410_final_schema.sql`
+- `supabase/migrations/0001_production_schema.sql`
+- `supabase/migrations/0002_drop_legacy_rpc.sql`
 
 ## Notes
 
 - Runtime is aligned to DB v2 contracts.
+
