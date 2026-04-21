@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PrepVeda â A study plan that actually fits your life</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['"Plus Jakarta Sans"', 'ui-sans-serif'] },
+      colors: {
+        brand: { DEFAULT: '#4F46E5', light: '#EEF0FF', mid: '#6366f1' },
+        rose: { DEFAULT: '#F43F5E', light: '#FFF1F3' },
+        surface: '#FFFFFF',
+        base: '#F5F3FF',
+      },
+      boxShadow: {
+        card: '0 1px 3px rgba(79,70,229,0.07), 0 8px 24px rgba(79,70,229,0.09)',
+        'card-hover': '0 4px 8px rgba(79,70,229,0.08), 0 20px 48px rgba(79,70,229,0.14)',
+        glow: '0 0 0 1px rgba(79,70,229,0.12), 0 8px 40px rgba(79,70,229,0.18)',
+        'rose-glow': '0 8px 32px rgba(244,63,94,0.35)',
+      },
+    },
+  },
+};
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;background:#F5F3FF}
+body{font-family:'Plus Jakarta Sans',ui-sans-serif,sans-serif;background:#F5F3FF;color:#0B0C1A;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+::selection{background:rgba(79,70,229,0.15)}
+
+/* Grid bg */
+.dot-grid{background-image:radial-gradient(circle,rgba(79,70,229,0.18) 1px,transparent 1px);background-size:28px 28px}
+.line-grid{background-image:linear-gradient(rgba(79,70,229,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(79,70,229,0.06) 1px,transparent 1px);background-size:48px 48px}
+
+/* Scroll reveal */
+.reveal{opacity:0;transform:translateY(28px);transition:opacity 0.75s cubic-bezier(0.16,1,0.3,1),transform 0.75s cubic-bezier(0.16,1,0.3,1)}
+.reveal.on{opacity:1;transform:none}
+.reveal-l{opacity:0;transform:translateX(-28px);transition:opacity 0.75s cubic-bezier(0.16,1,0.3,1),transform 0.75s cubic-bezier(0.16,1,0.3,1)}
+.reveal-l.on{opacity:1;transform:none}
+.reveal-r{opacity:0;transform:translateX(28px);transition:opacity 0.75s cubic-bezier(0.16,1,0.3,1),transform 0.75s cubic-bezier(0.16,1,0.3,1)}
+.reveal-r.on{opacity:1;transform:none}
+
+/* Float animations */
+@keyframes floatA{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-12px) rotate(-1deg)}}
+@keyframes floatB{0%,100%{transform:translateY(0) rotate(1deg)}50%{transform:translateY(-9px) rotate(1deg)}}
+@keyframes floatC{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+@keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
+@keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(244,63,94,0.4)}70%{box-shadow:0 0 0 10px rgba(244,63,94,0)}100%{box-shadow:0 0 0 0 rgba(244,63,94,0)}}
+@keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes aurora{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(40px,-20px) scale(1.08)}66%{transform:translate(-30px,30px) scale(0.95)}}
+@keyframes aurora2{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(-50px,20px) scale(1.1)}66%{transform:translate(40px,-30px) scale(0.92)}}
+@keyframes screenFade{0%{opacity:0;transform:scale(1.02)}10%,85%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.99)}}
+@keyframes badge-pop{0%{opacity:0;transform:translateY(6px) scale(0.9)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes gradient-x{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+
+.fa{animation:floatA 6s ease-in-out infinite}
+.fb{animation:floatB 5.5s ease-in-out infinite}
+.fc{animation:floatC 7s ease-in-out infinite}
+.aurora1{animation:aurora 12s ease-in-out infinite}
+.aurora2{animation:aurora2 15s ease-in-out infinite}
+
+/* FAQ */
+details[open] summary .plus{transform:rotate(45deg)}
+summary{list-style:none}
+summary::-webkit-details-marker{display:none}
+
+/* Hero tab indicator */
+.tab-dot{transition:all 0.4s ease}
+.tab-dot.active{background:#4F46E5;transform:scaleX(2.5)}
+
+/* Screen slider */
+.screen-slide{position:absolute;inset:0;opacity:0;transition:opacity 0.7s ease;display:flex;flex-direction:column}
+.screen-slide.active{opacity:1}
+
+/* Gradient text */
+.grad-text{background:linear-gradient(135deg,#4F46E5 0%,#7C3AED 50%,#F43F5E 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.grad-text-animate{background:linear-gradient(135deg,#4F46E5,#7C3AED,#F43F5E,#7C3AED,#4F46E5);background-size:300%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:gradient-x 5s ease infinite}
+
+/* Feature screenshot hover */
+.screen-frame{transition:transform 0.5s cubic-bezier(0.16,1,0.3,1),box-shadow 0.5s ease}
+.screen-frame:hover{transform:translateY(-6px) scale(1.015);box-shadow:0 30px 80px rgba(79,70,229,0.2)}
+
+/* Pill badge */
+.pill{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:99px;font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase}
+</style>
+
+<!-- Scroll progress bar -->
+<style>
+#scroll-bar{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,#4F46E5,#7C3AED,#F43F5E);z-index:9999;width:0%;transition:width 0.1s linear;border-radius:0 2px 2px 0}
+.mobile-menu{display:none;position:fixed;inset:0;top:68px;z-index:49;background:white;padding:24px;flex-direction:column;gap:4px;border-top:1px solid rgba(0,0,0,0.06)}
+.mobile-menu.open{display:flex}
+.mobile-menu a{display:block;padding:14px 16px;font-size:16px;font-weight:700;color:#0B0C1A;border-radius:12px;text-decoration:none;transition:background 0.15s}
+.mobile-menu a:hover{background:#F5F3FF}
+.mobile-menu .cta-m{background:#F43F5E;color:white;text-align:center;margin-top:8px;border-radius:14px}
+.mobile-menu .cta-m:hover{background:#E11D48}
+</style>
+</head>
+<body>
+
+<!-- TWEAKS -->
+<script>
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "violet",
+  "bg": "lavender",
+  "heroBadge": "serious"
+}/*EDITMODE-END*/;
+</script>
+
+<!-- NAV -->
+<nav class="fixed top-0 inset-x-0 z-50 h-[68px] flex items-center px-6 lg:px-12 bg-white/85 backdrop-blur-xl border-b border-black/[0.06]">
+  <div class="max-w-7xl mx-auto flex justify-between items-center w-full">
+    <a href="#" class="flex items-center gap-2 group">
+      <img src="./logo.png" alt="PrepVeda" class="w-10 h-10 rounded-full object-cover shadow-sm" />
+      <div>
+        <div class="font-black text-[1.1rem] text-[#0B0C1A] tracking-tight leading-none">PrepVeda</div>
+        <div class="text-[9px] font-bold text-[#9294B4] tracking-[0.18em] uppercase">plan Â· track Â· excel</div>
+      </div>
+    </a>
+    <div class="hidden md:flex items-center gap-8 text-sm font-semibold text-[#454772]">
+      <a href="#how" class="hover:text-brand transition-colors">How it works</a>
+      <a href="#features" class="hover:text-brand transition-colors">Features</a>
+      <a href="#faq" class="hover:text-brand transition-colors">FAQ</a>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="#" class="hidden sm:block text-sm font-bold text-[#454772] hover:text-[#0B0C1A] transition-colors">Log in</a>
+      <a href="#" class="px-5 py-2.5 bg-[#F43F5E] hover:bg-[#E11D48] text-white text-sm font-bold rounded-full shadow-rose-glow hover:shadow-[0_8px_24px_rgba(244,63,94,0.45)] hover:-translate-y-0.5 transition-all hidden sm:block">Get Started Free</a>
+      <button id="hamburger" onclick="toggleMobile()" class="md:hidden flex flex-col gap-1.5 p-2" aria-label="Menu">
+        <span class="ham-line w-5 h-0.5 bg-[#0B0C1A] rounded-full block transition-all"></span>
+        <span class="ham-line w-5 h-0.5 bg-[#0B0C1A] rounded-full block transition-all"></span>
+        <span class="ham-line w-5 h-0.5 bg-[#0B0C1A] rounded-full block transition-all"></span>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- Mobile menu -->
+<div class="mobile-menu" id="mobile-menu">
+  <a href="#how" onclick="toggleMobile()">How it works</a>
+  <a href="#features" onclick="toggleMobile()">Features</a>
+  <a href="#faq" onclick="toggleMobile()">FAQ</a>
+  <a href="#" class="text-sm font-bold text-[#454772]">Log in</a>
+  <a href="#" class="cta-m">Get Started Free</a>
+</div>
+
+<!-- Scroll progress -->
+<div id="scroll-bar"></div>
+
+<!-- HERO -->
+<section class="relative pt-[68px] min-h-screen flex flex-col justify-center overflow-hidden">
+  <!-- Bg aurora -->
+  <div class="absolute inset-0 pointer-events-none">
+    <div class="aurora1 absolute top-[-20%] left-[-10%] w-[55%] h-[65%] bg-brand/[0.12] rounded-full blur-[120px]"></div>
+    <div class="aurora2 absolute bottom-[-15%] right-[-10%] w-[50%] h-[60%] bg-[#F43F5E]/[0.08] rounded-full blur-[100px]"></div>
+    <div class="absolute top-[40%] left-[40%] w-[30%] h-[30%] bg-violet-400/[0.07] rounded-full blur-[80px]"></div>
+    <div class="absolute inset-0 dot-grid opacity-60"></div>
+  </div>
+
+  <div class="relative z-10 max-w-7xl mx-auto px-6 lg:px-12 py-20 grid lg:grid-cols-[1fr_1.1fr] gap-12 xl:gap-20 items-center">
+    <!-- Left copy -->
+    <div>
+      <div class="pill bg-brand/10 text-brand mb-7" style="border:1px solid rgba(79,70,229,0.2)">
+        <span style="width:6px;height:6px;border-radius:50%;background:#F43F5E;animation:pulse-ring 2s infinite"></span>
+        Built for serious exam prep
+      </div>
+      <h1 class="text-[3.5rem] sm:text-[4.2rem] xl:text-[5rem] font-black leading-[1.02] tracking-tight text-[#0B0C1A] mb-6">
+        A study plan<br />that <span class="grad-text-animate">actually fits</span><br />your life.
+      </h1>
+      <p class="text-lg xl:text-xl text-[#454772] font-medium leading-relaxed mb-9 max-w-[480px]">
+        Tell PrepVeda your subjects, chapters and deadlines. It builds a day-by-day schedule around your real capacity â and warns you <strong class="text-[#0B0C1A] font-bold">before</strong> you commit to something impossible.
+      </p>
+      <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-10">
+        <a href="#" class="group px-8 py-4 bg-[#F43F5E] hover:bg-[#E11D48] text-white rounded-2xl font-bold text-base shadow-rose-glow hover:shadow-[0_12px_40px_rgba(244,63,94,0.45)] hover:-translate-y-1 transition-all flex items-center gap-3">
+          Start Planning Free
+          <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+        </a>
+        <a href="#how" class="text-base font-bold text-[#454772] hover:text-brand transition-colors flex items-center gap-1.5">
+          See how it works <span class="text-lg">â</span>
+        </a>
+      </div>
+      <!-- Trust signals -->
+      <div class="flex flex-wrap items-center gap-5 text-sm font-semibold text-[#9294B4]">
+        <div class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg> Free plan forever</div>
+        <div class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg> No credit card</div>
+        <div class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg> &lt; 2s to generate plan</div>
+      </div>
+    </div>
+
+    <!-- Right: animated frame -->
+    <div class="relative">
+      <!-- Glow halo behind frame -->
+      <div class="absolute inset-[-12%] rounded-[3rem] pointer-events-none" style="background:radial-gradient(ellipse at 60% 40%,rgba(79,70,229,0.18) 0%,rgba(244,63,94,0.1) 50%,transparent 70%);filter:blur(2px)"></div>
+
+      <!-- Main frame -->
+      <div class="relative rounded-[1.5rem] overflow-hidden border border-black/[0.08] shadow-[0_32px_80px_rgba(79,70,229,0.18),0_0_0_1px_rgba(79,70,229,0.08)] bg-white">
+        <!-- Browser chrome -->
+        <div class="h-10 bg-[#F7F8FB] border-b border-black/[0.07] flex items-center px-4 gap-3">
+          <div class="flex gap-1.5"><div class="w-3 h-3 rounded-full bg-[#FF5F56]"></div><div class="w-3 h-3 rounded-full bg-[#FFBD2E]"></div><div class="w-3 h-3 rounded-full bg-[#27C93F]"></div></div>
+          <div class="flex-1 mx-2 h-6 rounded-md bg-white border border-black/[0.08] flex items-center px-3 gap-2">
+            <svg class="w-3 h-3 text-[#9294B4]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/></svg>
+            <span class="text-[10px] font-semibold text-[#9294B4]">prepveda.app</span>
+          </div>
+        </div>
+        <!-- Animated screen -->
+        <div id="hero-frame" style="aspect-ratio:16/9.5;position:relative;overflow:hidden;background:#F5F3FF"></div>
+        <!-- Screen tabs indicator -->
+        <div class="bg-[#F7F8FB] border-t border-black/[0.06] px-4 py-2.5 flex items-center justify-between">
+          <div class="flex gap-2" id="hero-tabs">
+            <div class="tab-dot h-1.5 w-5 rounded-full bg-[#4F46E5] active"></div>
+            <div class="tab-dot h-1.5 w-5 rounded-full bg-black/10"></div>
+            <div class="tab-dot h-1.5 w-5 rounded-full bg-black/10"></div>
+            <div class="tab-dot h-1.5 w-5 rounded-full bg-black/10"></div>
+          </div>
+          <div class="text-[10px] font-semibold text-[#9294B4]" id="hero-label">Dashboard</div>
+        </div>
+      </div>
+
+      <!-- Metric badges: row below the frame, no overlap -->
+      <div class="flex justify-between gap-3 mt-4">
+        <div class="fa flex items-center gap-2.5 bg-white rounded-2xl shadow-card px-4 py-2.5 border border-black/[0.05] flex-1">
+          <div class="w-8 h-8 rounded-xl bg-[#FFF1F3] flex items-center justify-center text-sm shrink-0">ð¥</div>
+          <div><div class="text-[9px] font-bold text-[#9294B4] uppercase tracking-wider">Streak</div><div class="text-xs font-bold text-[#0B0C1A]">12 days strong</div></div>
+        </div>
+        <div class="fb flex items-center gap-2.5 bg-white rounded-2xl shadow-card px-4 py-2.5 border border-black/[0.05] flex-1">
+          <div class="w-8 h-8 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+          </div>
+          <div><div class="text-[9px] font-bold text-[#9294B4] uppercase tracking-wider">Today</div><div class="text-xs font-bold text-[#0B0C1A]">4 of 30 tasks done</div></div>
+        </div>
+        <div class="fc flex items-center gap-2.5 bg-white rounded-2xl shadow-card px-4 py-2.5 border border-black/[0.05] flex-1">
+          <div class="w-8 h-8 rounded-xl bg-[#FFFBEB] flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+          </div>
+          <div><div class="text-[9px] font-bold text-[#9294B4] uppercase tracking-wider">Heads up</div><div class="text-xs font-bold text-[#0B0C1A]">Calculus is tight</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scroll nudge -->
+  <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 opacity-50">
+    <span class="text-xs font-semibold text-[#9294B4]">Scroll to explore</span>
+    <svg class="w-4 h-4 text-[#9294B4] animate-bounce" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+  </div>
+</section>
+
+<!-- EXAM TRUST STRIP -->
+<section class="py-5 px-6 bg-white border-y border-black/[0.06]">
+  <div class="max-w-5xl mx-auto">
+    <div class="flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
+      <span class="text-xs font-bold text-[#9294B4] uppercase tracking-widest shrink-0">Used for</span>
+      <div class="w-px h-4 bg-black/10 hidden sm:block"></div>
+      <div class="flex flex-wrap justify-center gap-x-6 gap-y-2">
+        <span class="text-sm font-black text-[#454772] tracking-tight">Competitive Entrances</span>
+        <span class="text-[#D1D3E0]">/</span>
+        <span class="text-sm font-black text-[#454772] tracking-tight">Board Exams</span>
+        <span class="text-[#D1D3E0]">/</span>
+        <span class="text-sm font-black text-[#454772] tracking-tight">Professional Certifications</span>
+        <span class="text-[#D1D3E0]">/</span>
+        <span class="text-sm font-black text-[#454772] tracking-tight">Semester Finals</span>
+        <span class="text-[#D1D3E0]">/</span>
+        <span class="text-sm font-black text-[#454772] tracking-tight">Any exam you name it</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PAIN -->
+<section class="py-24 px-6 bg-white">
+  <div class="max-w-6xl mx-auto">
+    <div class="text-center mb-14 reveal">
+      <div class="pill bg-[#FFF1F3] text-[#F43F5E] mb-5" style="border:1px solid rgba(244,63,94,0.2)">The real problem</div>
+      <h2 class="text-4xl md:text-5xl font-black tracking-tight text-[#0B0C1A]">Most exam prep fails the same way.</h2>
+    </div>
+    <div class="grid md:grid-cols-3 gap-5">
+      <div class="reveal group rounded-3xl border border-black/[0.07] bg-[#F5F3FF] p-8 hover:-translate-y-2 hover:shadow-card-hover transition-all duration-500">
+        <div class="w-12 h-12 rounded-2xl bg-[#FFF1F3] border border-[#F43F5E]/20 flex items-center justify-center mb-6">
+          <svg class="w-6 h-6 text-[#F43F5E]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3"/></svg>
+        </div>
+        <h3 class="text-xl font-black text-[#0B0C1A] mb-3">Plans built on hope</h3>
+        <p class="text-[#454772] leading-relaxed font-medium">You set deadlines based on what you <em>wish</em> you could do â not the hours you actually have.</p>
+      </div>
+      <div class="reveal group rounded-3xl border border-black/[0.07] bg-[#F5F3FF] p-8 hover:-translate-y-2 hover:shadow-card-hover transition-all duration-500" style="transition-delay:0.08s">
+        <div class="w-12 h-12 rounded-2xl bg-[#EEF0FF] border border-brand/20 flex items-center justify-center mb-6">
+          <svg class="w-6 h-6 text-brand" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        </div>
+        <h3 class="text-xl font-black text-[#0B0C1A] mb-3">Drowning in syllabus</h3>
+        <p class="text-[#454772] leading-relaxed font-medium">A dozen subjects, hundreds of chapters, and no clear answer to "what do I study right now?"</p>
+      </div>
+      <div class="reveal group rounded-3xl border border-black/[0.07] bg-[#F5F3FF] p-8 hover:-translate-y-2 hover:shadow-card-hover transition-all duration-500" style="transition-delay:0.16s">
+        <div class="w-12 h-12 rounded-2xl bg-[#ECFDF5] border border-emerald-500/20 flex items-center justify-center mb-6">
+          <svg class="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        </div>
+        <h3 class="text-xl font-black text-[#0B0C1A] mb-3">No early warning</h3>
+        <p class="text-[#454772] leading-relaxed font-medium">You only find out the plan was impossible when it's too late to catch up.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how" class="py-24 px-6 bg-[#F5F3FF]">
+  <div class="max-w-7xl mx-auto">
+    <div class="text-center mb-16 reveal">
+      <div class="pill bg-brand/10 text-brand mb-5" style="border:1px solid rgba(79,70,229,0.2)">How it works</div>
+      <h2 class="text-4xl md:text-5xl font-black tracking-tight text-[#0B0C1A] max-w-3xl mx-auto leading-tight">Three steps from syllabus chaos to a schedule you trust.</h2>
+    </div>
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="reveal rounded-3xl bg-white border border-black/[0.07] p-7 shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-500">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-11 h-11 rounded-2xl bg-brand flex items-center justify-center text-white text-sm font-black shadow-[0_4px_12px_rgba(79,70,229,0.35)]">01</div>
+          <span class="text-xs font-black uppercase tracking-widest text-brand">Intake</span>
+        </div>
+        <h3 class="text-xl font-black text-[#0B0C1A] mb-3">Tell it what you have.</h3>
+        <p class="text-[#454772] font-medium text-sm leading-relaxed mb-6">Add subjects and chapters, set your exam date, and say how many minutes you can study weekday vs. weekend.</p>
+        <div class="rounded-2xl overflow-hidden border border-black/[0.06]"><img src="./app_screenshots/Planner_Page1.png" alt="Intake" class="w-full" /></div>
+      </div>
+      <div class="reveal rounded-3xl bg-white border border-black/[0.07] p-7 shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-500" style="transition-delay:0.08s">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-11 h-11 rounded-2xl bg-[#F43F5E] flex items-center justify-center text-white text-sm font-black shadow-[0_4px_12px_rgba(244,63,94,0.35)]">02</div>
+          <span class="text-xs font-black uppercase tracking-widest text-[#F43F5E]">Preview</span>
+        </div>
+        <h3 class="text-xl font-black text-[#0B0C1A] mb-3">See if it's feasible.</h3>
+        <p class="text-[#454772] font-medium text-sm leading-relaxed mb-6">PrepVeda flags each subject as safe, tight, at-risk or impossible â and tells you exactly what to tweak.</p>
+        <div class="rounded-2xl overflow-hidden border border-black/[0.06]"><img src="./app_screenshots/Planner_Page2.png" alt="Feasibility" class="w-full" /></div>
+      </div>
+      <div class="reveal rounded-3xl bg-white border border-black/[0.07] p-7 shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-500" style="transition-delay:0.16s">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-11 h-11 rounded-2xl bg-emerald-500 flex items-center justify-center text-white text-sm font-black shadow-[0_4px_12px_rgba(16,185,129,0.35)]">03</div>
+          <span class="text-xs font-black uppercase tracking-widest text-emerald-500">Confirm</span>
+        </div>
+        <h3 class="text-xl font-black text-[#0B0C1A] mb-3">Commit and start.</h3>
+        <p class="text-[#454772] font-medium text-sm leading-relaxed mb-6">Lock in your schedule. Every day you know exactly which chapters to study, for how long, and what comes next.</p>
+        <div class="rounded-2xl overflow-hidden border border-black/[0.06]"><img src="./app_screenshots/Schedule_Page.png" alt="Schedule" class="w-full" /></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEASIBILITY WEDGE -->
+<section class="py-24 px-6 bg-white">
+  <div class="max-w-6xl mx-auto grid lg:grid-cols-2 gap-14 items-center">
+    <div class="reveal-l">
+      <div class="pill bg-amber-50 text-amber-600 mb-6" style="border:1px solid rgba(245,158,11,0.25)">The unfair advantage</div>
+      <h2 class="text-4xl md:text-5xl font-black tracking-tight text-[#0B0C1A] mb-6 leading-tight">The only planner that tells you <span class="text-[#F43F5E]">the truth</span> before you start.</h2>
+      <p class="text-lg text-[#454772] font-medium leading-relaxed mb-8">PrepVeda models every session against your real capacity â weekday minutes, weekend minutes, flexibility buffer, off-days. If your plan doesn't fit, it tells you <strong class="text-[#0B0C1A]">exactly</strong> what to change.</p>
+      <div class="space-y-3">
+        <div class="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-black/[0.07] bg-[#F5F3FF]"><div class="w-2 h-8 rounded-full bg-emerald-500 shrink-0"></div><div class="flex-1 flex items-center justify-between"><span class="font-bold text-[#0B0C1A]">Safe</span><span class="text-sm font-mono text-[#9294B4]">&lt; 80% capacity</span></div></div>
+        <div class="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-black/[0.07] bg-[#F5F3FF]"><div class="w-2 h-8 rounded-full bg-amber-400 shrink-0"></div><div class="flex-1 flex items-center justify-between"><span class="font-bold text-[#0B0C1A]">Tight</span><span class="text-sm font-mono text-[#9294B4]">80 â 90%</span></div></div>
+        <div class="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-black/[0.07] bg-[#F5F3FF]"><div class="w-2 h-8 rounded-full bg-[#F43F5E] shrink-0"></div><div class="flex-1 flex items-center justify-between"><span class="font-bold text-[#0B0C1A]">At risk</span><span class="text-sm font-mono text-[#9294B4]">&gt; 90%</span></div></div>
+        <div class="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-black/[0.07] bg-[#F5F3FF]"><div class="w-2 h-8 rounded-full bg-red-600 shrink-0"></div><div class="flex-1 flex items-center justify-between"><span class="font-bold text-[#0B0C1A]">Impossible</span><span class="text-sm font-mono text-[#9294B4]">Deadline breach</span></div></div>
+      </div>
+    </div>
+    <div class="reveal-r">
+      <div class="rounded-3xl border border-black/[0.07] bg-[#F5F3FF] p-7 shadow-card">
+        <div class="flex items-center justify-between mb-6">
+          <span class="text-sm font-black text-[#0B0C1A] uppercase tracking-wide">Feasibility Preview</span>
+          <span class="text-xs font-mono text-[#9294B4]">plan #042</span>
+        </div>
+        <div class="space-y-3 mb-6" id="feas-bars">
+          <div class="feas-row flex items-center gap-3"><span class="text-sm font-bold text-[#0B0C1A] w-28 shrink-0">Mathematics</span><div class="flex-1 h-2 rounded-full bg-black/[0.06] overflow-hidden"><div class="feas-bar h-full rounded-full bg-emerald-500 transition-all duration-[1.5s] ease-out" style="width:0%"data-w="68"></div></div><span class="text-xs font-mono text-[#9294B4] w-8 text-right">68%</span><span class="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0">Safe</span></div>
+          <div class="feas-row flex items-center gap-3"><span class="text-sm font-bold text-[#0B0C1A] w-28 shrink-0">Physics</span><div class="flex-1 h-2 rounded-full bg-black/[0.06] overflow-hidden"><div class="feas-bar h-full rounded-full bg-emerald-500 transition-all duration-[1.5s] ease-out" style="width:0%"data-w="74"></div></div><span class="text-xs font-mono text-[#9294B4] w-8 text-right">74%</span><span class="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0">Safe</span></div>
+          <div class="feas-row flex items-center gap-3"><span class="text-sm font-bold text-[#0B0C1A] w-28 shrink-0">Calculus</span><div class="flex-1 h-2 rounded-full bg-black/[0.06] overflow-hidden"><div class="feas-bar h-full rounded-full bg-amber-400 transition-all duration-[1.5s] ease-out" style="width:0%"data-w="87"></div></div><span class="text-xs font-mono text-[#9294B4] w-8 text-right">87%</span><span class="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-amber-50 text-amber-600 border border-amber-200 shrink-0">Tight</span></div>
+          <div class="feas-row flex items-center gap-3"><span class="text-sm font-bold text-[#0B0C1A] w-28 shrink-0">AI &amp; ML</span><div class="flex-1 h-2 rounded-full bg-black/[0.06] overflow-hidden"><div class="feas-bar h-full rounded-full bg-[#F43F5E] transition-all duration-[1.5s] ease-out" style="width:0%"data-w="94"></div></div><span class="text-xs font-mono text-[#9294B4] w-8 text-right">94%</span><span class="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-[#FFF1F3] text-[#F43F5E] border border-[#F43F5E]/25 shrink-0">At risk</span></div>
+          <div class="feas-row flex items-center gap-3"><span class="text-sm font-bold text-[#0B0C1A] w-28 shrink-0">P&amp;S</span><div class="flex-1 h-2 rounded-full bg-black/[0.06] overflow-hidden"><div class="feas-bar h-full rounded-full bg-emerald-500 transition-all duration-[1.5s] ease-out" style="width:0%"data-w="62"></div></div><span class="text-xs font-mono text-[#9294B4] w-8 text-right">62%</span><span class="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0">Safe</span></div>
+        </div>
+        <div class="flex items-start gap-3 px-4 py-3.5 rounded-xl bg-amber-50 border border-amber-200">
+          <svg class="w-4 h-4 text-amber-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+          <p class="text-sm text-[#454772] leading-relaxed"><strong class="text-[#0B0C1A]">AI &amp; ML is 94% of capacity.</strong> Add <strong class="text-amber-600">+15 min/day</strong> or extend by <strong class="text-amber-600">2 days</strong> to reach safe.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features" class="py-24 px-6 bg-[#F5F3FF]">
+  <div class="max-w-7xl mx-auto">
+    <div class="text-center mb-20 reveal">
+      <div class="pill bg-violet-100 text-violet-600 mb-5" style="border:1px solid rgba(124,58,237,0.2)">Everything you need</div>
+      <h2 class="text-4xl md:text-5xl font-black tracking-tight text-[#0B0C1A] max-w-3xl mx-auto leading-tight">Every tool you need to own your prep.</h2>
+    </div>
+
+    <div class="space-y-24">
+      <!-- F1: Subjects -->
+      <div class="grid md:grid-cols-2 gap-10 lg:gap-20 items-center">
+        <div class="reveal-l screen-frame rounded-[1.5rem] overflow-hidden border border-black/[0.07] shadow-card"><img src="./app_screenshots/Subjects_Page.png" class="w-full" alt="Subjects" /></div>
+        <div class="reveal-r">
+          <div class="pill bg-brand/10 text-brand mb-5" style="border:1px solid rgba(79,70,229,0.2)">01 Â· Subjects &amp; Chapters</div>
+          <h3 class="text-3xl md:text-4xl font-black tracking-tight text-[#0B0C1A] mb-5 leading-tight">Your entire syllabus, <span class="text-brand">structured.</span></h3>
+          <p class="text-lg text-[#454772] font-medium leading-relaxed mb-7">Group material into subjects. Break each into chapters with effort estimates, session lengths and deadlines. Set dependencies so prerequisites always come first.</p>
+          <ul class="space-y-3">
+            <li class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-brand/10 border border-brand/20 flex items-center justify-center shrink-0"><svg class="w-4 h-4 text-brand" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg></div><span class="font-semibold text-[#454772]">Unlimited subjects &amp; chapters</span></li>
+            <li class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-brand/10 border border-brand/20 flex items-center justify-center shrink-0"><svg class="w-4 h-4 text-brand" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><span class="font-semibold text-[#454772]">Live per-chapter completion tracking</span></li>
+            <li class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-brand/10 border border-brand/20 flex items-center justify-center shrink-0"><svg class="w-4 h-4 text-brand" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg></div><span class="font-semibold text-[#454772]">Lock prerequisites with dependencies</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- F2: Planner -->
+      <div class="grid md:grid-cols-2 gap-10 lg:gap-20 items-center">
+        <div class="reveal-r md:order-2 screen-frame rounded-[1.5rem] overflow-hidden border border-black/[0.07] shadow-card"><img src="./app_screenshots/Planner_Page2.png" class="w-full" alt="Planner" /></div>
+        <div class="reveal-l md:order-1">
+          <div class="pill bg-[#FFF1F3] text-[#F43F5E] mb-5" style="border:1px solid rgba(244,63,94,0.2)">02 Â· The Planner</div>
+          <h3 class="text-3xl md:text-4xl font-black tracking-tight text-[#0B0C1A] mb-5 leading-tight">Schedules that respect your <span class="text-[#F43F5E]">real life.</span></h3>
+          <p class="text-lg text-[#454772] font-medium leading-relaxed mb-7">Set weekday and weekend capacity separately. Add a flexibility buffer for overflow days. Override specific dates for travel, exams or rest.</p>
+          <ul class="space-y-3">
+            <li class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-[#FFF1F3] border border-[#F43F5E]/20 flex items-center justify-center shrink-0"><svg class="w-4 h-4 text-[#F43F5E]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span class="font-semibold text-[#454772]">Weekday vs. weekend capacity</span></li>
+            <li class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-[#FFF1F3] border border-[#F43F5E]/20 flex items-center justify-center shrink-0"><svg class="w-4 h-4 text-[#F43F5E]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg></div><span class="font-semibold text-[#454772]">Flexibility buffer for overflow days</span></li>
+            <li class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-[#FFF1F3] border border-[#F43F5E]/20 flex items-center justify-center shrink-0"><svg class="w-4 h-4 text-[#F43F5E]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><span class="font-semibold text-[#454772]">Per-day custom capacity overrides</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- F3: Calendar -->
+      <div class="grid md:grid-cols-2 gap-10 lg:gap-20 items-center">
+        <div class="reveal-l screen-frame rounded-[1.5rem] overflow-hidden border border-black/[0.07] shadow-card"><img src="./app_screenshots/Calendar_Page.png" class="w-full" alt="Calendar" /></div>
+        <div class="reveal-r">
+          <div class="pill bg-violet-100 text-violet-600 mb-5" style="border:1px solid rgba(124,58,237,0.2)">03 Â· Calendar View</div>
+          <h3 class="text-3xl md:text-4xl font-black tracking-tight text-[#0B0C1A] mb-5 leading-tight">See the <span class="text-violet-600">whole month</span> at a glance.</h3>
+          <p class="text-lg text-[#454772] font-medium leading-relaxed mb-7">Every scheduled session, colour-coded by subject. Spot dense weeks before they happen. Filter by subject or zoom into a single day.</p>
+          <ul class="space-y-3">
+            <li class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-violet-100 border border-violet-200 flex items-center justify-center shrink-0"><svg class="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><span class="font-semibold text-[#454772]">Monthly view of every session</span></li>
+            <li class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-violet-100 border border-violet-200 flex items-center justify-center shrink-0"><svg class="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg></div><span class="font-semibold text-[#454772]">Colour-coded subject filters</span></li>
+            <li class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-violet-100 border border-violet-200 flex items-center justify-center shrink-0"><svg class="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div><span class="font-semibold text-[#454772]">Spot busy weeks in advance</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- F4: Schedule -->
+      <div class="grid md:grid-cols-2 gap-10 lg:gap-20 items-center">
+        <div class="reveal-r md:order-2 screen-frame rounded-[1.5rem] overflow-hidden border border-black/[0.07] shadow-card"><img src="./app_screenshots/Schedule_Page.png" class="w-full" alt="Schedule" /></div>
+        <div class="reveal-l md:order-1">
+          <div class="pill bg-emerald-50 text-emerald-600 mb-5" style="border:1px solid rgba(16,185,129,0.2)">04 Â· Weekly Schedule</div>
+          <h3 class="text-3xl md:text-4xl font-black tracking-tight text-[#0B0C1A] mb-5 leading-tight">Drag, reschedule, <span class="text-emerald-600">done.</span></h3>
+          <p class="text-lg text-[#454772] font-medium leading-relaxed mb-7">Your week laid out day by day. Drag a task to tomorrow, mark it complete, or add a last-minute session â all without breaking feasibility.</p>
+          <ul class="space-y-3">
+            <li class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0"><svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><span class="font-semibold text-[#454772]">One-tap task completion</span></li>
+            <li class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0"><svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg></div><span class="font-semibold text-[#454772]">Drag-and-drop rescheduling</span></li>
+            <li class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0"><svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/></svg></div><span class="font-semibold text-[#454772]">Streak &amp; focus tracking</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<section class="py-20 px-6 bg-white border-y border-black/[0.06]">
+  <div class="max-w-6xl mx-auto">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-8 reveal">
+      <div class="text-center">
+        <div class="text-5xl md:text-6xl font-black tracking-tight text-brand mb-2" id="cnt-plans">0</div>
+        <div class="text-sm font-semibold text-[#9294B4]">Study plans built</div>
+      </div>
+      <div class="text-center">
+        <div class="text-5xl md:text-6xl font-black tracking-tight text-[#F43F5E] mb-2" id="cnt-hrs">0</div>
+        <div class="text-sm font-semibold text-[#9294B4]">Study hours scheduled</div>
+      </div>
+      <div class="text-center">
+        <div class="text-5xl md:text-6xl font-black tracking-tight text-amber-500 mb-2">&lt; 2s</div>
+        <div class="text-sm font-semibold text-[#9294B4]">Plan generation time</div>
+      </div>
+      <div class="text-center">
+        <div class="text-5xl md:text-6xl font-black tracking-tight text-emerald-500 mb-2">$0</div>
+        <div class="text-sm font-semibold text-[#9294B4]">To get started</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="py-24 px-6 bg-[#F5F3FF]">
+  <div class="max-w-6xl mx-auto">
+    <div class="text-center mb-14 reveal">
+      <div class="pill bg-emerald-50 text-emerald-600 mb-5" style="border:1px solid rgba(16,185,129,0.2)">From the community</div>
+      <h2 class="text-4xl md:text-5xl font-black tracking-tight text-[#0B0C1A]">Students who made the switch.</h2>
+    </div>
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="reveal rounded-3xl bg-white border border-black/[0.07] p-7 shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-500">
+        <div class="flex gap-0.5 mb-4">âââââ</div>
+        <p class="text-[#454772] font-medium leading-relaxed mb-6 text-wrap-pretty">&ldquo;I used to make a plan on Day 1 and abandon it by Day 3. PrepVeda showed me my Calculus deadline was impossible before I even started â I adjusted it in 30 seconds. First time I've finished a syllabus on time.&rdquo;</p>
+        <div class="flex items-center gap-3 pt-5 border-t border-black/[0.06]">
+          <div class="w-9 h-9 rounded-full bg-brand/15 flex items-center justify-center text-sm font-black text-brand">RK</div>
+          <div><div class="text-sm font-bold text-[#0B0C1A]">Rohan K.</div><div class="text-xs text-[#9294B4] font-medium">JEE Advanced aspirant</div></div>
+        </div>
+      </div>
+      <div class="reveal rounded-3xl bg-white border border-black/[0.07] p-7 shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-500" style="transition-delay:0.08s">
+        <div class="flex gap-0.5 mb-4">âââââ</div>
+        <p class="text-[#454772] font-medium leading-relaxed mb-6 text-wrap-pretty">&ldquo;The feasibility bars are genuinely game-changing. I had 6 subjects and had no idea which ones were safe. PrepVeda colour-coded everything and told me exactly where to add time. My UPSC prep finally feels controlled.&rdquo;</p>
+        <div class="flex items-center gap-3 pt-5 border-t border-black/[0.06]">
+          <div class="w-9 h-9 rounded-full bg-[#F43F5E]/15 flex items-center justify-center text-sm font-black text-[#F43F5E]">PS</div>
+          <div><div class="text-sm font-bold text-[#0B0C1A]">Priya S.</div><div class="text-xs text-[#9294B4] font-medium">UPSC CSE 2026</div></div>
+        </div>
+      </div>
+      <div class="reveal rounded-3xl bg-white border border-black/[0.07] p-7 shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-500" style="transition-delay:0.16s">
+        <div class="flex gap-0.5 mb-4">âââââ</div>
+        <p class="text-[#454772] font-medium leading-relaxed mb-6 text-wrap-pretty">&ldquo;I travel on weekdays sometimes. PrepVeda lets me set different capacities per day so I'm not lying to myself. The calendar view helps me spot crunch weeks a month in advance. Nothing else does this.&rdquo;</p>
+        <div class="flex items-center gap-3 pt-5 border-t border-black/[0.06]">
+          <div class="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center text-sm font-black text-violet-600">AM</div>
+          <div><div class="text-sm font-bold text-[#0B0C1A]">Aryan M.</div><div class="text-xs text-[#9294B4] font-medium">GATE ECE 2026</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING TEASER -->
+<section class="py-20 px-6 bg-white">
+  <div class="max-w-3xl mx-auto text-center reveal">
+    <div class="pill bg-emerald-50 text-emerald-600 mb-6 mx-auto" style="border:1px solid rgba(16,185,129,0.2)">Pricing</div>
+    <h2 class="text-4xl font-black text-[#0B0C1A] mb-4">Free to start. Always.</h2>
+    <p class="text-lg text-[#454772] font-medium mb-10">Full planner, subjects, calendar and schedule â on the free plan, forever. Pro features coming soon.</p>
+    <div class="grid sm:grid-cols-2 gap-5 text-left">
+      <div class="rounded-3xl border-2 border-brand/20 bg-[#F5F3FF] p-7">
+        <div class="text-xs font-black uppercase tracking-widest text-brand mb-3">Free</div>
+        <div class="text-4xl font-black text-[#0B0C1A] mb-1">$0 <span class="text-base font-semibold text-[#9294B4]">/forever</span></div>
+        <div class="text-sm text-[#9294B4] mb-6">No card required</div>
+        <ul class="space-y-2.5 mb-7">
+          <li class="flex gap-2.5 text-sm font-medium text-[#454772]"><svg class="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>Unlimited subjects &amp; chapters</li>
+          <li class="flex gap-2.5 text-sm font-medium text-[#454772]"><svg class="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>Feasibility preview</li>
+          <li class="flex gap-2.5 text-sm font-medium text-[#454772]"><svg class="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>Calendar &amp; weekly schedule</li>
+          <li class="flex gap-2.5 text-sm font-medium text-[#454772]"><svg class="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>Streak tracking</li>
+        </ul>
+        <a href="#" class="block text-center py-3 bg-brand text-white font-bold rounded-xl hover:bg-brand/90 transition-colors text-sm">Get started free</a>
+      </div>
+      <div class="rounded-3xl border border-black/[0.07] bg-[#F5F3FF] p-7 relative overflow-hidden">
+        <div class="absolute top-4 right-4 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-amber-100 text-amber-600 border border-amber-200">Coming soon</div>
+        <div class="text-xs font-black uppercase tracking-widest text-[#9294B4] mb-3">Pro</div>
+        <div class="text-4xl font-black text-[#9294B4] mb-1">TBD</div>
+        <div class="text-sm text-[#9294B4] mb-6">Join waitlist for early access</div>
+        <ul class="space-y-2.5 mb-7">
+          <li class="flex gap-2.5 text-sm font-medium text-[#9294B4]"><svg class="w-4 h-4 text-[#D1D3E0] mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>Everything in Free</li>
+          <li class="flex gap-2.5 text-sm font-medium text-[#9294B4]"><svg class="w-4 h-4 text-[#D1D3E0] mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>Smart revision scheduling</li>
+          <li class="flex gap-2.5 text-sm font-medium text-[#9294B4]"><svg class="w-4 h-4 text-[#D1D3E0] mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>Analytics &amp; insights</li>
+          <li class="flex gap-2.5 text-sm font-medium text-[#9294B4]"><svg class="w-4 h-4 text-[#D1D3E0] mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>Priority support</li>
+        </ul>
+        <button class="w-full py-3 bg-white border border-black/[0.1] text-[#9294B4] font-bold rounded-xl text-sm cursor-default">Notify me</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq" class="py-24 px-6 bg-[#F5F3FF]">
+  <div class="max-w-3xl mx-auto">
+    <div class="text-center mb-14 reveal">
+      <div class="pill bg-brand/10 text-brand mb-5" style="border:1px solid rgba(79,70,229,0.2)">Questions</div>
+      <h2 class="text-4xl md:text-5xl font-black tracking-tight text-[#0B0C1A]">Still wondering?</h2>
+    </div>
+    <div class="space-y-3 reveal">
+      <details class="group rounded-2xl border border-black/[0.07] bg-white overflow-hidden shadow-card">
+        <summary class="flex items-center justify-between gap-4 cursor-pointer px-6 py-5 hover:bg-[#F5F3FF] transition-colors"><span class="text-base font-bold text-[#0B0C1A] pr-4">Is this an AI model writing my schedule?</span><div class="plus w-8 h-8 shrink-0 rounded-full border border-black/[0.08] bg-[#F5F3FF] flex items-center justify-center transition-transform duration-300 text-brand font-black text-lg leading-none select-none">+</div></summary>
+        <div class="px-6 pb-6 text-[#454772] leading-relaxed font-medium">No â and that's a feature. PrepVeda uses a deterministic constraint solver. Same inputs, same plan every time. No hallucinations, no random rewrites.</div>
+      </details>
+      <details class="group rounded-2xl border border-black/[0.07] bg-white overflow-hidden shadow-card">
+        <summary class="flex items-center justify-between gap-4 cursor-pointer px-6 py-5 hover:bg-[#F5F3FF] transition-colors"><span class="text-base font-bold text-[#0B0C1A] pr-4">Does it work for my specific exam?</span><div class="plus w-8 h-8 shrink-0 rounded-full border border-black/[0.08] bg-[#F5F3FF] flex items-center justify-center transition-transform duration-300 text-brand font-black text-lg leading-none select-none">+</div></summary>
+        <div class="px-6 pb-6 text-[#454772] leading-relaxed font-medium">PrepVeda is exam-agnostic. If you can break your prep into subjects and chapters with effort estimates, it works â board exams, competitive entrance, professional certs, semester finals.</div>
+      </details>
+      <details class="group rounded-2xl border border-black/[0.07] bg-white overflow-hidden shadow-card">
+        <summary class="flex items-center justify-between gap-4 cursor-pointer px-6 py-5 hover:bg-[#F5F3FF] transition-colors"><span class="text-base font-bold text-[#0B0C1A] pr-4">What happens when I fall behind or miss a day?</span><div class="plus w-8 h-8 shrink-0 rounded-full border border-black/[0.08] bg-[#F5F3FF] flex items-center justify-center transition-transform duration-300 text-brand font-black text-lg leading-none select-none">+</div></summary>
+        <div class="px-6 pb-6 text-[#454772] leading-relaxed font-medium">Re-run the planner in Intake mode. You can keep the previous plan structure or let it re-optimise around what's left. Feasibility re-checks immediately.</div>
+      </details>
+      <details class="group rounded-2xl border border-black/[0.07] bg-white overflow-hidden shadow-card">
+        <summary class="flex items-center justify-between gap-4 cursor-pointer px-6 py-5 hover:bg-[#F5F3FF] transition-colors"><span class="text-base font-bold text-[#0B0C1A] pr-4">Can I edit the generated schedule by hand?</span><div class="plus w-8 h-8 shrink-0 rounded-full border border-black/[0.08] bg-[#F5F3FF] flex items-center justify-center transition-transform duration-300 text-brand font-black text-lg leading-none select-none">+</div></summary>
+        <div class="px-6 pb-6 text-[#454772] leading-relaxed font-medium">Yes. Drag tasks across days, mark things complete, or add ad-hoc sessions. Manual edits don't break the plan.</div>
+      </details>
+      <details class="group rounded-2xl border border-black/[0.07] bg-white overflow-hidden shadow-card">
+        <summary class="flex items-center justify-between gap-4 cursor-pointer px-6 py-5 hover:bg-[#F5F3FF] transition-colors"><span class="text-base font-bold text-[#0B0C1A] pr-4">Is there a free plan?</span><div class="plus w-8 h-8 shrink-0 rounded-full border border-black/[0.08] bg-[#F5F3FF] flex items-center justify-center transition-transform duration-300 text-brand font-black text-lg leading-none select-none">+</div></summary>
+        <div class="px-6 pb-6 text-[#454772] leading-relaxed font-medium">Yes. The free plan includes full planner access, subjects, calendar and schedule. No card required.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA â dark for contrast punch -->
+<section class="py-24 px-6 bg-[#0B0C1A] relative overflow-hidden">
+  <div class="absolute inset-0 pointer-events-none">
+    <div class="absolute -top-40 -right-40 w-[500px] h-[500px] bg-brand/30 rounded-full blur-[120px]"></div>
+    <div class="absolute -bottom-32 -left-32 w-[400px] h-[400px] bg-[#F43F5E]/20 rounded-full blur-[100px]"></div>
+    <div class="absolute inset-0 line-grid opacity-30"></div>
+  </div>
+  <div class="relative z-10 max-w-4xl mx-auto text-center reveal">
+    <div class="pill bg-white/[0.08] text-white/80 mb-8" style="border:1px solid rgba(255,255,255,0.1)">
+      <span style="width:6px;height:6px;border-radius:50%;background:#F43F5E;animation:pulse-ring 2s infinite"></span>
+      Ready when you are
+    </div>
+    <h2 class="text-5xl md:text-7xl font-black tracking-tight text-white mb-6 leading-[1.02]">Stop guessing.<br /><span class="grad-text-animate">Start scheduling.</span></h2>
+    <p class="text-xl text-white/60 font-medium mb-10 max-w-xl mx-auto">Build your first feasibility-checked plan in under 5 minutes.</p>
+    <a href="#" class="group inline-flex px-10 py-5 bg-[#F43F5E] hover:bg-[#E11D48] text-white rounded-2xl font-bold text-lg shadow-rose-glow hover:shadow-[0_12px_50px_rgba(244,63,94,0.5)] items-center gap-3 hover:-translate-y-1 transition-all">
+      Create your plan
+      <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+    </a>
+    <div class="mt-5 text-sm font-semibold text-white/30">No credit card Â· Free plan forever</div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="bg-[#0B0C1A] border-t border-white/[0.06] py-10 px-6">
+  <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-5">
+    <div class="flex items-center gap-2.5">
+      <img src="./logo.png" alt="PrepVeda" class="w-8 h-8 rounded-full object-cover" />
+      <span class="font-black text-white">PrepVeda</span>
+    </div>
+    <div class="text-sm font-medium text-white/30">&copy; 2026 PrepVeda Â· All rights reserved.</div>
+    <div class="flex gap-6 text-sm font-bold"><a href="#" class="text-white/40 hover:text-white transition-colors">Privacy</a><a href="#" class="text-white/40 hover:text-white transition-colors">Terms</a><a href="#" class="text-white/40 hover:text-white transition-colors">Contact</a></div>
+  </div>
+</footer>
+
+<!-- TWEAKS PANEL -->
+<div id="tweaks-panel" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9999;background:white;border:1px solid rgba(0,0,0,0.1);border-radius:16px;padding:20px;width:240px;box-shadow:0 20px 60px rgba(0,0,0,0.15);font-family:'Plus Jakarta Sans',sans-serif;">
+  <div style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#9294B4;margin-bottom:16px;">Tweaks</div>
+  <div style="margin-bottom:14px;">
+    <div style="font-size:12px;font-weight:700;color:#0B0C1A;margin-bottom:8px;">CTA accent</div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="setAcc('rose')" data-acc="rose" style="width:26px;height:26px;border-radius:50%;background:#F43F5E;border:2px solid transparent;cursor:pointer;transition:all 0.2s;"></button>
+      <button onclick="setAcc('indigo')" data-acc="indigo" style="width:26px;height:26px;border-radius:50%;background:#4F46E5;border:2px solid transparent;cursor:pointer;transition:all 0.2s;"></button>
+      <button onclick="setAcc('violet')" data-acc="violet" style="width:26px;height:26px;border-radius:50%;background:#7C3AED;border:2px solid transparent;cursor:pointer;transition:all 0.2s;"></button>
+      <button onclick="setAcc('emerald')" data-acc="emerald" style="width:26px;height:26px;border-radius:50%;background:#059669;border:2px solid transparent;cursor:pointer;transition:all 0.2s;"></button>
+    </div>
+  </div>
+  <div style="margin-bottom:14px;">
+    <div style="font-size:12px;font-weight:700;color:#0B0C1A;margin-bottom:8px;">Background tint</div>
+    <div style="display:flex;gap:6px;">
+      <button onclick="setBg2('lavender')" id="tint-lavender" style="flex:1;padding:5px 0;font-size:10px;font-weight:700;border-radius:8px;background:#EEF0FF;border:1.5px solid #4F46E5;color:#4F46E5;cursor:pointer;">Lavender</button>
+      <button onclick="setBg2('cream')" id="tint-cream" style="flex:1;padding:5px 0;font-size:10px;font-weight:700;border-radius:8px;background:#F5F5F0;border:1.5px solid transparent;color:#9294B4;cursor:pointer;">Cream</button>
+      <button onclick="setBg2('white')" id="tint-white" style="flex:1;padding:5px 0;font-size:10px;font-weight:700;border-radius:8px;background:#F9FAFB;border:1.5px solid transparent;color:#9294B4;cursor:pointer;">White</button>
+    </div>
+  </div>
+  <div>
+    <div style="font-size:12px;font-weight:700;color:#0B0C1A;margin-bottom:8px;">Hero frame speed</div>
+    <input type="range" min="1500" max="6000" step="500" value="3000" id="speed-slider" oninput="setSpeed(this.value)" style="-webkit-appearance:none;width:100%;height:3px;border-radius:99px;background:#EEF0FF;outline:none;cursor:pointer">
+    <div style="font-size:10px;color:#9294B4;margin-top:4px;text-align:center" id="speed-label">3.0s per screen</div>
+  </div>
+</div>
+
+<script>
+// Scroll progress bar
+const scrollBar = document.getElementById('scroll-bar');
+window.addEventListener('scroll', () => {
+  const pct = window.scrollY / (document.body.scrollHeight - window.innerHeight) * 100;
+  if (scrollBar) scrollBar.style.width = pct + '%';
+}, {passive: true});
+
+// Mobile menu
+function toggleMobile() {
+  const m = document.getElementById('mobile-menu');
+  m.classList.toggle('open');
+}
+
+// Animated counters
+function animateCount(el, target, suffix='', prefix='') {
+  const dur = 1800, start = performance.now();
+  const update = (now) => {
+    const t = Math.min((now - start) / dur, 1);
+    const ease = 1 - Math.pow(1 - t, 4);
+    el.textContent = prefix + Math.round(ease * target).toLocaleString() + suffix;
+    if (t < 1) requestAnimationFrame(update);
+  };
+  requestAnimationFrame(update);
+}
+
+const statsObs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      animateCount(document.getElementById('cnt-plans'), 5200, '+');
+      animateCount(document.getElementById('cnt-hrs'), 128000, '+');
+      statsObs.disconnect();
+    }
+  });
+}, { threshold: 0.4 });
+const statsEl = document.getElementById('cnt-plans');
+if (statsEl) statsObs.observe(statsEl.closest('section'));
+
+// Tweaks
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === '__activate_edit_mode') document.getElementById('tweaks-panel').style.display = 'block';
+  if (e.data && e.data.type === '__deactivate_edit_mode') document.getElementById('tweaks-panel').style.display = 'none';
+});
+window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+
+const TWEAK_DEFAULTS2 = /*EDITMODE-BEGIN*/{"accent":"rose","bg":"lavender","heroBadge":"serious"}/*EDITMODE-END*/;
+
+const ACC_COLORS = {rose:'#F43F5E',indigo:'#4F46E5',violet:'#7C3AED',emerald:'#059669'};
+const BG_COLORS  = {lavender:'#F5F3FF',cream:'#F8F7F2',white:'#FAFAFA'};
+
+function setAcc(a) {
+  document.querySelectorAll('[data-acc]').forEach(b => b.style.borderColor = b.dataset.acc===a?'#0B0C1A':'transparent');
+  const c = ACC_COLORS[a];
+  document.querySelectorAll('a.bg-\\[\\#F43F5E\\], a.bg-\\[\\#E11D48\\]').forEach(el => { el.style.background=c; });
+  window.parent.postMessage({type:'__edit_mode_set_keys',edits:{accent:a}}, '*');
+}
+
+function setBg2(b) {
+  ['lavender','cream','white'].forEach(k => {
+    const el = document.getElementById('tint-'+k);
+    if (el) { el.style.borderColor = k===b?'#4F46E5':'transparent'; el.style.color = k===b?'#4F46E5':'#9294B4'; }
+  });
+  document.body.style.background = BG_COLORS[b];
+  document.querySelectorAll('.bg-\\[\\#F5F3FF\\]').forEach(el => el.style.background = BG_COLORS[b]);
+  document.documentElement.style.background = BG_COLORS[b];
+  window.parent.postMessage({type:'__edit_mode_set_keys',edits:{bg:b}}, '*');
+}
+
+let heroInterval, heroSpeed = 3000;
+function setSpeed(v) {
+  heroSpeed = +v;
+  document.getElementById('speed-label').textContent = (v/1000).toFixed(1)+'s per screen';
+  if (heroInterval) { clearInterval(heroInterval); heroInterval = setInterval(advanceHero, heroSpeed); }
+}
+
+// Scroll reveal
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('on'); obs.unobserve(e.target); } });
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal, .reveal-l, .reveal-r').forEach(el => obs.observe(el));
+
+// Feasibility bars animate on scroll
+const feasObs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.querySelectorAll('.feas-bar').forEach((bar, i) => {
+        setTimeout(() => { bar.style.width = bar.dataset.w + '%'; }, i * 150);
+      });
+      feasObs.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.3 });
+const feasBars = document.getElementById('feas-bars');
+if (feasBars) feasObs.observe(feasBars);
+
+// Hero frame cycling
+const heroScreens = [
+  { src: './app_screenshots/Dashboard.png', label: 'Dashboard' },
+  { src: './app_screenshots/Planner_Page2.png', label: 'Feasibility Preview' },
+  { src: './app_screenshots/Calendar_Page.png', label: 'Calendar' },
+  { src: './app_screenshots/Schedule_Page.png', label: 'Weekly Schedule' },
+];
+let heroIdx = 0;
+const heroFrame = document.getElementById('hero-frame');
+const heroTabs = document.getElementById('hero-tabs');
+const heroLabelEl = document.getElementById('hero-label');
+
+// Preload images
+heroScreens.forEach(s => { const img = new Image(); img.src = s.src; });
+
+// Build slides
+heroScreens.forEach((s, i) => {
+  const slide = document.createElement('img');
+  slide.src = s.src;
+  slide.style.cssText = `position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top;opacity:${i===0?1:0};transition:opacity 0.7s cubic-bezier(0.16,1,0.3,1);`;
+  heroFrame.appendChild(slide);
+});
+
+const slides = heroFrame.querySelectorAll('img');
+const dots = heroTabs ? heroTabs.querySelectorAll('.tab-dot') : [];
+
+function advanceHero() {
+  const prev = heroIdx;
+  heroIdx = (heroIdx + 1) % heroScreens.length;
+  slides[prev].style.opacity = 0;
+  slides[heroIdx].style.opacity = 1;
+  if (dots.length) {
+    dots[prev].classList.remove('active'); dots[prev].style.background='rgba(0,0,0,0.1)'; dots[prev].style.transform='';
+    dots[heroIdx].classList.add('active'); dots[heroIdx].style.background='#4F46E5'; dots[heroIdx].style.transform='scaleX(2.5)';
+  }
+  if (heroLabelEl) heroLabelEl.textContent = heroScreens[heroIdx].label;
+}
+
+heroInterval = setInterval(advanceHero, heroSpeed);
+</script>
+</body>
+</html>
