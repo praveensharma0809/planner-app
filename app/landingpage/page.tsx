@@ -163,7 +163,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto h-full flex items-center justify-between">
           <Link href="/landingpage" className="flex items-center gap-2.5 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-4">
             <Image
-              src="/app_screenshots/Logo.jpg"
+              src="/logo.jpg"
               alt="PrepVeda"
               width={40}
               height={40}
@@ -650,7 +650,7 @@ export default function LandingPage() {
         <footer className="bg-[#0B0C1A] border-t border-white/10 py-10 px-6">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5">
             <div className="flex items-center gap-2.5">
-              <Image src="/app_screenshots/Logo.jpg" alt="PrepVeda" width={32} height={32} className="rounded-full object-cover" />
+              <Image src="/logo.jpg" alt="PrepVeda" width={32} height={32} className="rounded-full object-cover" />
               <span className="text-white font-extrabold">PrepVeda</span>
             </div>
             <div className="text-sm font-medium text-white/40">&copy; {new Date().getFullYear()} PrepVeda · All rights reserved.</div>

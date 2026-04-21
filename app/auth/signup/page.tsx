@@ -49,7 +49,7 @@ export default function SignupPage() {
       {/* Left Pane - Form */}
       <div className="flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-16 xl:px-24 relative z-10">
         <Link href="/landingpage" className="absolute top-8 left-6 sm:left-12 lg:left-16 xl:left-24 flex items-center gap-2.5 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-2 transition-transform hover:-translate-x-1">
-          <Image src="/app_screenshots/Logo.jpg" alt="PrepVeda" width={32} height={32} className="rounded-full object-cover shadow-sm border border-black/5" />
+          <Image src="/logo.jpg" alt="PrepVeda" width={32} height={32} className="rounded-full object-cover shadow-sm border border-black/5" />
           <span className="text-base font-extrabold tracking-tight text-[#0B0C1A]">PrepVeda</span>
         </Link>
         
