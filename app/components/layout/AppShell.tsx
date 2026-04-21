@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import {
   createContext,
@@ -11,6 +11,7 @@ import {
 import dynamic from "next/dynamic"
 import { Sidebar } from "@/app/components/layout/Sidebar"
 import { ScheduleTopbarProvider } from "@/app/components/layout/ScheduleTopbarContext"
+import { GlobalFounderMessage } from "@/app/components/FounderMessageModal"
 
 const Topbar = dynamic(
   () => import("@/app/components/layout/Topbar").then((m) => m.Topbar),
@@ -32,9 +33,9 @@ interface SidebarContextValue {
 export const SidebarContext = createContext<SidebarContextValue>({
   collapsed: false,
   mobileOpen: false,
-  toggleCollapse: () => {},
-  toggleMobile: () => {},
-  closeMobile: () => {},
+  toggleCollapse: () => { },
+  toggleMobile: () => { },
+  closeMobile: () => { },
 })
 
 export function useSidebar() {
@@ -116,11 +117,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           {/* Mobile overlay — covers content behind open sidebar */}
           <div
-            className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300 ${
-              mobileOpen
-                ? "opacity-100 pointer-events-auto"
-                : "opacity-0 pointer-events-none"
-            }`}
+            className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300 ${mobileOpen
+              ? "opacity-100 pointer-events-auto"
+              : "opacity-0 pointer-events-none"
+              }`}
             onClick={closeMobile}
             aria-hidden="true"
           />
@@ -130,13 +130,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           {/* Right body: topbar + scrollable main */}
           <div
-            className={`flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden transition-[margin-left] duration-300 ease-in-out ${
-              collapsed ? "lg:ml-[var(--sidebar-collapsed-width)]" : "lg:ml-[var(--sidebar-width)]"
-            }`}
+            className={`flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden transition-[margin-left] duration-300 ease-in-out ${collapsed ? "lg:ml-[var(--sidebar-collapsed-width)]" : "lg:ml-[var(--sidebar-width)]"
+              }`}
           >
             <Topbar />
             <main className="shell-main flex h-full min-h-0 w-full min-w-0 flex-col items-stretch overflow-hidden">{children}</main>
           </div>
+          <GlobalFounderMessage />
         </div>
       </ScheduleTopbarProvider>
     </SidebarContext.Provider>

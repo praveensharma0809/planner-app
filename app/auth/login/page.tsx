@@ -1,10 +1,17 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/app/components/Toast";
 import Link from "next/link";
+import Image from "next/image";
+import { Plus_Jakarta_Sans } from "next/font/google";
+
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+});
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,40 +43,41 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center text-white relative overflow-hidden" style={{ background: "var(--background)" }}>
-      <div className="mesh-bg" />
-
-      <div className="w-full max-w-md space-y-8 relative z-10 px-4">
-        <div className="text-center space-y-3">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl shadow-indigo-500/20">
-            <span className="text-xl font-black text-white">S</span>
+    <main className={`${plusJakarta.className} min-h-screen grid lg:grid-cols-[1fr_1.1fr] bg-white text-[#0B0C1A] antialiased overflow-hidden`}>
+      {/* Left Pane - Form */}
+      <div className="flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-16 xl:px-24 relative z-10">
+        <Link href="/landingpage" className="absolute top-8 left-6 sm:left-12 lg:left-16 xl:left-24 flex items-center gap-2.5 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-2 transition-transform hover:-translate-x-1">
+          <Image src="/logo.jpg" alt="PrepVeda" width={32} height={32} className="rounded-full object-cover shadow-sm border border-black/5" />
+          <span className="text-base font-extrabold tracking-tight text-[#0B0C1A]">PrepVeda</span>
+        </Link>
+        
+        <div className="w-full max-w-[420px] mx-auto space-y-10 mt-12 lg:mt-0">
+          <div className="space-y-3">
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#0B0C1A]">Welcome back</h1>
+            <p className="text-[#454772] font-medium text-base">Please enter your details to sign in.</p>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight gradient-text">PrepVeda</h1>
-          <p className="text-sm text-white/40">Sign in to continue</p>
-        </div>
 
-        <div className="glass-card !p-8 space-y-6">
-          <form className="space-y-4" onSubmit={handleLogin}>
-            <div className="space-y-1.5">
-              <label htmlFor="email" className="text-xs text-white/40 font-medium">Email</label>
+          <form className="space-y-6" onSubmit={handleLogin}>
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-bold text-[#0B0C1A]">Email</label>
               <input
                 id="email"
                 type="email"
                 placeholder="you@example.com"
-                className="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.06] focus:outline-none focus:border-indigo-500/30 focus:ring-1 focus:ring-indigo-500/20 text-sm transition-all"
+                className="w-full px-4 py-3.5 rounded-2xl bg-white border border-black/[0.1] focus:outline-none focus:border-[#4F46E5] focus:ring-4 focus:ring-[#4F46E5]/10 text-[15px] font-medium text-[#0B0C1A] placeholder:text-[#9294B4] transition-all shadow-sm"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="password" className="text-xs text-white/40 font-medium">Password</label>
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-bold text-[#0B0C1A]">Password</label>
               <input
                 id="password"
                 type="password"
-                placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;"
-                className="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.06] focus:outline-none focus:border-indigo-500/30 focus:ring-1 focus:ring-indigo-500/20 text-sm transition-all"
+                placeholder="••••••••"
+                className="w-full px-4 py-3.5 rounded-2xl bg-white border border-black/[0.1] focus:outline-none focus:border-[#4F46E5] focus:ring-4 focus:ring-[#4F46E5]/10 text-[15px] font-medium text-[#0B0C1A] placeholder:text-[#9294B4] transition-all shadow-sm"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -79,21 +87,47 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary w-full !py-3 !text-sm"
+              className="w-full py-4 rounded-2xl bg-[#4F46E5] hover:bg-[#4338CA] active:scale-[0.98] disabled:opacity-70 disabled:active:scale-100 text-white font-bold text-[15px] shadow-[0_8px_24px_rgba(79,70,229,0.25)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4F46E5] focus-visible:ring-offset-2 transition-all"
             >
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
 
-          <p className="text-center text-sm text-white/30">
+          <p className="text-center text-[#454772] font-medium text-sm">
             Don&apos;t have an account?{" "}
-            <Link href="/auth/signup" className="text-indigo-400 hover:text-indigo-300 transition-colors font-medium">
-              Create one
+            <Link href="/auth/signup" className="text-[#4F46E5] font-extrabold hover:text-[#4338CA] focus-visible:outline-none focus-visible:underline transition-colors">
+              Create free account
             </Link>
           </p>
+        </div>
+      </div>
+
+      {/* Right Pane - Image & Brand */}
+      <div className="hidden lg:block relative bg-[#F5F3FF] p-6 xl:p-8">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#4F46E5]/5 to-[#F43F5E]/5" />
+        <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle, rgba(79, 70, 229, 0.1) 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+        
+        <div className="relative h-full w-full rounded-[2.5rem] overflow-hidden shadow-2xl shadow-[#4F46E5]/10 border border-white/50 bg-[#EEF0FF] flex items-center justify-center">
+          <Image 
+            src="/app_screenshots/auth_cover.png" 
+            alt="PrepVeda Abstract" 
+            fill 
+            className="object-cover" 
+            priority 
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/0 to-black/0" />
+          
+          <div className="absolute bottom-12 left-12 right-12 z-20">
+
+            <h2 className="text-4xl xl:text-5xl font-extrabold tracking-tight text-white mb-4 leading-tight">
+              Stop guessing. <br/> Start scheduling.
+            </h2>
+            <p className="text-white/80 font-medium text-lg max-w-md">
+              PrepVeda is the only planner that flags impossible deadlines before you even begin studying.
+            </p>
+          </div>
         </div>
       </div>
     </main>
   );
 }
-

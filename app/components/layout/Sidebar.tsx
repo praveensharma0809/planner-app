@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import Link from "next/link"
 import Image from "next/image"
@@ -303,7 +303,7 @@ export function Sidebar() {
           onClick={closeMobile}
         >
           <div className="flex-shrink-0 w-[26px] h-[26px] rounded-md overflow-hidden grid place-items-center bg-transparent">
-            <Image src="/logo.png" alt="PrepVeda Logo" width={26} height={26} className="w-full h-full object-cover" />
+            <Image src="/logo.jpg" alt="PrepVeda Logo" width={26} height={26} className="w-full h-full object-cover" />
           </div>
           {!collapsed && (
             <span className="sidebar-logo-text">PrepVeda</span>

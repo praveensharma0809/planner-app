@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useCallback, useEffect } from "react";
 import Image from "next/image";
@@ -821,7 +821,7 @@ export default function TutorialWizard() {
             <div className="onb-welcome-visual">
               <div className="onb-welcome-logo">
                 <div className="flex-shrink-0 w-14 h-14 rounded-2xl overflow-hidden grid place-items-center bg-transparent shadow-[0_8px_30px_var(--sh-primary-glow)]">
-                  <Image src="/logo.png" alt="PrepVeda Logo" width={56} height={56} className="w-full h-full object-cover" />
+                  <Image src="/logo.jpg" alt="PrepVeda Logo" width={56} height={56} className="w-full h-full object-cover" />
                 </div>
                 <span className="onb-welcome-logo-text">PrepVeda</span>
               </div>
