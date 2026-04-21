@@ -654,10 +654,15 @@ export default function LandingPage() {
               <span className="text-white font-extrabold">PrepVeda</span>
             </div>
             <div className="text-sm font-medium text-white/40">&copy; {new Date().getFullYear()} PrepVeda · All rights reserved.</div>
-            <div className="flex gap-6 text-sm font-bold text-white/40">
+            <div className="flex flex-wrap justify-center gap-6 items-center text-sm font-bold text-white/40">
               <Link href="/privacy" className="hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded transition-colors">Privacy</Link>
               <Link href="/terms" className="hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded transition-colors">Terms</Link>
               <a href="mailto:stayyplanned@gmail.com" className="hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded transition-colors">Contact</a>
+              <div className="w-px h-4 bg-white/20 hidden sm:block" />
+              <a href="https://instagram.com/prepvedaa" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded transition-colors">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                <span>@prepvedaa</span>
+              </a>
             </div>
           </div>
         </footer>
