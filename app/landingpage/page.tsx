@@ -108,7 +108,7 @@ export default function LandingPage() {
       setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
     }, 3000);
     return () => clearInterval(timer);
-  }, [isPaused, heroSlides.length]);
+  }, [isPaused]);
 
   useEffect(() => {
     const handleVisibilityChange = () => setIsPaused(document.hidden);

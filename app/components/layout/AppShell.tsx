@@ -11,7 +11,10 @@ import {
 import dynamic from "next/dynamic"
 import { Sidebar } from "@/app/components/layout/Sidebar"
 import { ScheduleTopbarProvider } from "@/app/components/layout/ScheduleTopbarContext"
-import { GlobalFounderMessage } from "@/app/components/FounderMessageModal"
+const GlobalFounderMessage = dynamic(
+  () => import("@/app/components/FounderMessageModal").then((m) => ({ default: m.GlobalFounderMessage })),
+  { ssr: false }
+)
 
 const Topbar = dynamic(
   () => import("@/app/components/layout/Topbar").then((m) => m.Topbar),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 
@@ -10,13 +10,7 @@ interface FounderMessageModalProps {
 }
 
 export function FounderMessageModal({ isOpen, onClose }: FounderMessageModalProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!isOpen || !mounted) return null;
+  if (!isOpen) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8 overflow-y-auto animate-in fade-in duration-200">
@@ -73,15 +67,11 @@ export function FounderMessageModal({ isOpen, onClose }: FounderMessageModalProp
 }
 
 export function GlobalFounderMessage() {
-  const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
+  const [isOpen, setIsOpen] = useState(() => {
     const shouldShow = localStorage.getItem("showFounderMessage") === "true";
-    if (shouldShow) {
-      setIsOpen(true);
-      localStorage.removeItem("showFounderMessage");
-    }
-  }, []);
+    if (shouldShow) localStorage.removeItem("showFounderMessage");
+    return shouldShow;
+  });
 
   return <FounderMessageModal isOpen={isOpen} onClose={() => setIsOpen(false)} />;
 }
