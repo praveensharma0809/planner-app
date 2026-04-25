@@ -171,7 +171,13 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     () => subjects.filter((subject) => subject.archived),
     [subjects]
   )
-  const displaySubjects = showArchived ? archivedSubjects : activeSubjects
+  // Memoized so the reference is stable when the underlying lists don't
+  // change — the selection-sync effects below depend on this and a fresh
+  // array every render would loop them indefinitely.
+  const displaySubjects = useMemo(
+    () => (showArchived ? archivedSubjects : activeSubjects),
+    [showArchived, archivedSubjects, activeSubjects]
+  )
 
   useEffect(() => {
     if (displaySubjects.length === 0) {
@@ -185,8 +191,10 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     })
   }, [displaySubjects])
 
-  const selectedSubject =
-    displaySubjects.find((subject) => subject.id === selectedSubjectId) ?? null
+  const selectedSubject = useMemo(
+    () => displaySubjects.find((subject) => subject.id === selectedSubjectId) ?? null,
+    [displaySubjects, selectedSubjectId]
+  )
 
   const visibleChapters = useMemo(() => {
     const chapters = selectedSubject?.chapters ?? []
@@ -218,8 +226,11 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     }
   }, [selectedSubject])
 
-  const selectedChapter =
-    selectedSubject?.chapters.find((chapter) => chapter.id === selectedChapterId) ?? null
+  const selectedChapter = useMemo(
+    () =>
+      selectedSubject?.chapters.find((chapter) => chapter.id === selectedChapterId) ?? null,
+    [selectedSubject, selectedChapterId]
+  )
 
   useEffect(() => {
     setSelectedTaskIds(new Set())
