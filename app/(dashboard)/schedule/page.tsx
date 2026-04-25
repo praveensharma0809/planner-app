@@ -304,13 +304,26 @@ export default function SchedulePage() {
   const handleToggleComplete = useCallback(async (taskId: string, nextCompleted: boolean) => {
     if (busyTaskIds.has(taskId)) return
 
-    if (!tasks.some((task) => task.id === taskId)) return
+    const existing = tasks.find((task) => task.id === taskId)
+    if (!existing) return
+    const previousCompleted = existing.completed
 
+    // Optimistic flip — keep mirror to MonthView gold-standard pattern.
+    setTasks((previous) =>
+      previous.map((task) =>
+        task.id === taskId ? { ...task, completed: nextCompleted } : task,
+      ),
+    )
     setTaskBusy(taskId, true)
 
     try {
       const result = await setTaskCompletion(taskId, nextCompleted)
       if (result.status !== "SUCCESS") {
+        setTasks((previous) =>
+          previous.map((task) =>
+            task.id === taskId ? { ...task, completed: previousCompleted } : task,
+          ),
+        )
         if (result.status === "UNAUTHORIZED") {
           addToast("Please sign in again.", "error")
         } else if (result.status === "NOT_FOUND") {
@@ -318,48 +331,54 @@ export default function SchedulePage() {
         } else {
           addToast(result.message || "Could not update task status.", "error")
         }
-        return
       }
-
-      await loadWeekData(weekMeta.weekStartISO)
     } catch {
+      setTasks((previous) =>
+        previous.map((task) =>
+          task.id === taskId ? { ...task, completed: previousCompleted } : task,
+        ),
+      )
       addToast("Could not update task status.", "error")
     } finally {
       setTaskBusy(taskId, false)
     }
-  }, [addToast, busyTaskIds, loadWeekData, setTaskBusy, tasks, weekMeta.weekStartISO])
+  }, [addToast, busyTaskIds, setTaskBusy, tasks])
 
   const handleDeleteEvent = useCallback(async (eventId: string) => {
     if (busyTaskIds.has(eventId)) return
 
+    const previousTasks = tasks
+    // Optimistic removal — restore on non-success.
+    setTasks((previous) => previous.filter((task) => task.id !== eventId))
     setTaskBusy(eventId, true)
     try {
       const result = await deleteScheduleTask(eventId)
 
       if (result.status === "SUCCESS") {
-        setTasks((previous) => previous.filter((task) => task.id !== eventId))
         addToast("Event deleted.", "success")
         return
       }
+
+      if (result.status === "NOT_FOUND") {
+        addToast("This event no longer exists.", "info")
+        return
+      }
+
+      setTasks(previousTasks)
 
       if (result.status === "UNAUTHORIZED") {
         addToast("Sign in required to delete events.", "error")
         return
       }
 
-      if (result.status === "NOT_FOUND") {
-        setTasks((previous) => previous.filter((task) => task.id !== eventId))
-        addToast("This event no longer exists.", "info")
-        return
-      }
-
       addToast(`Could not delete event: ${result.message}`, "error")
     } catch {
+      setTasks(previousTasks)
       addToast("Could not delete event right now.", "error")
     } finally {
       setTaskBusy(eventId, false)
     }
-  }, [addToast, busyTaskIds, setTaskBusy])
+  }, [addToast, busyTaskIds, setTaskBusy, tasks])
 
   const handleSubmitEvent = useCallback(async (draft: EventDraft, eventId?: string) => {
     if (isSavingEvent) return false

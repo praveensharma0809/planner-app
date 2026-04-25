@@ -38,8 +38,6 @@ export async function getSubjectProgress(): Promise<GetSubjectProgressResponse> 
       .select("id, name")
       .eq("user_id", user.id)
       .eq("archived", false)
-      .not("name", "ilike", "others")
-      .not("name", "ilike", "__deprecated_others__")
       .order("sort_order", { ascending: true })
 
     if (subjectsError) {

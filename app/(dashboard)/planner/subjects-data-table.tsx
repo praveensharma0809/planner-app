@@ -1807,7 +1807,7 @@ export function SubjectsDataTable({
     }
   }
 
-  async function openDependencyManager(scope: DependencyScope) {
+  function openDependencyManager(scope: DependencyScope) {
     if (showArchived) return
 
     if (scope === "chapter" && !selectedChapter) {
@@ -1832,18 +1832,45 @@ export function SubjectsDataTable({
     setDependencyScope(scope)
     setDependencyTargetChapterId(targetId)
     setDependencySearch("")
+    setDependencySelectedIds(new Set())
     setDependencyModalOpen(true)
-
-    setDependencyLoading(true)
-    try {
-      const map = await loadTopicParamsSnapshot(true)
-      setDependencySelectedIds(new Set(map.get(targetId)?.depends_on ?? []))
-    } catch (error) {
-      showMutationError(error, "Could not load dependencies.")
-    } finally {
-      setDependencyLoading(false)
-    }
   }
+
+  useEffect(() => {
+    if (!dependencyModalOpen || !dependencyTargetChapterId) return
+
+    let alive = true
+    setDependencyLoading(true)
+    void (async () => {
+      try {
+        const map = await loadTopicParamsSnapshot(true)
+        if (!alive) return
+        const rawDependsOn = map.get(dependencyTargetChapterId)?.depends_on ?? []
+
+        if (dependencyScope === "subject") {
+          // Subject-scope deps are persisted as fan-out across chapters: the anchor
+          // chapter's depends_on contains chapter IDs from other subjects. Reduce
+          // those back to the unique set of source subject IDs for the picker.
+          const subjectIds = new Set<string>()
+          for (const chapterId of rawDependsOn) {
+            const chapter = chapterById.get(chapterId)
+            if (chapter) subjectIds.add(chapter.subjectId)
+          }
+          setDependencySelectedIds(subjectIds)
+        } else {
+          setDependencySelectedIds(new Set(rawDependsOn))
+        }
+      } catch (error) {
+        if (alive) showMutationError(error, "Could not load dependencies.")
+      } finally {
+        if (alive) setDependencyLoading(false)
+      }
+    })()
+
+    return () => {
+      alive = false
+    }
+  }, [chapterById, dependencyModalOpen, dependencyScope, dependencyTargetChapterId, loadTopicParamsSnapshot, showMutationError])
 
   function toggleDependencySelection(chapterId: string) {
     setDependencySelectedIds((previous) => {
@@ -1857,55 +1884,89 @@ export function SubjectsDataTable({
     })
   }
 
+  function buildTopicParamPayload(
+    targetChapter: SubjectNavChapter & { subjectId: string; subjectName: string },
+    dependsOn: string[],
+  ) {
+    const existing = topicParamsByTopic.get(targetChapter.id)
+    const chapterTasks = tasksByChapter[targetChapter.id] ?? []
+    const chapterTaskMinutes = chapterTasks.reduce(
+      (sum, task) => sum + Math.max(0, task.durationMinutes),
+      0,
+    )
+    const chapterTaskDurations = chapterTasks.map((task) => Math.max(0, task.durationMinutes))
+    const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10)
+    const estimatedHours = existing?.estimated_hours
+      ? existing.estimated_hours
+      : derivedHours > 0 ? derivedHours : 1
+
+    return {
+      topic_id: targetChapter.id,
+      estimated_hours: estimatedHours,
+      deadline: existing?.deadline ?? null,
+      earliest_start: existing?.earliest_start ?? targetChapter.earliestStart ?? null,
+      depends_on: dependsOn,
+      session_length_minutes: inferSessionLengthMinutes(
+        chapterTaskDurations,
+        existing?.session_length_minutes,
+      ),
+      rest_after_days: existing?.rest_after_days ?? Math.max(0, targetChapter.restAfterDays ?? 0),
+      max_sessions_per_day: existing?.max_sessions_per_day ?? 0,
+      study_frequency: existing?.study_frequency ?? "daily",
+    }
+  }
+
   async function handleSaveDependencies() {
     if (!dependencyTargetChapterId) {
       addToast("Select a chapter first.", "error")
       return
     }
 
-    const chapter = chapterById.get(dependencyTargetChapterId)
-    if (!chapter) {
-      addToast("Selected chapter could not be found.", "error")
-      return
-    }
-
-    const existing = topicParamsByTopic.get(dependencyTargetChapterId)
-    const chapterTaskMinutes = (tasksByChapter[dependencyTargetChapterId] ?? []).reduce(
-      (sum, task) => sum + Math.max(0, task.durationMinutes),
-      0
-    )
-    const chapterTaskDurations = (tasksByChapter[dependencyTargetChapterId] ?? []).map((task) =>
-      Math.max(0, task.durationMinutes)
-    )
-const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10)
-      const estimatedHours = existing?.estimated_hours
-        ? existing.estimated_hours
-        : derivedHours > 0 ? derivedHours : 1
-
-    const dependsOn = Array.from(dependencySelectedIds)
-      .filter((id) => id !== dependencyTargetChapterId)
-
     if (!beginMutation()) return
-
     setDependencySaving(true)
 
     try {
-      const result = await saveTopicParams([
-        {
-          topic_id: dependencyTargetChapterId,
-          estimated_hours: estimatedHours,
-          deadline: existing?.deadline ?? null,
-          earliest_start: existing?.earliest_start ?? chapter.earliestStart ?? null,
-          depends_on: dependsOn,
-          session_length_minutes: inferSessionLengthMinutes(
-            chapterTaskDurations,
-            existing?.session_length_minutes
-          ),
-          rest_after_days: existing?.rest_after_days ?? Math.max(0, chapter.restAfterDays ?? 0),
-          max_sessions_per_day: existing?.max_sessions_per_day ?? 0,
-          study_frequency: existing?.study_frequency ?? "daily",
-        },
-      ])
+      let payload: ReturnType<typeof buildTopicParamPayload>[]
+
+      if (dependencyScope === "subject") {
+        if (!selectedSubject || selectedSubject.chapters.length === 0) {
+          addToast("Select a subject with at least one chapter.", "error")
+          return
+        }
+
+        // Resolve each selected dep subject to its anchor chapter (the last chapter
+        // of that subject acts as the prerequisite — its completion implies the
+        // whole subject is done).
+        const anchorChapterIds: string[] = []
+        for (const subjectId of dependencySelectedIds) {
+          if (subjectId === selectedSubject.id) continue
+          const depSubject = activeSubjects.find((subject) => subject.id === subjectId)
+          if (!depSubject || depSubject.chapters.length === 0) continue
+          const anchor = depSubject.chapters[depSubject.chapters.length - 1]
+          if (anchor) anchorChapterIds.push(anchor.id)
+        }
+
+        // Fan-out: every chapter in the target subject takes the same set of
+        // anchor prerequisites so the dependency holds at the subject level.
+        payload = selectedSubject.chapters.map((chapter) => {
+          const enriched = { ...chapter, subjectId: selectedSubject.id, subjectName: selectedSubject.name }
+          const dependsOn = anchorChapterIds.filter((id) => id !== chapter.id)
+          return buildTopicParamPayload(enriched, dependsOn)
+        })
+      } else {
+        const chapter = chapterById.get(dependencyTargetChapterId)
+        if (!chapter) {
+          addToast("Selected chapter could not be found.", "error")
+          return
+        }
+
+        const dependsOn = Array.from(dependencySelectedIds).filter(
+          (id) => id !== dependencyTargetChapterId,
+        )
+        payload = [buildTopicParamPayload(chapter, dependsOn)]
+      }
+
+      const result = await saveTopicParams(payload)
 
       if (result.status === "SUCCESS") {
         addToast("Dependencies saved.", "success")
@@ -1952,16 +2013,39 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
     }
 
     if (!selectedSubject) return []
-    return selectedSubject.chapters.map((chapter) => ({
-      id: chapter.id,
-      label: chapter.name,
-    }))
+    // Subject scope: surface the subject as a single read-only target. Per-chapter
+    // selection inside a subject is handled by fan-out at save time.
+    return [{
+      id: selectedSubject.id,
+      label: selectedSubject.name,
+    }]
   }, [dependencyScope, selectedChapter, selectedSubject])
 
   const dependencyCandidates = useMemo(() => {
     const query = dependencySearch.trim().toLowerCase()
+    const targetSubjectId = selectedSubject?.id ?? null
+
+    if (dependencyScope === "subject") {
+      return activeSubjects
+        .filter((subject) => subject.id !== targetSubjectId)
+        .filter((subject) => {
+          if (!query) return true
+          return subject.name.toLowerCase().includes(query)
+        })
+        .map((subject) => ({
+          id: subject.id,
+          name: subject.name,
+          subjectName: "",
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name))
+    }
+
     return allActiveChapters
       .filter((chapter) => chapter.id !== dependencyTargetChapterId)
+      .filter((chapter) => {
+        if (!targetSubjectId) return true
+        return chapter.subjectId === targetSubjectId
+      })
       .filter((chapter) => {
         if (!query) return true
         const haystack = `${chapter.subjectName} ${chapter.name}`.toLowerCase()
@@ -1972,7 +2056,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
         if (bySubject !== 0) return bySubject
         return left.name.localeCompare(right.name)
       })
-  }, [allActiveChapters, dependencySearch, dependencyTargetChapterId])
+  }, [activeSubjects, allActiveChapters, dependencyScope, dependencySearch, dependencyTargetChapterId, selectedSubject])
 
   return (
     <div
@@ -2080,7 +2164,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     size="sm"
                     className="w-full justify-center"
                     onClick={() => {
-                      void openDependencyManager("subject")
+                      openDependencyManager("subject")
                     }}
                     disabled={isMutating || showArchived || !selectedSubject || selectedSubject.chapters.length === 0}
                   >
@@ -2127,7 +2211,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     size="sm"
                     className="w-full justify-center"
                     onClick={() => {
-                      void openDependencyManager("chapter")
+                      openDependencyManager("chapter")
                     }}
                     disabled={isMutating || showArchived || !selectedChapter}
                   >
@@ -3096,35 +3180,18 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
         size="md"
       >
         <div className="space-y-4">
-          {dependencyScope === "subject" ? (
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                Target Chapter
-              </label>
-              <select
-                value={dependencyTargetChapterId}
-                onChange={(event) => setDependencyTargetChapterId(event.target.value)}
-                className="ui-input"
-                disabled={isMutating || dependencyLoading || dependencySaving}
-              >
-                {dependencyTargetOptions.map((option) => (
-                  <option key={`dependency-target-${option.id}`} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : dependencyTargetOptions[0] ? (
+          {dependencyTargetOptions[0] ? (
             <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-              Target: {dependencyTargetOptions[0].label}
+              {dependencyScope === "subject" ? "Target Subject: " : "Target: "}
+              {dependencyTargetOptions[0].label}
             </p>
           ) : null}
 
           <Input
-            label="Search Chapters"
+            label={dependencyScope === "subject" ? "Search Subjects" : "Search Chapters"}
             value={dependencySearch}
             onChange={(event) => setDependencySearch(event.target.value)}
-            placeholder="Filter by subject or chapter"
+            placeholder={dependencyScope === "subject" ? "Filter by subject" : "Filter by subject or chapter"}
           />
 
           <div
@@ -3133,11 +3200,11 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
           >
             {dependencyLoading ? (
               <p className="px-1 py-2 text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                Loading chapter parameters...
+                {dependencyScope === "subject" ? "Loading subject parameters..." : "Loading chapter parameters..."}
               </p>
             ) : dependencyCandidates.length === 0 ? (
               <p className="px-1 py-2 text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                No candidate chapters found.
+                {dependencyScope === "subject" ? "No other subjects available." : "No candidate chapters found."}
               </p>
             ) : (
               dependencyCandidates.map((candidate) => {
@@ -3161,9 +3228,11 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     >
                       {candidate.name}
                     </p>
-                    <p className="text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
-                      {candidate.subjectName}
-                    </p>
+                    {candidate.subjectName ? (
+                      <p className="text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
+                        {candidate.subjectName}
+                      </p>
+                    ) : null}
                   </button>
                 )
               })

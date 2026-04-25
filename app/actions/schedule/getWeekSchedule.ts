@@ -97,8 +97,6 @@ export async function getScheduleWeekData(
         .select("id, name, sort_order")
         .eq("user_id", user.id)
         .eq("archived", false)
-          .not("name", "ilike", "others")
-          .not("name", "ilike", "__deprecated_others__")
         .order("sort_order", { ascending: true }),
       supabase
         .from("tasks")

@@ -3,9 +3,20 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { createBrowserClient } from "@supabase/ssr"
 import { useSidebar } from "./AppShell"
+
+function useSupabaseBrowserClient() {
+  return useMemo(
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      ),
+    []
+  )
+}
 
 // ─── SVG icon primitive ───────────────────────────────────────
 
@@ -197,34 +208,51 @@ function NavItemRow({
 
 function SidebarFooter({ collapsed }: { collapsed: boolean }) {
   const router = useRouter()
-  const [email, setEmail] = useState<string | null>(null)
+  const supabase = useSupabaseBrowserClient()
+  const [displayName, setDisplayName] = useState<string | null>(null)
   const [signingOut, setSigningOut] = useState(false)
 
   useEffect(() => {
-    const client = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-    client.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email ?? null)
-    })
-  }, [])
+    let cancelled = false
+
+    const load = async () => {
+      const { data: userData } = await supabase.auth.getUser()
+      const user = userData.user
+      if (!user) {
+        if (!cancelled) setDisplayName(null)
+        return
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .maybeSingle()
+
+      if (cancelled) return
+
+      const fullName = (profile?.full_name ?? "").trim()
+      setDisplayName(fullName || user.email || null)
+    }
+
+    void load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [supabase])
 
   const handleSignOut = async () => {
     setSigningOut(true)
     try {
-      const client = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
-      await client.auth.signOut()
+      await supabase.auth.signOut()
       router.push("/auth/login")
     } catch {
       setSigningOut(false)
     }
   }
 
-  const initial = email ? email[0].toUpperCase() : "·"
+  const initial = displayName ? displayName.trim()[0]?.toUpperCase() ?? "·" : "·"
 
   return (
     <div className="sidebar-footer">
@@ -237,10 +265,12 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
         {!collapsed && (
           <>
             <div className="flex-1 min-w-0">
-              <p className="sidebar-user-email truncate text-[12.5px]" title={email ?? ""}>
-                {email ?? "—"}
+              <p
+                className="sidebar-user-name truncate text-[13px] font-medium"
+                title={displayName ?? ""}
+              >
+                {displayName ?? "—"}
               </p>
-              <p className="sidebar-user-plan text-[11px] mt-0.5">Free plan</p>
             </div>
 
             <button

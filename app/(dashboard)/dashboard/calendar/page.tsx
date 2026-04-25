@@ -37,8 +37,6 @@ export default async function CalendarPage({ searchParams }: Props) {
         .select("id, name")
         .eq("user_id", user.id)
         .eq("archived", false)
-        .not("name", "ilike", "others")
-        .not("name", "ilike", "__deprecated_others__")
         .order("sort_order")
       : Promise.resolve({ data: [] }),
   ])

@@ -3,10 +3,8 @@ import { getStreak } from "@/app/actions/dashboard/getStreak"
 import { getWeeklySnapshot } from "@/app/actions/dashboard/getWeeklySnapshot"
 import { getSubjectProgress, type SubjectProgress } from "@/app/actions/dashboard/getSubjectProgress"
 import { getBacklog } from "@/app/actions/dashboard/getBacklog"
-import { setTaskCompletion } from "@/app/actions/plan/setTaskCompletion"
-import { deleteScheduleTask } from "@/app/actions/schedule/deleteScheduleTask"
-import { SubmitButton } from "@/app/components/SubmitButton"
 import { RescheduleMissedButton } from "./RescheduleMissedButton"
+import { DashboardTaskToggle, DashboardTaskDelete } from "./DashboardTaskActions"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import type { Task } from "@/lib/types/db"
 import { Badge } from "@/app/components/ui"
@@ -130,8 +128,6 @@ export default async function DashboardPage() {
           .select("id, name, sort_order")
           .eq("user_id", user.id)
           .eq("archived", false)
-          .not("name", "ilike", "others")
-          .not("name", "ilike", "__deprecated_others__")
           .order("sort_order", { ascending: true })
       ).data ?? [])
     : []
@@ -238,30 +234,6 @@ export default async function DashboardPage() {
   ]
 
   const riskSignalCount = alertItems.length
-
-  async function handleComplete(formData: FormData) {
-    "use server"
-
-    const taskId = formData.get("task_id")
-    if (typeof taskId !== "string" || !taskId) return
-    try {
-      await setTaskCompletion(taskId, true)
-    } catch {
-      // Avoid crashing the server-action transport on unexpected runtime failures.
-    }
-  }
-
-  async function handleDelete(formData: FormData) {
-    "use server"
-
-    const taskId = formData.get("task_id")
-    if (typeof taskId !== "string" || !taskId) return
-    try {
-      await deleteScheduleTask(taskId)
-    } catch {
-      // Avoid crashing the server-action transport on unexpected runtime failures.
-    }
-  }
 
   return (
     <div className="page-root animate-fade-in flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto">
@@ -402,18 +374,11 @@ export default async function DashboardPage() {
                       {visiblePendingTasks.map((task) => (
                         <div
                           key={task.id}
+                          data-task-row
                           className="flex items-center gap-2 rounded-xl border px-2.5 py-2"
                           style={{ borderColor: "var(--sh-border)", background: "var(--sh-card)" }}
                         >
-                          <form action={handleComplete}>
-                            <input type="hidden" name="task_id" value={task.id} />
-                            <SubmitButton
-                              className="dashboard-task-checkbox"
-                              aria-label="Complete task"
-                            >
-                              <span className="sr-only">Complete</span>
-                            </SubmitButton>
-                          </form>
+                          <DashboardTaskToggle taskId={task.id} mode="pending" />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium" style={{ color: "var(--sh-text-primary)" }}>
                               {task.title}
@@ -431,22 +396,7 @@ export default async function DashboardPage() {
                               {task.session_type !== "core" && <span>{task.session_type}</span>}
                             </div>
                           </div>
-                          <form action={handleDelete}>
-                            <input type="hidden" name="task_id" value={task.id} />
-                            <SubmitButton
-                              className="task-icon-delete-button shrink-0"
-                              aria-label="Delete task"
-                              title="Delete"
-                            >
-                              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 6V4.8A1.8 1.8 0 0 1 9.8 3h4.4A1.8 1.8 0 0 1 16 4.8V6" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 6l-1 13a2 2 0 0 1-2 1.8H8a2 2 0 0 1-2-1.8L5 6" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 10v7M14 10v7" />
-                              </svg>
-                              <span className="sr-only">Delete</span>
-                            </SubmitButton>
-                          </form>
+                          <DashboardTaskDelete taskId={task.id} />
                         </div>
                       ))}
                     </div>
@@ -471,12 +421,8 @@ export default async function DashboardPage() {
                       </summary>
                       <div className="mt-3 space-y-1.5">
                         {doneTodaySorted.map((task) => (
-                          <div key={task.id} className="dashboard-task-completed">
-                            <div className="dashboard-task-complete-check">
-                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                            </div>
+                          <div key={task.id} data-task-row className="dashboard-task-completed">
+                            <DashboardTaskToggle taskId={task.id} mode="completed" />
                             <span className="dashboard-task-completed-title">{task.title}</span>
                             <span className="dashboard-task-completed-time">
                               {(
@@ -485,22 +431,7 @@ export default async function DashboardPage() {
                                   : (task.subject_id ? subjectNameById.get(task.subject_id) : null) ?? "Unknown"
                               ).slice(0, 10)} · {task.duration_minutes}m
                             </span>
-                            <form action={handleDelete}>
-                              <input type="hidden" name="task_id" value={task.id} />
-                              <SubmitButton
-                                className="task-icon-delete-button shrink-0"
-                                aria-label="Delete task"
-                                title="Delete"
-                              >
-                                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 6V4.8A1.8 1.8 0 0 1 9.8 3h4.4A1.8 1.8 0 0 1 16 4.8V6" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 6l-1 13a2 2 0 0 1-2 1.8H8a2 2 0 0 1-2-1.8L5 6" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 10v7M14 10v7" />
-                                </svg>
-                                <span className="sr-only">Delete</span>
-                              </SubmitButton>
-                            </form>
+                            <DashboardTaskDelete taskId={task.id} />
                           </div>
                         ))}
                       </div>

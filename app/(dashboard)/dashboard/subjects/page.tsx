@@ -23,8 +23,6 @@ export default async function SubjectsPage() {
     .from("subjects")
     .select("id, name, archived, sort_order")
     .eq("user_id", user.id)
-    .not("name", "ilike", "others")
-    .not("name", "ilike", "__deprecated_others__")
     .order("sort_order", { ascending: true })
 
   const subjects = (subjectRows ?? []) as SubjectRow[]

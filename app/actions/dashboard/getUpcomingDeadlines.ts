@@ -54,8 +54,6 @@ export async function getUpcomingDeadlines(): Promise<GetUpcomingDeadlinesRespon
         .from("subjects")
         .select("id, name")
         .eq("archived", false)
-        .not("name", "ilike", "others")
-        .not("name", "ilike", "__deprecated_others__")
         .in("id", subjectIds)
 
       if (subjectsError) {

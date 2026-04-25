@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useEffect } from "react";
 import Image from "next/image";
+import { preload } from "react-dom";
 import { useRouter } from "next/navigation";
 import { completeOnboarding } from "@/app/actions/onboarding/completeOnboarding";
 import "./onboarding.css";
@@ -462,6 +463,19 @@ export default function TutorialWizard() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [handleNext, handleBack, handleSkip, isLast]);
+
+  // Preload every guided-flow image once on mount so slide swaps don't blank the frame.
+  useEffect(() => {
+    const allFlowImages = [
+      ...SUBJECTS_FLOW_SLIDES,
+      ...PLANNER_FLOW_SLIDES,
+      ...DASHBOARD_FLOW_SLIDES,
+      ...SCHEDULE_CALENDAR_FLOW_SLIDES,
+    ].map((s) => s.image);
+    for (const src of allFlowImages) {
+      preload(src, { as: "image" });
+    }
+  }, []);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");

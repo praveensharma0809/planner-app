@@ -305,8 +305,6 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
       .select("id, user_id, name, sort_order, archived, created_at")
       .eq("user_id", user.id)
       .eq("archived", false)
-      .not("name", "ilike", "others")
-      .not("name", "ilike", "__deprecated_others__")
       .order("sort_order", { ascending: true })
 
     if (subjectError) {
@@ -444,8 +442,6 @@ export async function saveStructure(
       .select("id")
       .eq("user_id", user.id)
       .eq("archived", false)
-      .not("name", "ilike", "others")
-      .not("name", "ilike", "__deprecated_others__")
 
     for (const subject of existingSubjects ?? []) {
       if (!keepSubjectIds.has(subject.id)) {

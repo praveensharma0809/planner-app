@@ -40,6 +40,9 @@ export function FounderMessageModal({ isOpen, onClose }: FounderMessageModalProp
             <p className="p-4 bg-[#F5F3FF] border border-[#4F46E5]/10 rounded-xl text-[#0B0C1A]">
               <strong>Note:</strong> This is beta version and under testing, users are requested to give their suggestions and report any bugs they come across.
             </p>
+            <p className="p-4 bg-[#F5F3FF] border border-[#4F46E5]/10 rounded-xl text-[#0B0C1A]">
+              <strong>Currently, the app is optimized for desktop only. We are working on launching apps for mobile users.</strong>
+            </p>
             <p>
               If you ever need a help you can email me directly at{" "}
               <a href="mailto:stayyplanned@gmail.com" className="text-[#4F46E5] font-bold hover:underline">

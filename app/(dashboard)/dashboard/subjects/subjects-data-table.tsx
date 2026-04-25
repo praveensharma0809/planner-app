@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useState, useTransition, type CSSProperties, type FormEvent, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core"
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
@@ -24,6 +24,8 @@ import {
 import { setSubjectTaskCompletion } from "@/app/actions/subjects/setSubjectTaskCompletion"
 import { deleteSubject } from "@/app/actions/subjects/deleteSubject"
 import { toggleArchiveSubject } from "@/app/actions/subjects/toggleArchiveSubject"
+import { reorderSubjects as reorderSubjectsAction } from "@/app/actions/subjects/reorderSubjects"
+import { reorderChapters as reorderChaptersAction } from "@/app/actions/subjects/reorderChapters"
 import { useSidebar } from "@/app/components/layout/AppShell"
 import { PageHeader } from "@/app/components/layout/PageHeader"
 import { FlowTutorialButton } from "@/app/components/onboarding/FlowTutorialButton"
@@ -189,10 +191,17 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   const { addToast } = useToast()
   const { collapsed } = useSidebar()
   const sidebarExpanded = !collapsed
+  const [, startBackgroundRefresh] = useTransition()
+  const refreshInBackground = useCallback(() => {
+    startBackgroundRefresh(() => {
+      router.refresh()
+    })
+  }, [router])
   const [subjects, setSubjects] = useState<SubjectNavItem[]>(initialSubjects)
   const [tasksByChapter, setTasksByChapter] =
     useState<Record<string, TopicTaskItem[]>>(initialTasksByChapter)
   const [showArchived, setShowArchived] = useState(false)
+  const [showArchivedChapters, setShowArchivedChapters] = useState(false)
   const [pendingSubjectId, setPendingSubjectId] = useState<string | null>(null)
   const [pendingChapterId, setPendingChapterId] = useState<string | null>(null)
   const [pendingTaskIds, setPendingTaskIds] = useState<Set<string>>(new Set())
@@ -265,17 +274,34 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   const selectedSubject =
     displaySubjects.find((subject) => subject.id === selectedSubjectId) ?? null
 
-  useEffect(() => {
+  const visibleChapters = useMemo(() => {
     const chapters = selectedSubject?.chapters ?? []
-    if (chapters.length === 0) {
+    if (showArchived) return chapters
+    return chapters.filter((chapter) => Boolean(chapter.archived) === showArchivedChapters)
+  }, [selectedSubject, showArchived, showArchivedChapters])
+
+  const archivedChapterCount = useMemo(() => {
+    if (!selectedSubject) return 0
+    return selectedSubject.chapters.filter((chapter) => chapter.archived).length
+  }, [selectedSubject])
+
+  useEffect(() => {
+    if (visibleChapters.length === 0) {
       setSelectedChapterId(null)
       return
     }
 
     setSelectedChapterId((current) => {
-      if (current && chapters.some((chapter) => chapter.id === current)) return current
-      return chapters[0].id
+      if (current && visibleChapters.some((chapter) => chapter.id === current)) return current
+      return visibleChapters[0].id
     })
+  }, [visibleChapters])
+
+  useEffect(() => {
+    if (!selectedSubject) return
+    if (selectedSubject.chapters.every((chapter) => !chapter.archived)) {
+      setShowArchivedChapters(false)
+    }
   }, [selectedSubject])
 
   const selectedChapter =
@@ -293,6 +319,78 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   const completedCount = chapterTasks.filter((task) => task.completed).length
   const visibleTasks = chapterTasks
 
+  const handleReorderSubjects = useCallback(
+    async (newOrderIds: string[]) => {
+      const idToActive = new Map(activeSubjects.map((s) => [s.id, s]))
+      const reorderedActive = newOrderIds
+        .map((id) => idToActive.get(id))
+        .filter((s): s is SubjectNavItem => Boolean(s))
+
+      if (reorderedActive.length !== activeSubjects.length) return
+
+      const previous = subjects
+      const archivedKept = subjects.filter((s) => s.archived)
+      setSubjects([...reorderedActive, ...archivedKept])
+
+      const updates = reorderedActive.map((subject, index) => ({
+        id: subject.id,
+        sort_order: index,
+      }))
+
+      const result = await reorderSubjectsAction(updates)
+      if (result.status !== "SUCCESS") {
+        setSubjects(previous)
+        addToast(
+          result.status === "ERROR" ? result.message : "Failed to reorder subjects.",
+          "error"
+        )
+        return
+      }
+      refreshInBackground()
+    },
+    [activeSubjects, addToast, refreshInBackground, subjects]
+  )
+
+  const handleReorderChapters = useCallback(
+    async (newOrderIds: string[]) => {
+      if (!selectedSubject) return
+      const subjectId = selectedSubject.id
+
+      const idToChapter = new Map(selectedSubject.chapters.map((c) => [c.id, c]))
+      const reorderedChapters = newOrderIds
+        .map((id) => idToChapter.get(id))
+        .filter((c): c is SubjectNavChapter => Boolean(c))
+
+      if (reorderedChapters.length !== selectedSubject.chapters.length) return
+
+      const previous = subjects
+      setSubjects((current) =>
+        current.map((subject) =>
+          subject.id === subjectId
+            ? { ...subject, chapters: reorderedChapters }
+            : subject
+        )
+      )
+
+      const updates = reorderedChapters.map((chapter, index) => ({
+        id: chapter.id,
+        sort_order: index,
+      }))
+
+      const result = await reorderChaptersAction(subjectId, updates)
+      if (result.status !== "SUCCESS") {
+        setSubjects(previous)
+        addToast(
+          result.status === "ERROR" ? result.message : "Failed to reorder chapters.",
+          "error"
+        )
+        return
+      }
+      refreshInBackground()
+    },
+    [addToast, refreshInBackground, selectedSubject, subjects]
+  )
+
   const subjectColumnItems: ColumnItem[] = displaySubjects.map((subject) => ({
     id: subject.id,
     label: subject.name,
@@ -306,18 +404,18 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
           },
   }))
 
-  const chapterColumnItems: ColumnItem[] = (selectedSubject?.chapters ?? []).map((chapter) => ({
-    id: chapter.id,
-    label: chapter.name,
-    hint: `${(tasksByChapter[chapter.id] ?? []).length} task${(tasksByChapter[chapter.id] ?? []).length === 1 ? "" : "s"}`,
-    onEdit: showArchived ? undefined : () => openEditChapter(chapter.id, chapter.name),
-    onDelete:
-      showArchived
-        ? undefined
-        : () => {
-            void handleDeleteChapter(chapter.id, chapter.name)
-          },
-  }))
+  const chapterColumnItems: ColumnItem[] = visibleChapters.map((chapter) => {
+    const isReadOnly = showArchived || showArchivedChapters
+    return {
+      id: chapter.id,
+      label: chapter.name,
+      hint: `${(tasksByChapter[chapter.id] ?? []).length} task${(tasksByChapter[chapter.id] ?? []).length === 1 ? "" : "s"}`,
+      onEdit: isReadOnly ? undefined : () => openEditChapter(chapter.id, chapter.name),
+      onDelete: isReadOnly ? undefined : () => {
+        void handleDeleteChapter(chapter.id, chapter.name)
+      },
+    }
+  })
 
   const allVisibleSelected =
     visibleTasks.length > 0 && visibleTasks.every((task) => selectedTaskIds.has(task.id))
@@ -419,7 +517,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         )
       )
       addToast(result.archived ? "Subject archived." : "Subject restored.", "success")
-      router.refresh()
+      refreshInBackground()
     } else {
       addToast(result.status === "ERROR" ? result.message : "Unauthorized", "error")
     }
@@ -449,7 +547,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
       if (result.status === "SUCCESS") {
         addToast(archived ? "Chapter restored." : "Chapter archived.", "success")
-        router.refresh()
+        refreshInBackground()
         return
       }
 
@@ -514,7 +612,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         })
       }
       addToast(result.status === "ERROR" ? result.message : "Failed to reorder tasks.", "error")
-      router.refresh()
+      refreshInBackground()
     }
 
     setReorderingTaskIds([])
@@ -551,7 +649,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
       if (result.status !== "SUCCESS") {
         addToast(result.status === "ERROR" ? result.message : "Failed to auto-order tasks.", "error")
-        router.refresh()
+        refreshInBackground()
       }
 
       setReorderingTaskIds([])
@@ -560,7 +658,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     return () => {
       alive = false
     }
-  }, [addToast, chapterTasks, manualOrderChapterIds, reorderingTaskIds.length, router, selectedChapter, showArchived])
+  }, [addToast, chapterTasks, manualOrderChapterIds, refreshInBackground, reorderingTaskIds.length, selectedChapter, showArchived])
 
 
   async function handleSaveChapter(event: FormEvent<HTMLFormElement>) {
@@ -582,7 +680,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
           setSelectedChapterId(result.chapterId)
           setChapterDialog(CLOSED_DIALOG_STATE)
           addToast("Chapter added.", "success")
-          router.refresh()
+          refreshInBackground()
           return
         }
 
@@ -601,7 +699,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       if (result.status === "SUCCESS") {
         setChapterDialog(CLOSED_DIALOG_STATE)
         addToast("Chapter updated.", "success")
-        router.refresh()
+        refreshInBackground()
         return
       }
 
@@ -645,7 +743,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
         setTaskDialog(CLOSED_DIALOG_STATE)
         addToast("Task updated.", "success")
-        router.refresh()
+        refreshInBackground()
         return
       }
 
@@ -668,7 +766,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     const result = await deleteChapter(chapterId)
     if (result.status === "SUCCESS") {
       addToast("Chapter deleted.", "success")
-      router.refresh()
+      refreshInBackground()
       return
     }
 
@@ -688,7 +786,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     const result = await deleteSubject(subjectId)
     if (result.status === "SUCCESS") {
       addToast("Subject deleted.", "success")
-      router.refresh()
+      refreshInBackground()
       return
     }
 
@@ -705,12 +803,29 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       return
     }
 
+    const previousTasksByChapter = tasksByChapter
+    setTasksByChapter((previous) => {
+      const next: Record<string, TopicTaskItem[]> = {}
+      for (const [chapterId, tasks] of Object.entries(previous)) {
+        next[chapterId] = tasks.filter((task) => task.id !== taskId)
+      }
+      return next
+    })
+    setSelectedTaskIds((current) => {
+      if (!current.has(taskId)) return current
+      const next = new Set(current)
+      next.delete(taskId)
+      return next
+    })
+
     const result = await deleteSubjectTask(taskId)
     if (result.status === "SUCCESS") {
       addToast("Task deleted.", "success")
-      router.refresh()
+      refreshInBackground()
       return
     }
+
+    setTasksByChapter(previousTasksByChapter)
 
     if (result.status === "UNAUTHORIZED") {
       addToast("Unauthorized", "error")
@@ -747,7 +862,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
           addToast("Task added.", "success")
           setTaskComposerOpen(false)
           resetTaskComposerFields()
-          router.refresh()
+          refreshInBackground()
           return
         }
 
@@ -799,7 +914,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         addToast(`Added ${result.createdCount} tasks.`, "success")
         setTaskComposerOpen(false)
         resetTaskComposerFields()
-        router.refresh()
+        refreshInBackground()
         return
       }
 
@@ -855,7 +970,19 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       return
     }
 
+    const selectedIdSet = new Set(taskIds)
+    const previousTasksByChapter = tasksByChapter
+    const previousSelected = selectedTaskIds
+
+    setTasksByChapter((previous) => ({
+      ...previous,
+      [selectedChapter.id]: (previous[selectedChapter.id] ?? []).filter(
+        (task) => !selectedIdSet.has(task.id)
+      ),
+    }))
+    setSelectedTaskIds(new Set())
     setDeletingSelectedTasks(true)
+
     try {
       const result = await deleteSubjectTasks({
         chapterId: selectedChapter.id,
@@ -863,18 +990,13 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       })
 
       if (result.status === "SUCCESS") {
-        const selectedIdSet = new Set(taskIds)
-        setTasksByChapter((previous) => ({
-          ...previous,
-          [selectedChapter.id]: (previous[selectedChapter.id] ?? []).filter(
-            (task) => !selectedIdSet.has(task.id)
-          ),
-        }))
-        setSelectedTaskIds(new Set())
         addToast(`Deleted ${result.deletedCount} task${result.deletedCount === 1 ? "" : "s"}.`, "success")
-        router.refresh()
+        refreshInBackground()
         return
       }
+
+      setTasksByChapter(previousTasksByChapter)
+      setSelectedTaskIds(previousSelected)
 
       if (result.status === "UNAUTHORIZED") {
         addToast("Unauthorized", "error")
@@ -888,11 +1010,14 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   }
 
   async function handleToggleTask(taskId: string, nextCompleted: boolean) {
-    if (!selectedChapter || showArchived) return
+    if (!selectedChapter || showArchived || showArchivedChapters) return
     if (pendingTaskIds.has(taskId)) return
 
     const chapterId = selectedChapter.id
-    if (!(tasksByChapter[chapterId] ?? []).some((task) => task.id === taskId)) return
+    const chapterTasksForChapter = tasksByChapter[chapterId] ?? []
+    const previousTask = chapterTasksForChapter.find((task) => task.id === taskId)
+    if (!previousTask) return
+    const previousCompleted = previousTask.completed
 
     setPendingTaskIds((current) => {
       const next = new Set(current)
@@ -900,9 +1025,22 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       return next
     })
 
+    setTasksByChapter((previous) => ({
+      ...previous,
+      [chapterId]: (previous[chapterId] ?? []).map((task) =>
+        task.id === taskId ? { ...task, completed: nextCompleted } : task
+      ),
+    }))
+
     try {
       const result = await setSubjectTaskCompletion(taskId, nextCompleted)
       if (result.status !== "SUCCESS") {
+        setTasksByChapter((previous) => ({
+          ...previous,
+          [chapterId]: (previous[chapterId] ?? []).map((task) =>
+            task.id === taskId ? { ...task, completed: previousCompleted } : task
+          ),
+        }))
         if (result.status === "UNAUTHORIZED") {
           addToast("Unauthorized", "error")
         } else if (result.status === "NOT_FOUND") {
@@ -913,8 +1051,14 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         return
       }
 
-      router.refresh()
+      refreshInBackground()
     } catch {
+      setTasksByChapter((previous) => ({
+        ...previous,
+        [chapterId]: (previous[chapterId] ?? []).map((task) =>
+          task.id === taskId ? { ...task, completed: previousCompleted } : task
+        ),
+      }))
       addToast("Could not update task status.", "error")
     } finally {
       setPendingTaskIds((current) => {
@@ -976,6 +1120,8 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
               activeId={selectedSubjectId}
               emptyMessage="No subjects available."
               onSelect={setSelectedSubjectId}
+              onReorder={showArchived ? undefined : handleReorderSubjects}
+              sensors={sensors}
               footer={
                 <>
                   <Button
@@ -1016,6 +1162,8 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
               activeId={selectedChapterId}
               emptyMessage="No chapters in this subject."
               onSelect={setSelectedChapterId}
+              onReorder={showArchived || showArchivedChapters ? undefined : handleReorderChapters}
+              sensors={sensors}
               footer={
                 <>
                   <Button
@@ -1023,7 +1171,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                     size="sm"
                     className="w-full justify-center"
                     onClick={openCreateChapter}
-                    disabled={!selectedSubject || showArchived}
+                    disabled={!selectedSubject || showArchived || showArchivedChapters}
                   >
                     Add Chapter
                   </Button>
@@ -1036,6 +1184,19 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                   >
                     {selectedChapter?.archived ? "Restore Chapter" : "Archive Chapter"}
                   </Button>
+                  {!showArchived && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-center"
+                      onClick={() => setShowArchivedChapters((value) => !value)}
+                      disabled={!selectedSubject || (archivedChapterCount === 0 && !showArchivedChapters)}
+                    >
+                      {showArchivedChapters
+                        ? "Show Active Chapters"
+                        : `Archived Chapters (${archivedChapterCount})`}
+                    </Button>
+                  )}
                 </>
               }
             />
@@ -1079,7 +1240,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                         variant="primary"
                         size="sm"
                         onClick={openTaskComposer}
-                        disabled={showArchived}
+                        disabled={showArchived || showArchivedChapters}
                       >
                         Add Task
                       </Button>
@@ -1087,7 +1248,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                         variant="ghost"
                         size="sm"
                         onClick={() => setManageMode((value) => !value)}
-                        disabled={showArchived || chapterTasks.length === 0}
+                        disabled={showArchived || showArchivedChapters || chapterTasks.length === 0}
                       >
                         {manageMode ? "Done" : "Manage"}
                       </Button>
@@ -1276,7 +1437,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         onClose={() => setDrawerOpen(false)}
         onSaved={() => {
           setDrawerOpen(false)
-          router.refresh()
+          refreshInBackground()
         }}
       />
 
@@ -1605,6 +1766,8 @@ interface NavigationColumnProps {
   emptyMessage: string
   onSelect: (id: string) => void
   footer?: ReactNode
+  onReorder?: (newOrderIds: string[]) => void
+  sensors?: ReturnType<typeof useSensors>
 }
 
 function NavigationColumn({
@@ -1614,7 +1777,35 @@ function NavigationColumn({
   emptyMessage,
   onSelect,
   footer,
+  onReorder,
+  sensors,
 }: NavigationColumnProps) {
+  const handleDragEnd = (event: DragEndEvent) => {
+    if (!onReorder) return
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const ids = items.map((item) => item.id)
+    const fromIndex = ids.indexOf(String(active.id))
+    const toIndex = ids.indexOf(String(over.id))
+    if (fromIndex < 0 || toIndex < 0) return
+
+    onReorder(arrayMove(ids, fromIndex, toIndex))
+  }
+
+  const renderRow = (item: ColumnItem) => {
+    const isActive = item.id === activeId
+    return (
+      <NavigationColumnRow
+        key={item.id}
+        item={item}
+        isActive={isActive}
+        draggable={Boolean(onReorder)}
+        onSelect={onSelect}
+      />
+    )
+  }
+
   return (
     <section
       className="w-[220px] min-w-[208px] h-full shrink-0 rounded-xl border px-2 py-2 snap-start flex flex-col"
@@ -1639,58 +1830,22 @@ function NavigationColumn({
           </p>
         )}
 
-        {items.map((item) => {
-          const isActive = item.id === activeId
-
-          return (
-            <div
-              key={item.id}
-              className="rounded-lg border p-1.5 transition-colors"
-              style={{
-                borderColor: isActive ? "var(--sh-primary-glow)" : "transparent",
-                background: isActive ? "var(--sh-primary-muted)" : "transparent",
-              }}
+        {items.length > 0 && onReorder && sensors ? (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={items.map((item) => item.id)}
+              strategy={rectSortingStrategy}
             >
-              <div className="flex items-start gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => onSelect(item.id)}
-                  className="min-w-0 flex-1 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-[rgba(124,108,255,0.08)]"
-                >
-                  <p
-                    className="truncate text-sm font-semibold"
-                    style={{
-                      color: isActive ? "var(--sh-primary-light)" : "var(--sh-text-primary)",
-                    }}
-                  >
-                    {item.label}
-                  </p>
-                  {item.hint && (
-                    <p className="mt-0.5 text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
-                      {item.hint}
-                    </p>
-                  )}
-                </button>
-
-                <div className="flex shrink-0 items-center gap-1 pt-1">
-                  {item.onEdit && (
-                    <RowActionButton
-                      label={`Edit ${item.label}`}
-                      onClick={item.onEdit}
-                    />
-                  )}
-                  {item.onDelete && (
-                    <RowActionButton
-                      label={`Delete ${item.label}`}
-                      onClick={item.onDelete}
-                      danger
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-          )
-        })}
+              {items.map(renderRow)}
+            </SortableContext>
+          </DndContext>
+        ) : (
+          items.map(renderRow)
+        )}
       </div>
 
       {footer && (
@@ -1702,6 +1857,84 @@ function NavigationColumn({
         </div>
       )}
     </section>
+  )
+}
+
+interface NavigationColumnRowProps {
+  item: ColumnItem
+  isActive: boolean
+  draggable: boolean
+  onSelect: (id: string) => void
+}
+
+function NavigationColumnRow({ item, isActive, draggable, onSelect }: NavigationColumnRowProps) {
+  const sortable = useSortable({ id: item.id, disabled: !draggable })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable
+
+  const style: CSSProperties = {
+    borderColor: isActive ? "var(--sh-primary-glow)" : "transparent",
+    background: isActive ? "var(--sh-primary-muted)" : "transparent",
+    transform: draggable ? CSS.Transform.toString(transform) : undefined,
+    transition: draggable ? transition : undefined,
+    opacity: draggable && isDragging ? 0.6 : 1,
+  }
+
+  return (
+    <div
+      ref={draggable ? setNodeRef : undefined}
+      className="rounded-lg border p-1.5 transition-colors"
+      style={style}
+    >
+      <div className="flex items-start gap-1.5">
+        {draggable && (
+          <button
+            type="button"
+            aria-label={`Reorder ${item.label}`}
+            className="mt-1 flex h-5 w-3 shrink-0 cursor-grab items-center justify-center rounded text-[10px] active:cursor-grabbing"
+            style={{ color: "var(--sh-text-muted)" }}
+            {...attributes}
+            {...listeners}
+          >
+            ⋮⋮
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onSelect(item.id)}
+          className="min-w-0 flex-1 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-[rgba(124,108,255,0.08)]"
+        >
+          <p
+            className="truncate text-sm font-semibold"
+            style={{
+              color: isActive ? "var(--sh-primary-light)" : "var(--sh-text-primary)",
+            }}
+          >
+            {item.label}
+          </p>
+          {item.hint && (
+            <p className="mt-0.5 text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
+              {item.hint}
+            </p>
+          )}
+        </button>
+
+        <div className="flex shrink-0 items-center gap-1 pt-1">
+          {item.onEdit && (
+            <RowActionButton
+              label={`Edit ${item.label}`}
+              onClick={item.onEdit}
+            />
+          )}
+          {item.onDelete && (
+            <RowActionButton
+              label={`Delete ${item.label}`}
+              onClick={item.onDelete}
+              danger
+            />
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
