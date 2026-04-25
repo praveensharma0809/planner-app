@@ -32,6 +32,16 @@ import { FlowTutorialButton } from "@/app/components/onboarding/FlowTutorialButt
 import { SUBJECTS_FLOW_SLIDES } from "@/app/components/onboarding/flowSlides"
 import { useToast } from "@/app/components/Toast"
 import { Button, Input, Modal } from "@/app/components/ui"
+import {
+  RowActionButton,
+  type ColumnItem,
+} from "@/app/components/subjects-data-table/shared"
+import {
+  clampInteger,
+  compareTasksNaturally,
+  composeSeriesName,
+  shouldAutoOrderTasks,
+} from "@/app/components/subjects-data-table/helpers"
 import { SubjectDrawer } from "./SubjectDrawer"
 
 export interface SubjectNavTopic {
@@ -65,13 +75,9 @@ interface Props {
   initialTasksByChapter: Record<string, TopicTaskItem[]>
 }
 
-interface ColumnItem {
-  id: string
-  label: string
-  hint?: string
-  onEdit?: () => void
-  onDelete?: () => void
-}
+// ColumnItem and RowActionButton are imported from
+// @/app/components/subjects-data-table/shared so this view and the
+// planner stay in sync on the row primitives.
 
 type NameDialogState = {
   open: boolean
@@ -90,101 +96,9 @@ const CLOSED_DIALOG_STATE: NameDialogState = {
   value: "",
 }
 
-function clampInteger(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
-
-function composeSeriesName(
-  baseName: string,
-  index: number,
-  placement: NumberPlacement,
-  separator: string,
-  numberPadding: number
-): string {
-  const numeric = String(index).padStart(Math.max(0, numberPadding), "0")
-  const cleanSeparator = separator.trim()
-
-  if (placement === "prefix") {
-    return cleanSeparator ? `${numeric}${cleanSeparator}${baseName}` : `${numeric}${baseName}`
-  }
-
-  return cleanSeparator ? `${baseName}${cleanSeparator}${numeric}` : `${baseName}${numeric}`
-}
-
-function buildNumericPatternKey(title: string): string | null {
-  const normalized = title.trim().toLowerCase()
-  if (!normalized) return null
-
-  if (!/\d/.test(normalized)) return null
-  return normalized.replace(/\d+/g, "#")
-}
-
-function extractNumericParts(title: string): number[] {
-  const matches = title.match(/\d+/g)
-  if (!matches) return []
-
-  return matches
-    .map((token) => Number.parseInt(token, 10))
-    .filter((value) => Number.isFinite(value))
-}
-
-function shouldAutoOrderTasks(tasks: TopicTaskItem[]): boolean {
-  if (tasks.length < 2) return false
-
-  const patternCounts = new Map<string, number>()
-  for (const task of tasks) {
-    const key = buildNumericPatternKey(task.title)
-    if (!key) continue
-    patternCounts.set(key, (patternCounts.get(key) ?? 0) + 1)
-  }
-
-  let maxPatternCount = 0
-  for (const count of patternCounts.values()) {
-    if (count > maxPatternCount) {
-      maxPatternCount = count
-    }
-  }
-
-  return maxPatternCount >= 2
-}
-
-function compareTasksNaturally(left: TopicTaskItem, right: TopicTaskItem): number {
-  const leftTitle = left.title.trim()
-  const rightTitle = right.title.trim()
-
-  if (!leftTitle && !rightTitle) {
-    return left.id.localeCompare(right.id)
-  }
-  if (!leftTitle) return 1
-  if (!rightTitle) return -1
-
-  const leftPattern = buildNumericPatternKey(leftTitle)
-  const rightPattern = buildNumericPatternKey(rightTitle)
-
-  if (leftPattern && rightPattern && leftPattern === rightPattern) {
-    const leftNumbers = extractNumericParts(leftTitle)
-    const rightNumbers = extractNumericParts(rightTitle)
-    const maxLength = Math.max(leftNumbers.length, rightNumbers.length)
-
-    for (let index = 0; index < maxLength; index += 1) {
-      const leftValue = leftNumbers[index]
-      const rightValue = rightNumbers[index]
-
-      if (leftValue === undefined && rightValue === undefined) break
-      if (leftValue === undefined) return -1
-      if (rightValue === undefined) return 1
-      if (leftValue !== rightValue) return leftValue - rightValue
-    }
-  }
-
-  const byTitle = leftTitle.localeCompare(rightTitle, undefined, {
-    numeric: true,
-    sensitivity: "base",
-  })
-
-  if (byTitle !== 0) return byTitle
-  return left.id.localeCompare(right.id)
-}
+// Task ordering + bulk-naming helpers (clampInteger, composeSeriesName,
+// shouldAutoOrderTasks, compareTasksNaturally) live in
+// @/app/components/subjects-data-table/helpers and are imported above.
 
 export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Props) {
   const router = useRouter()
@@ -2007,48 +1921,3 @@ function NameModal({
   )
 }
 
-interface RowActionButtonProps {
-  label: string
-  onClick: () => void
-  danger?: boolean
-  disabled?: boolean
-}
-
-function RowActionButton({ label, onClick, danger = false, disabled = false }: RowActionButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="rounded-md border p-1 transition-colors hover:bg-white/5 disabled:opacity-50"
-      style={{ borderColor: "var(--sh-border)", color: danger ? "#f87171" : "var(--sh-text-muted)" }}
-      aria-label={label}
-      title={label}
-    >
-      {danger ? (
-        <svg
-          className="h-3.5 w-3.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-        >
-          <path d="M3 6h18" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M8 6V4h8v2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M19 6l-1 14H6L5 6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      ) : (
-        <svg
-          className="h-3.5 w-3.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-        >
-          <path d="M12 20h9" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M16.5 3.5a2.1 2.1 0 113 3L7 19l-4 1 1-4 12.5-12.5z" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
-    </button>
-  )
-}

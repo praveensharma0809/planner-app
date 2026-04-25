@@ -12,8 +12,9 @@ This document is the execution plan for resolving the audited issues. Work is gr
 |---|---|
 | Phase 1 — Stabilization quick wins | ✅ Completed 2026-04-25 |
 | Phase 2 — Optimistic UI & reload storm | ✅ Completed 2026-04-25 |
-| Phase 3 — Architectural cleanup (forks, deps, DnD) | 🟡 Partially completed 2026-04-25 — see report |
+| Phase 3 — Architectural cleanup (forks, deps, DnD) | ✅ Completed 2026-04-26 — see Phase 3 + Phase 5 reports |
 | Phase 4 — UI/UX consistency follow-up (optimistic gaps, archive, deps) | ✅ Completed 2026-04-26 — see report |
+| Phase 5 — 3.A shared-module extraction (forked-component cleanup) | ✅ Completed 2026-04-26 — see report |
 
 ---
 
@@ -370,6 +371,78 @@ Follow-up pass after the user re-audited the running app and identified residual
 
 - Subjects: chapter-level archive/unarchive/delete are still imperative (not optimistic). Tasks dominate the user-facing latency, so the current optimistic coverage handles the reported pain. Promoting chapter ops to optimistic is a future polish item.
 - Planner subject-scope dep semantics rely on "last chapter" of each dep subject as the anchor. If a user later reorders chapters, the persisted dep does not auto-rebind — it stays pinned to whatever chapter was last at save time. Acceptable for now; revisit if it surfaces in user feedback.
+
+---
+
+## Phase 5 Delivery Report — 2026-04-26 (Phase 3.A follow-through)
+
+The original Phase 3 plan deferred 3.A (forked-component unification) as a multi-session refactor. After Phase 4 closed the user-facing bugs, this phase tackled the leftover code-organization debt **without** changing any visible behavior on either page.
+
+### Approach taken — and why
+
+A full single-component unification with a `mode: "planner" | "subjects"` prop was rejected after a deep diff of the two files:
+
+- The two `NavigationColumn` implementations have meaningful UX differences (planner: 208px column, drag-anywhere on the card; dashboard: 220px column, dedicated `⋮⋮` drag handle).
+- The two `NameModal` implementations differ (dashboard's accepts a `destructiveActionLabel`/`onDestructiveAction` pair used to surface chapter archive/unarchive from inside the modal; planner's does not).
+- Forcing a single component would either alter UX on at least one page (breaking the project's "no breaking changes" rule) or push the divergence into runtime branches inside one file — which is worse than the current duplication.
+
+Instead, we extracted the **truly identical** primitives into a shared module so both pages converge on a single source of truth where it is safe to do so, and kept the visually-divergent shells in their respective files.
+
+### What was delivered
+
+**New shared module:** [app/components/subjects-data-table/](app/components/subjects-data-table/)
+
+- `helpers.ts` — task-ordering and bulk-naming utilities (`clampInteger`, `composeSeriesName`, `compareTasksNaturally`, `shouldAutoOrderTasks`, `buildMonthGrid`, `defaultIntakeConstraints`, `normalizeDayOfWeekCapacity`, `normalizeDurationMinutes`, `isLikelyNetworkError`, month-cursor helpers). Moved from `app/(dashboard)/planner/subjects-data-table.helpers.ts`.
+- `shared.tsx` — `RowActionButton` component + `ColumnItem` interface. New file; both files import from here.
+
+**Dead code removed**
+
+- `app/(dashboard)/planner/subjects-data-table.ui.tsx` (485 LOC) — confirmed never imported by anything in the repo. The planner had been using its own inline copies of `NavigationColumn`/`NameModal`/`RowActionButton` all along; the `.ui.tsx` file was orphaned. Deleted in this phase.
+
+**Inline duplicates collapsed**
+
+- Dashboard `subjects-data-table.tsx`: removed inline `clampInteger`, `composeSeriesName`, `buildNumericPatternKey`, `extractNumericParts`, `shouldAutoOrderTasks`, `compareTasksNaturally`, `RowActionButton`, and the `ColumnItem` interface. Now imports them from the shared module.
+- Planner `subjects-data-table.tsx`: removed inline `RowActionButton` + `ColumnItem` interface. Imports both from the shared module. (Helper imports already pointed at the moved file.)
+
+### Quantitative impact
+
+| File | Before | After | Δ |
+|---|---:|---:|---:|
+| `app/(dashboard)/dashboard/subjects/subjects-data-table.tsx` | 2054 | 1923 | −131 |
+| `app/(dashboard)/planner/subjects-data-table.tsx` | 3881 | 3835 | −46 |
+| `app/(dashboard)/planner/subjects-data-table.ui.tsx` (dead) | 485 | — | −485 |
+| `app/components/subjects-data-table/helpers.ts` (moved) | — | 218 | +0 (relocation) |
+| `app/components/subjects-data-table/shared.tsx` (new) | — | 64 | +64 |
+| **Net repo LOC** | | | **−598** |
+
+### Files touched
+
+- Created: `app/components/subjects-data-table/shared.tsx`
+- Moved: `app/(dashboard)/planner/subjects-data-table.helpers.ts` → `app/components/subjects-data-table/helpers.ts`
+- Deleted: `app/(dashboard)/planner/subjects-data-table.ui.tsx` (was dead code)
+- Modified: `app/(dashboard)/planner/subjects-data-table.tsx`
+- Modified: `app/(dashboard)/dashboard/subjects/subjects-data-table.tsx`
+
+### Verification
+
+- `npx tsc --noEmit` — exit 0
+- `npx eslint app` — exit 0
+- `npx vitest run` — 30 files / **273 tests passed**
+- `npx next build` — successful production build (Next.js 16.1.6, Turbopack)
+- Bundle output: route table identical to Phase 4 (no chunks added/removed)
+
+### What was intentionally NOT done
+
+- **`NavigationColumn` and `NameModal` were not unified.** Documented above — both have UX-divergent visual contracts that would regress one page if forced together. Each file keeps its own implementation, with cross-references in comments so future contributors know.
+- **No `subject_dependencies` SQL migration (3.B Option A).** Phase 4 shipped the UI fan-out path (Option B) which fixes the user-visible bug; Option A is no longer required and would only make sense if the per-chapter shape becomes a real-world pain point later.
+
+### Phase 3 status update
+
+Phase 3 is now ✅ complete. Specifically:
+
+- **3.A — Forked-component cleanup** ✅ done via the shared-module extraction documented above.
+- **3.B — Dependencies feature bug fixes** ✅ done in Phase 3 + Phase 4 (fan-out persistence, scope-correct picker).
+- **3.C — Dead code & residue removal** ✅ done in Phase 3 + Phase 5 (`subjects-data-table.ui.tsx` was the last orphan).
 
 
 For Phase 3.B, also indicate **Option A** (new table + SQL migration) or **Option B** (fan-out, no schema change).
