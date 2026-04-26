@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { getTodayLocalDate, normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
+import { plannerImportRowArraySchema } from "@/lib/contracts/schemas"
 
 type SessionType = "core" | "revision" | "practice"
 
@@ -90,7 +91,7 @@ export async function importPlannerSchedule(
       return { status: "ERROR", message: taskError.message }
     }
 
-    const tasks = (rows ?? []) as PlannerImportRow[]
+    const tasks = plannerImportRowArraySchema.parse(rows ?? [])
     const subjectNameById = new Map<string, string>()
 
     const subjectIds = [

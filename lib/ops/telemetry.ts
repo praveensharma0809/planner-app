@@ -67,10 +67,30 @@ function dbTelemetryEnabled() {
   return process.env.ENABLE_DB_TELEMETRY === "true"
 }
 
+/**
+ * Calculates elapsed milliseconds since a given start timestamp.
+ * Clamped to zero (never returns negative values).
+ *
+ * @param startedAtMs - The start timestamp from `Date.now()`.
+ * @returns Elapsed milliseconds (min 0).
+ */
 export function durationSince(startedAtMs: number): number {
   return Math.max(0, Date.now() - startedAtMs)
 }
 
+/**
+ * Tracks an operational event for telemetry / monitoring.
+ *
+ * Logs to console unconditionally. If `ENABLE_DB_TELEMETRY` is set to `"true"`
+ * and a Supabase-like client is provided, also inserts into `ops_events` table.
+ *
+ * @param input.eventName - Human-readable event name (e.g., "planner:generate").
+ * @param input.status - Event outcome: "started", "success", "error", or "warning".
+ * @param input.userId - Optional authenticated user ID for attribution.
+ * @param input.durationMs - Optional elapsed duration in milliseconds.
+ * @param input.metadata - Optional free-form metadata (truncated to 3500 chars).
+ * @param input.supabase - Optional Supabase client for DB persistence.
+ */
 export async function trackServerEvent(input: TrackServerEventInput): Promise<void> {
   const eventRow = {
     event_name: input.eventName,
@@ -116,4 +136,5 @@ export async function trackServerEvent(input: TrackServerEventInput): Promise<vo
   }
 }
 
+/** Possible status values for an operational event. */
 export type { OpsEventStatus, TrackServerEventInput }

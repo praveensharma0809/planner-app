@@ -4,6 +4,10 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isCanonicalIntakeManualTask } from "@/lib/planner/contracts"
 import { STANDALONE_SUBJECT_LABEL } from "@/lib/constants"
 import { getTodayLocalDate, normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
+import {
+  scheduleSubjectRowArraySchema,
+  scheduleTaskRowArraySchema,
+} from "@/lib/contracts/schemas"
 
 type SessionType = "core" | "revision" | "practice"
 
@@ -21,12 +25,6 @@ type ScheduleTaskRow = {
   session_number: number
   total_sessions: number
   created_at: string
-}
-
-type SubjectRow = {
-  id: string
-  name: string
-  sort_order: number | null
 }
 
 export type ScheduleWeekTask = Omit<ScheduleTaskRow, "task_source"> & {
@@ -118,8 +116,8 @@ export async function getScheduleWeekData(
       return { status: "ERROR", message: taskError.message }
     }
 
-    const subjects = (subjectRows ?? []) as SubjectRow[]
-    const tasks = ((taskRows ?? []) as ScheduleTaskRow[])
+    const subjects = scheduleSubjectRowArraySchema.parse(subjectRows ?? [])
+    const tasks = scheduleTaskRowArraySchema.parse(taskRows ?? [])
       .filter((task) => !isCanonicalIntakeManualTask(task))
 
     const subjectNameById = new Map(subjects.map((subject) => [subject.id, subject.name]))

@@ -30,6 +30,16 @@ import type {
   TopicTask,
   Topic,
 } from "@/lib/types/db"
+import {
+  subjectArraySchema,
+  topicArraySchema,
+  topicTaskArraySchema,
+  topicParamRowArraySchema,
+  subjectDeadlineRowArraySchema,
+  topicBareRowArraySchema,
+  subjectNameRowArraySchema,
+  plannerSettingsRowSchema,
+} from "@/lib/contracts/schemas"
 
 export interface StructureTask {
   id: string
@@ -311,7 +321,7 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
       return { status: "ERROR", message: subjectError.message }
     }
 
-    const subjects = (subjectRows ?? []) as Subject[]
+    const subjects = subjectArraySchema.parse(subjectRows ?? [])
     if (subjects.length === 0) {
       return { status: "SUCCESS", tree: { subjects: [] } }
     }
@@ -331,7 +341,7 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
         return { status: "ERROR", message: topicError.message }
       }
 
-      topics = (topicRows ?? []) as Topic[]
+      topics = topicArraySchema.parse(topicRows ?? [])
     }
 
     const topicIds = topics.map((topic) => topic.id)
@@ -361,7 +371,7 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
         return { status: "ERROR", message: taskError.message }
       }
 
-      tasks = (taskRows ?? []) as TopicTask[]
+      tasks = topicTaskArraySchema.parse(taskRows ?? [])
     }
 
     const tasksByTopic = new Map<string, StructureTask[]>()
@@ -580,18 +590,7 @@ export async function getTopicParams(): Promise<GetTopicParamsResponse> {
 
     if (error) return { status: "SUCCESS", params: [] }
 
-    const topicRows = (data ?? []) as Array<{
-      id: string
-      subject_id: string
-      estimated_hours: number | null
-      deadline: string | null
-      earliest_start: string | null
-      depends_on: string[] | null
-      session_length_minutes: number | null
-      rest_after_days: number | null
-      max_sessions_per_day: number | null
-      study_frequency: string | null
-    }>
+    const topicRows = topicParamRowArraySchema.parse(data ?? [])
 
     const subjectIds = [...new Set(topicRows.map((row) => row.subject_id))]
     const subjectDeadlineMap = new Map<string, string>()
@@ -604,7 +603,7 @@ export async function getTopicParams(): Promise<GetTopicParamsResponse> {
         .eq("archived", false)
         .in("id", subjectIds)
 
-      for (const row of (subjectRows ?? []) as Array<{ id: string; deadline: string | null }>) {
+      for (const row of subjectDeadlineRowArraySchema.parse(subjectRows ?? [])) {
         const deadline = normalizeOptionalDate(row.deadline)
         if (deadline) {
           subjectDeadlineMap.set(row.id, deadline)
@@ -651,7 +650,7 @@ export async function getTopicParams(): Promise<GetTopicParamsResponse> {
         rest_after_days: row.rest_after_days ?? 0,
         max_sessions_per_day: row.max_sessions_per_day ?? 0,
         study_frequency: row.study_frequency ?? "daily",
-      })) as TopicParams[],
+      })),
     }
   } catch {
     return { status: "SUCCESS", params: [] }
@@ -721,7 +720,7 @@ export async function saveTopicParams(
     const topicNameMap = new Map(knownTopics.map((topic) => [topic.id, topic.name]))
 
     const subjectIds = [...new Set(knownTopics.map((topic) => topic.subject_id))]
-    let subjectRows: Array<{ id: string; name: string; deadline: string | null }> = []
+    let subjectRows: ReturnType<typeof subjectNameRowArraySchema.parse> = []
     if (subjectIds.length > 0) {
       const { data, error: subjectError } = await supabase
         .from("subjects")
@@ -730,11 +729,7 @@ export async function saveTopicParams(
         .in("id", subjectIds)
 
       if (subjectError) return { status: "ERROR", message: subjectError.message }
-      subjectRows = (data ?? []) as Array<{
-        id: string
-        name: string
-        deadline: string | null
-      }>
+      subjectRows = subjectNameRowArraySchema.parse(data ?? [])
     }
 
     const subjectMap = new Map((subjectRows ?? []).map((subject) => [subject.id, subject]))
@@ -861,7 +856,9 @@ export async function getPlanConfig(): Promise<GetPlanConfigResponse> {
       .eq("user_id", user.id)
       .maybeSingle()
 
-    let data: PlannerSettingsRow | null = primaryData as PlannerSettingsRow | null
+    let data: PlannerSettingsRow | null = primaryData
+      ? plannerSettingsRowSchema.parse(primaryData) as PlannerSettingsRow
+      : null
 
     if (primaryError) {
       // Backward-compatible retry when intake_import_mode column is not yet available.
@@ -876,7 +873,9 @@ export async function getPlanConfig(): Promise<GetPlanConfigResponse> {
           return { status: "ERROR", message: legacyError.message }
         }
 
-        data = legacyData as PlannerSettingsRow | null
+        data = legacyData
+          ? plannerSettingsRowSchema.parse(legacyData) as PlannerSettingsRow
+          : null
       } else {
         return { status: "ERROR", message: primaryError.message }
       }
@@ -914,7 +913,7 @@ export async function getPlanConfig(): Promise<GetPlanConfigResponse> {
     return {
       status: "SUCCESS",
       config: {
-        ...(data as PlanConfig),
+        ...data,
         study_start_date: normalizedStudyStart,
         exam_date: normalizedExamDate,
         plan_order: "balanced",
@@ -1155,14 +1154,10 @@ export async function getDraftFeasibility(
       return { status: "SUCCESS", feasibility: emptyFeasibility() }
     }
 
-    const topics = (topicRows ?? []) as Pick<Topic, "id" | "subject_id" | "name">[]
+    const topics = topicBareRowArraySchema.parse(topicRows ?? [])
     const subjectIds = [...new Set(topics.map((topic) => topic.subject_id))]
 
-    let subjectRows: Array<{
-      id: string
-      name: string
-      deadline: string | null
-    }> = []
+    let subjectRows: ReturnType<typeof subjectNameRowArraySchema.parse> = []
     if (subjectIds.length > 0) {
       const { data } = await supabase
         .from("subjects")
@@ -1171,11 +1166,7 @@ export async function getDraftFeasibility(
         .eq("archived", false)
         .in("id", subjectIds)
 
-      subjectRows = (data ?? []) as Array<{
-        id: string
-        name: string
-        deadline: string | null
-      }>
+      subjectRows = subjectNameRowArraySchema.parse(data ?? [])
     }
 
     const paramMap = new Map(activeParams.map((param) => [param.topic_id, param]))

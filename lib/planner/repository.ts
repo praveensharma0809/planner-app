@@ -2,6 +2,14 @@
 
 type SupabaseLike = Awaited<ReturnType<typeof createServerSupabaseClient>>
 
+/**
+ * Reads the most recent plan snapshots for a user from the plan_snapshots table.
+ *
+ * @param supabase - Supabase client instance.
+ * @param userId - The authenticated user's ID.
+ * @param limit - Maximum number of snapshots to return (default 20).
+ * @returns Supabase query result with plan snapshot rows ordered by created_at descending.
+ */
 export async function getPlanSnapshots(
   supabase: SupabaseLike,
   userId: string,
@@ -15,6 +23,16 @@ export async function getPlanSnapshots(
     .limit(limit)
 }
 
+/**
+ * Reads active topics for a user, optionally filtered by subject IDs and/or topic IDs.
+ *
+ * @param supabase - Supabase client instance.
+ * @param userId - The authenticated user's ID.
+ * @param select - Column selection string for the topics query.
+ * @param topicIds - Optional array of topic IDs to filter by.
+ * @param subjectIds - Optional array of subject IDs to filter by.
+ * @returns Supabase query result with matching topic rows (archived=false only).
+ */
 export async function getTopicsForUser(
   supabase: SupabaseLike,
   userId: string,
@@ -39,6 +57,14 @@ export async function getTopicsForUser(
   return query
 }
 
+/**
+ * Reads non-archived, non-"others" subjects for a user, ordered by sort_order.
+ *
+ * @param supabase - Supabase client instance.
+ * @param userId - The authenticated user's ID.
+ * @param select - Column selection string (defaults to "id, name, sort_order, deadline, archived").
+ * @returns Supabase query result with matching subject rows.
+ */
 export async function getSubjectsForUser(
   supabase: SupabaseLike,
   userId: string,
@@ -54,6 +80,16 @@ export async function getSubjectsForUser(
     .order("sort_order", { ascending: true })
 }
 
+/**
+ * Reads incomplete topic_tasks for a user, optionally filtered by topic IDs and/or task IDs.
+ *
+ * @param supabase - Supabase client instance.
+ * @param userId - The authenticated user's ID.
+ * @param select - Column selection string.
+ * @param topicIds - Optional array of topic IDs to filter by.
+ * @param taskIds - Optional array of task IDs to filter by.
+ * @returns Supabase query result with matching incomplete topic_task rows.
+ */
 export async function getOpenManualTasksByTopic(
   supabase: SupabaseLike,
   userId: string,
@@ -78,6 +114,14 @@ export async function getOpenManualTasksByTopic(
   return query
 }
 
+/**
+ * Reads planner parameter columns for a user's topics, optionally filtered by topic IDs.
+ *
+ * @param supabase - Supabase client instance.
+ * @param userId - The authenticated user's ID.
+ * @param topicIds - Optional array of topic IDs to filter by.
+ * @returns Supabase query result with topic parameter columns.
+ */
 export async function getTopicParamsForUser(
   supabase: SupabaseLike,
   userId: string,
@@ -97,6 +141,14 @@ export async function getTopicParamsForUser(
   return query
 }
 
+/**
+ * Reads a user's planner settings row (at most one).
+ *
+ * @param supabase - Supabase client instance.
+ * @param userId - The authenticated user's ID.
+ * @param select - Column selection string (defaults to "*").
+ * @returns Supabase query result with a single planner_settings row, or null.
+ */
 export async function getPlannerSettings(
   supabase: SupabaseLike,
   userId: string,
@@ -109,6 +161,14 @@ export async function getPlannerSettings(
     .maybeSingle()
 }
 
+/**
+ * Calls the commit_plan_atomic_v2 RPC to atomically write a plan to the database
+ * within a transaction, replacing existing plan tasks with the new schedule.
+ *
+ * @param supabase - Supabase client instance.
+ * @param args - Object containing userId, tasks (plan payload), summary, configSnapshot, keepMode, newPlanStartDate, and commitHash.
+ * @returns Supabase RPC result.
+ */
 export async function commitPlanAtomic(
   supabase: SupabaseLike,
   args: {
@@ -131,6 +191,13 @@ export async function commitPlanAtomic(
   })
 }
 
+/**
+ * Reads all incomplete plan-sourced subject tasks for a user, ordered by scheduled_date ascending.
+ *
+ * @param supabase - Supabase client instance.
+ * @param userId - The authenticated user's ID.
+ * @returns Supabase query result with pending plan task rows.
+ */
 export async function getPendingPlanTasks(
   supabase: SupabaseLike,
   userId: string
@@ -147,6 +214,16 @@ export async function getPendingPlanTasks(
     .order("scheduled_date", { ascending: true })
 }
 
+/**
+ * Fetches the full context needed for plan rescheduling in parallel: planner settings,
+ * subjects, topics, and topic parameters.
+ *
+ * @param supabase - Supabase client instance.
+ * @param userId - The authenticated user's ID.
+ * @param plannerSettingsSelect - Column selection string for planner_settings.
+ * @param topicSelect - Column selection string for topics.
+ * @returns Tuple of [plannerSettingsResult, subjectsResult, topicsResult, topicParamsResult].
+ */
 export async function getRescheduleContext(
   supabase: SupabaseLike,
   userId: string,
@@ -198,6 +275,16 @@ export async function getRescheduleContext(
   return [configRes, subjectsRes, topicsRes, topicParamsRes]
 }
 
+/**
+ * Reads existing subject tasks (of any source/type) within a date range, used to compute
+ * daily capacity during rescheduling.
+ *
+ * @param supabase - Supabase client instance.
+ * @param userId - The authenticated user's ID.
+ * @param startDate - ISO date string for the range start (inclusive).
+ * @param endDate - ISO date string for the range end (inclusive).
+ * @returns Supabase query result with matching task rows.
+ */
 export async function getExistingTasksInRange(
   supabase: SupabaseLike,
   userId: string,
@@ -213,6 +300,13 @@ export async function getExistingTasksInRange(
     .lte("scheduled_date", endDate)
 }
 
+/**
+ * Deletes all incomplete plan-generated subject tasks for a user.
+ *
+ * @param supabase - Supabase client instance.
+ * @param userId - The authenticated user's ID.
+ * @returns Supabase delete result.
+ */
 export async function deletePendingPlanTasks(
   supabase: SupabaseLike,
   userId: string
@@ -226,6 +320,13 @@ export async function deletePendingPlanTasks(
     .eq("completed", false)
 }
 
+/**
+ * Inserts a new plan snapshot row into the plan_snapshots table and returns the new row's ID.
+ *
+ * @param supabase - Supabase client instance.
+ * @param payload - Object with user_id, task_count, schedule_json, settings_snapshot, and summary.
+ * @returns Supabase insert result with the new row's id (maybeSingle).
+ */
 export async function insertPlanSnapshot(
   supabase: SupabaseLike,
   payload: {
@@ -243,6 +344,13 @@ export async function insertPlanSnapshot(
     .maybeSingle()
 }
 
+/**
+ * Inserts one or more task rows into the tasks table.
+ *
+ * @param supabase - Supabase client instance.
+ * @param payload - Single task object or array of task objects to insert.
+ * @returns Supabase insert result.
+ */
 export async function insertTasks(
   supabase: SupabaseLike,
   payload: unknown

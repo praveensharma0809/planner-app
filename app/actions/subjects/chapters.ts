@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { normalizeOptionalDate, validateDateWindow } from "@/lib/planner/contracts"
+import { archivedChapterArraySchema } from "@/lib/contracts/schemas"
 
 function revalidateStructureViews() {
   revalidatePath("/dashboard/subjects")
@@ -70,7 +71,7 @@ export async function getArchivedChapters(subjectId?: string): Promise<GetArchiv
 
     return {
       status: "SUCCESS",
-      chapters: (data ?? []) as ArchivedChapterListItem[],
+      chapters: archivedChapterArraySchema.parse(data ?? []),
     }
   } catch (error) {
     return {

@@ -2,17 +2,13 @@
 
 import { revalidatePath } from "next/cache"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { syncTopicTaskCompletionRowSchema } from "@/lib/contracts/schemas"
 
 export type SetSubjectTaskCompletionResponse =
   | { status: "SUCCESS" }
   | { status: "UNAUTHORIZED" }
   | { status: "NOT_FOUND" }
   | { status: "ERROR"; message: string }
-
-type SyncTopicTaskCompletionRow = {
-  status: "SUCCESS" | "UNAUTHORIZED" | "NOT_FOUND"
-  synced_execution_count: number
-}
 
 function revalidateSubjectToggleViews() {
   revalidatePath("/dashboard")
@@ -49,7 +45,7 @@ export async function setSubjectTaskCompletion(
       return { status: "ERROR", message: error.message }
     }
 
-    const row = (Array.isArray(data) ? data[0] : null) as SyncTopicTaskCompletionRow | null
+    const row = (Array.isArray(data) ? syncTopicTaskCompletionRowSchema.parse(data[0]) : null)
     if (!row) {
       return { status: "ERROR", message: "Unexpected sync response." }
     }

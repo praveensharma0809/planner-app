@@ -1,6 +1,7 @@
 ﻿"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { subjectBareRowArraySchema } from "@/lib/contracts/schemas"
 
 export interface UpcomingDeadline {
   topic_id: string
@@ -60,7 +61,7 @@ export async function getUpcomingDeadlines(): Promise<GetUpcomingDeadlinesRespon
         return { status: "ERROR", message: subjectsError.message }
       }
 
-      subjects = (subjectRows ?? []) as Array<{ id: string; name: string }>
+      subjects = subjectBareRowArraySchema.parse(subjectRows ?? [])
     }
 
     const subjectNameMap = new Map<string, string>()
