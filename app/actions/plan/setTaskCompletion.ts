@@ -2,6 +2,7 @@
 
 import { completeTask } from "@/app/actions/plan/completeTask"
 import { uncompleteTask } from "@/app/actions/plan/uncompleteTask"
+import { logger } from "@/lib/ops/logger"
 
 export type SetTaskCompletionResponse =
   | { status: "SUCCESS" }
@@ -17,6 +18,7 @@ export async function setTaskCompletion(taskId: string, nextCompleted: boolean):
 
     return uncompleteTask(taskId)
   } catch (error) {
+    logger.error("setTaskCompletion", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

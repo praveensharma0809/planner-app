@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { subjectBareRowArraySchema } from "@/lib/contracts/schemas"
+import { logger } from "@/lib/ops/logger"
 
 export interface UpcomingDeadline {
   topic_id: string
@@ -87,6 +88,7 @@ export async function getUpcomingDeadlines(): Promise<GetUpcomingDeadlinesRespon
 
     return { status: "SUCCESS", deadlines }
   } catch (error) {
+    logger.error("getUpcomingDeadlines", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

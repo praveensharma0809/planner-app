@@ -1,11 +1,9 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useState, useTransition, type CSSProperties, type FormEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useState, useTransition, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core"
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
-import { useSortable } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
 import {
   addChapter,
   archiveChapter,
@@ -31,10 +29,11 @@ import { PageHeader } from "@/app/components/layout/PageHeader"
 import { FlowTutorialButton } from "@/app/components/onboarding/FlowTutorialButton"
 import { SUBJECTS_FLOW_SLIDES } from "@/app/components/onboarding/flowSlides"
 import { useToast } from "@/app/components/Toast"
-import { Button, Input, Modal } from "@/app/components/ui"
+import { Button } from "@/app/components/ui"
 import {
   RowActionButton,
   type ColumnItem,
+  NameModal,
 } from "@/app/components/subjects-data-table/shared"
 import {
   clampInteger,
@@ -43,6 +42,9 @@ import {
   shouldAutoOrderTasks,
 } from "@/app/components/subjects-data-table/helpers"
 import { SubjectDrawer } from "./SubjectDrawer"
+import { DraggableTaskRow } from "./subjects-data-table.taskRows"
+import { NavigationColumn } from "./subjects-data-table.navigation"
+import { TaskComposerModal } from "./subjects-data-table.taskComposer"
 
 export interface SubjectNavTopic {
   id: string
@@ -1404,531 +1406,35 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         onSubmit={handleSaveTaskTitle}
       />
 
-      <Modal
+      <TaskComposerModal
         open={taskComposerOpen}
+        saving={taskComposerSaving}
+        taskCreateMode={taskCreateMode}
+        singleTaskTitle={singleTaskTitle}
+        bulkBaseName={bulkBaseName}
+        bulkCount={bulkCount}
+        bulkStartAt={bulkStartAt}
+        bulkNumberPadding={bulkNumberPadding}
+        bulkSeparator={bulkSeparator}
+        bulkPlacement={bulkPlacement}
+        bulkPreview={bulkPreview}
         onClose={() => {
           setTaskComposerOpen(false)
           resetTaskComposerFields()
         }}
-        title="Add Tasks"
-        size="md"
-      >
-        <form className="space-y-4" onSubmit={handleCreateTasks}>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setTaskCreateMode("single")}
-              className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-              style={{
-                borderColor:
-                  taskCreateMode === "single" ? "var(--sh-primary-glow)" : "var(--sh-border)",
-                color:
-                  taskCreateMode === "single" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-                background:
-                  taskCreateMode === "single" ? "var(--sh-primary-muted)" : "transparent",
-              }}
-            >
-              Single Task
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setTaskCreateMode("bulk")}
-              className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-              style={{
-                borderColor:
-                  taskCreateMode === "bulk" ? "var(--sh-primary-glow)" : "var(--sh-border)",
-                color:
-                  taskCreateMode === "bulk" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-                background:
-                  taskCreateMode === "bulk" ? "var(--sh-primary-muted)" : "transparent",
-              }}
-            >
-              Bulk Series
-            </button>
-          </div>
-
-          {taskCreateMode === "single" ? (
-            <Input
-              required
-              label="Task Title"
-              value={singleTaskTitle}
-              onChange={(event) => setSingleTaskTitle(event.target.value)}
-              placeholder="e.g. Lecture review"
-            />
-          ) : (
-            <div className="space-y-3">
-              <Input
-                required
-                label="Base Name"
-                value={bulkBaseName}
-                onChange={(event) => setBulkBaseName(event.target.value)}
-                placeholder="e.g. Lecture"
-              />
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  required
-                  label="Count"
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={bulkCount}
-                  onChange={(event) => setBulkCount(event.target.value)}
-                />
-                <Input
-                  required
-                  label="Start Number"
-                  type="number"
-                  min={1}
-                  max={10000}
-                  value={bulkStartAt}
-                  onChange={(event) => setBulkStartAt(event.target.value)}
-                />
-                <Input
-                  required
-                  label="Number Padding"
-                  type="number"
-                  min={0}
-                  max={6}
-                  value={bulkNumberPadding}
-                  onChange={(event) => setBulkNumberPadding(event.target.value)}
-                  hint="Adds leading zeros: 0 -> Lecture-1, 1 -> Lecture-01, 2 -> Lecture-001"
-                />
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                    Number Placement
-                  </label>
-                  <select
-                    value={bulkPlacement}
-                    onChange={(event) =>
-                      setBulkPlacement(event.target.value === "prefix" ? "prefix" : "suffix")
-                    }
-                    className="ui-input"
-                  >
-                    <option value="suffix">Lecture-1</option>
-                    <option value="prefix">1-Lecture</option>
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                    Separator (what goes between name and number)
-                  </label>
-                  <select
-                    value={bulkSeparator}
-                    onChange={(event) => setBulkSeparator(event.target.value)}
-                    className="ui-input"
-                  >
-                    <option value="-">Hyphen: Lecture-1</option>
-                    <option value=" ">Space: Lecture 1</option>
-                    <option value="_">Underscore: Lecture_1</option>
-                    <option value="">None: Lecture1</option>
-                    <option value="·">Dot: Lecture·1</option>
-                  </select>
-                </div>
-              </div>
-
-              {bulkPreview.length > 0 && (
-                <div
-                  className="rounded-md border p-2.5"
-                  style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.015)" }}
-                >
-                  <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                    Preview
-                  </p>
-                  <p className="mt-1 text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                    {bulkPreview.join("  |  ")}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setTaskComposerOpen(false)
-                resetTaskComposerFields()
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm" disabled={taskComposerSaving}>
-              {taskComposerSaving
-                ? "Saving..."
-                : taskCreateMode === "single"
-                  ? "Add Task"
-                  : "Create Series"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-    </div>
-  )
-}
-
-interface DraggableTaskRowProps {
-  task: TopicTaskItem
-  isPending: boolean
-  isReordering: boolean
-  showFullTitle: boolean
-  canEdit: boolean
-  onToggle: (completed: boolean) => void
-  onEdit: () => void
-  onDelete: () => void
-}
-
-function DraggableTaskRow({
-  task,
-  isPending,
-  isReordering,
-  showFullTitle,
-  canEdit,
-  onToggle,
-  onEdit,
-  onDelete,
-}: DraggableTaskRowProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: task.id,
-  })
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging || isReordering ? 0.7 : 1,
-        borderColor: isDragging ? "var(--sh-primary-glow)" : "var(--sh-border)",
-        background: task.completed
-          ? "rgba(52, 211, 153, 0.08)"
-          : isDragging
-            ? "rgba(124, 108, 255, 0.1)"
-            : "rgba(255, 255, 255, 0.02)",
-        cursor: isDragging ? "grabbing" : "grab",
-      }}
-      className="group rounded-lg border px-2.5 py-1.5 transition-colors"
-    >
-      <div className={`flex gap-1.5 ${showFullTitle ? "items-start" : "items-center"}`}>
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs transition-colors hover:bg-white/5 disabled:opacity-50"
-          style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-          aria-label="Drag to reorder"
-          title="Drag to reorder"
-        >
-          <svg
-            className="h-3 w-3"
-            fill="currentColor"
-            viewBox="0 0 16 16"
-          >
-            <path d="M2 5h7v1H2V5zm0 3h7v1H2V8zm0 3h7v1H2v-1z" />
-            <path d="M10 5h4v1h-4V5zm0 3h4v1h-4V8zm0 3h4v1h-4v-1z" />
-          </svg>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onToggle(!task.completed)}
-          disabled={isPending || !canEdit}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors disabled:opacity-50"
-          style={{
-            borderColor: task.completed
-              ? "var(--sh-success)"
-              : "var(--sh-border)",
-            background: task.completed ? "var(--sh-success)" : "transparent",
-          }}
-          aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
-        >
-          {task.completed && (
-            <svg
-              className="h-3 w-3 text-white"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              viewBox="0 0 24 24"
-            >
-              <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
-
-        <p
-          className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through opacity-60" : ""} ${showFullTitle ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}
-          style={{ color: "var(--sh-text-primary)" }}
-          title={task.title}
-        >
-          {task.title}
-        </p>
-
-        <RowActionButton
-          label="Edit task title"
-          onClick={onEdit}
-          disabled={isPending || !canEdit}
-        />
-        <RowActionButton
-          label="Delete task"
-          onClick={onDelete}
-          danger
-          disabled={isPending || !canEdit}
-        />
-      </div>
-    </div>
-  )
-}
-
-interface NavigationColumnProps {
-  title: string
-  items: ColumnItem[]
-  activeId: string | null
-  emptyMessage: string
-  onSelect: (id: string) => void
-  footer?: ReactNode
-  onReorder?: (newOrderIds: string[]) => void
-  sensors?: ReturnType<typeof useSensors>
-}
-
-const NavigationColumn = memo(function NavigationColumn({
-  title,
-  items,
-  activeId,
-  emptyMessage,
-  onSelect,
-  footer,
-  onReorder,
-  sensors,
-}: NavigationColumnProps) {
-  const handleDragEnd = (event: DragEndEvent) => {
-    if (!onReorder) return
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    const ids = items.map((item) => item.id)
-    const fromIndex = ids.indexOf(String(active.id))
-    const toIndex = ids.indexOf(String(over.id))
-    if (fromIndex < 0 || toIndex < 0) return
-
-    onReorder(arrayMove(ids, fromIndex, toIndex))
-  }
-
-  const renderRow = (item: ColumnItem) => {
-    const isActive = item.id === activeId
-    return (
-      <NavigationColumnRow
-        key={item.id}
-        item={item}
-        isActive={isActive}
-        draggable={Boolean(onReorder)}
-        onSelect={onSelect}
+        onSubmit={handleCreateTasks}
+        onTaskCreateModeChange={setTaskCreateMode}
+        onSingleTaskTitleChange={setSingleTaskTitle}
+        onBulkBaseNameChange={setBulkBaseName}
+        onBulkCountChange={setBulkCount}
+        onBulkStartAtChange={setBulkStartAt}
+        onBulkNumberPaddingChange={setBulkNumberPadding}
+        onBulkSeparatorChange={setBulkSeparator}
+        onBulkPlacementChange={setBulkPlacement}
       />
-    )
-  }
-
-  return (
-    <section
-      className="w-[220px] min-w-[208px] h-full shrink-0 rounded-xl border px-2 py-2 snap-start flex flex-col"
-      style={{
-        borderColor: "var(--sh-border)",
-        background: "color-mix(in srgb, var(--sh-card) 94%, var(--foreground) 6%)",
-      }}
-    >
-      <div className="px-1.5 pb-2">
-        <p
-          className="text-[11px] font-semibold uppercase tracking-[0.14em]"
-          style={{ color: "var(--sh-text-muted)" }}
-        >
-          {title}
-        </p>
-      </div>
-
-      <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto pr-1">
-        {items.length === 0 && (
-          <p className="px-2 py-4 text-sm" style={{ color: "var(--sh-text-muted)" }}>
-            {emptyMessage}
-          </p>
-        )}
-
-        {items.length > 0 && onReorder && sensors ? (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={items.map((item) => item.id)}
-              strategy={rectSortingStrategy}
-            >
-              {items.map(renderRow)}
-            </SortableContext>
-          </DndContext>
-        ) : (
-          items.map(renderRow)
-        )}
-      </div>
-
-      {footer && (
-        <div
-          className="mt-2 space-y-1.5 border-t px-1 pt-2"
-          style={{ borderColor: "var(--sh-border)" }}
-        >
-          {footer}
-        </div>
-      )}
-    </section>
-  )
-})
-
-interface NavigationColumnRowProps {
-  item: ColumnItem
-  isActive: boolean
-  draggable: boolean
-  onSelect: (id: string) => void
-}
-
-function NavigationColumnRow({ item, isActive, draggable, onSelect }: NavigationColumnRowProps) {
-  const sortable = useSortable({ id: item.id, disabled: !draggable })
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable
-
-  const style: CSSProperties = {
-    borderColor: isActive ? "var(--sh-primary-glow)" : "transparent",
-    background: isActive ? "var(--sh-primary-muted)" : "transparent",
-    transform: draggable ? CSS.Transform.toString(transform) : undefined,
-    transition: draggable ? transition : undefined,
-    opacity: draggable && isDragging ? 0.6 : 1,
-  }
-
-  return (
-    <div
-      ref={draggable ? setNodeRef : undefined}
-      className="rounded-lg border p-1.5 transition-colors"
-      style={style}
-    >
-      <div className="flex items-start gap-1.5">
-        {draggable && (
-          <button
-            type="button"
-            aria-label={`Reorder ${item.label}`}
-            className="mt-1 flex h-5 w-3 shrink-0 cursor-grab items-center justify-center rounded text-[10px] active:cursor-grabbing"
-            style={{ color: "var(--sh-text-muted)" }}
-            {...attributes}
-            {...listeners}
-          >
-            ⋮⋮
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => onSelect(item.id)}
-          className="min-w-0 flex-1 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-[rgba(124,108,255,0.08)]"
-        >
-          <p
-            className="truncate text-sm font-semibold"
-            style={{
-              color: isActive ? "var(--sh-primary-light)" : "var(--sh-text-primary)",
-            }}
-          >
-            {item.label}
-          </p>
-          {item.hint && (
-            <p className="mt-0.5 text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
-              {item.hint}
-            </p>
-          )}
-        </button>
-
-        <div className="flex shrink-0 items-center gap-1 pt-1">
-          {item.onEdit && (
-            <RowActionButton
-              label={`Edit ${item.label}`}
-              onClick={item.onEdit}
-            />
-          )}
-          {item.onDelete && (
-            <RowActionButton
-              label={`Delete ${item.label}`}
-              onClick={item.onDelete}
-              danger
-            />
-          )}
-        </div>
-      </div>
     </div>
   )
 }
 
-interface NameModalProps {
-  open: boolean
-  title: string
-  fieldLabel: string
-  value: string
-  placeholder: string
-  submitLabel: string
-  loading: boolean
-  onChange: (value: string) => void
-  onClose: () => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
-  destructiveActionLabel?: string
-  onDestructiveAction?: () => void
-  destructiveDisabled?: boolean
-}
 
-function NameModal({
-  open,
-  title,
-  fieldLabel,
-  value,
-  placeholder,
-  submitLabel,
-  loading,
-  onChange,
-  onClose,
-  onSubmit,
-  destructiveActionLabel,
-  onDestructiveAction,
-  destructiveDisabled = false,
-}: NameModalProps) {
-  return (
-    <Modal open={open} onClose={onClose} title={title} size="sm">
-      <form className="flex max-h-[calc(100vh-13rem)] flex-col" onSubmit={onSubmit}>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <Input
-            autoFocus
-            required
-            label={fieldLabel}
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder={placeholder}
-          />
-        </div>
-
-        <div className="mt-4 flex items-center justify-end gap-2 border-t pt-3" style={{ borderColor: "var(--sh-border)" }}>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          {destructiveActionLabel && onDestructiveAction && (
-            <Button
-              type="button"
-              variant="danger"
-              size="sm"
-              onClick={onDestructiveAction}
-              disabled={destructiveDisabled}
-            >
-              {destructiveActionLabel}
-            </Button>
-          )}
-          <Button type="submit" variant="primary" size="sm" disabled={loading}>
-            {loading ? "Saving..." : submitLabel}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
 

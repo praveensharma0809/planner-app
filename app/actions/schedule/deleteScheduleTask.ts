@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { logger } from "@/lib/ops/logger"
 
 export type DeleteScheduleTaskResponse =
   | { status: "UNAUTHORIZED" }
@@ -55,6 +56,7 @@ export async function deleteScheduleTask(taskId: string): Promise<DeleteSchedule
 
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("deleteScheduleTask", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

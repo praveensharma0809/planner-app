@@ -91,7 +91,6 @@ describe("upsertScheduleTask", () => {
     const supabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) },
       from: vi.fn((table: string) => {
-        callCount++
         if (table === "subjects") {
           return {
             select: vi.fn(() => ({

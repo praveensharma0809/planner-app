@@ -2,6 +2,9 @@
   "name": "planner-app",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "next dev",
     "dev:reset-cache": "node -e \"require('fs').rmSync('.next-dev',{recursive:true,force:true})\"",

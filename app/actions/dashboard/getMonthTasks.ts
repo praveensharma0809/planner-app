@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isCanonicalIntakeManualTask } from "@/lib/planner/contracts"
+import { logger } from "@/lib/ops/logger"
 import type { Task } from "@/lib/types/db"
 
 export type GetMonthTasksResponse =
@@ -51,6 +52,7 @@ export async function getMonthTasks(
 
     return { status: "SUCCESS", tasks }
   } catch (error) {
+    logger.error("getMonthTasks", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

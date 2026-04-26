@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isCanonicalIntakeManualTask } from "@/lib/planner/contracts"
 import { STANDALONE_SUBJECT_LABEL } from "@/lib/constants"
 import { getTodayLocalDate, normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
+import { logger } from "@/lib/ops/logger"
 import {
   scheduleSubjectRowArraySchema,
   scheduleTaskRowArraySchema,
@@ -151,6 +152,7 @@ export async function getScheduleWeekData(
       })),
     }
   } catch (error) {
+    logger.error("getScheduleWeekData", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

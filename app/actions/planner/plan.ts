@@ -12,6 +12,7 @@ import {
   type PlanResult,
 } from "@/lib/planner/engine"
 import { durationSince, trackServerEvent } from "@/lib/ops/telemetry"
+import { logger } from "@/lib/ops/logger"
 import { isISODate } from "@/lib/planner/contracts"
 import {
   buildDroppedReasons,
@@ -289,7 +290,8 @@ async function normalizePlannerTaskSourceAfterCommit(
       .eq("task_type", "subject")
       .eq("task_source", "manual")
       .not("plan_snapshot_id", "is", null)
-  } catch {
+  } catch (error) {
+    logger.error("normalizePlannerTaskSourceAfterCommit", error)
     // Do not fail commit response if cleanup step cannot run.
   }
 }
@@ -494,7 +496,8 @@ export async function getPlanHistory(): Promise<GetPlanHistoryResponse> {
     if (error) return { status: "SUCCESS", snapshots: [] }
 
     return { status: "SUCCESS", snapshots: (data ?? []) as PlanSnapshot[] }
-  } catch {
+  } catch (error) {
+    logger.error("getPlanHistory", error)
     return { status: "SUCCESS", snapshots: [] }
   }
 }
@@ -694,6 +697,7 @@ export async function generatePlanAction(
 
     return result
   } catch (error) {
+    logger.error("generatePlanAction", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -933,6 +937,7 @@ export async function commitPlan(
       snapshotId,
     }
   } catch (error) {
+    logger.error("commitPlan", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -1135,6 +1140,7 @@ export async function reoptimizePreviewPlan(
       droppedSessions,
     }
   } catch (error) {
+    logger.error("reoptimizePreviewPlan", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -1464,6 +1470,7 @@ export async function rescheduleMissedPlan(): Promise<RescheduleMissedPlanRespon
       droppedReasons,
     }
   } catch (error) {
+    logger.error("rescheduleMissedPlan", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

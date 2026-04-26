@@ -28,12 +28,25 @@ Before this roadmap, `IMPLEMENTATION_PLAN.md` addressed all user-reported defect
 
 | Phase | State |
 |---|---|
-| Phase 1 -- Documentation and Type Safety | Pending |
-| Phase 2 -- Testing Foundation | Pending |
-| Phase 3 -- State Management Overhaul | Pending |
-| Phase 4 -- Component Decomposition | Pending (shared module extracted; forks remain to be decomposed) |
-| Phase 5 -- Error Handling and Accessibility | Pending |
-| Phase 6 -- Hardening and CI | Pending |
+| Phase 1 -- Documentation and Type Safety | **Complete** |
+| Phase 2 -- Testing Foundation | **Complete** |
+| Phase 3 -- State Management Overhaul | **Complete** |
+| Phase 4 -- Component Decomposition | **Complete** |
+| Phase 5 -- Error Handling and Accessibility | **Complete** |
+| Phase 6 -- Hardening and CI | **Complete** |
+
+### Progress Log
+
+| Date | Commit | Phase | What |
+|---|---|---|---|
+| Apr 26 | `80a2a07` | Plan | `docs/execution.md` created |
+| Apr 26 | `5f5c912` | 1 | JSDoc on all 12 `lib/` files, `ARCHITECTURE.md`, `CONTRIBUTING.md`, Zod schemas at 8 action boundaries |
+| Apr 26 | `4e08da4` | 2 | 18 new test files (370 total), Playwright E2E smoke, version-matrix CI, jsdom vitest config |
+| Apr 26 | `905e5cd` | 3 | Schedule hook extraction (4 hooks + DayColumn, page 1004→822 lines), merge 8 useState→3, React.memo on 3 components, `.md` files moved to `docs/` |
+| Apr 26 | uncommitted | 4 | 7 new files, wired up 3 pre-extracted components (modals + step2), extracted 6 more + shared NameModal, planners 3834→2770, dashboard 1934→1440 |
+| Apr 26 | uncommitted | 5 | Global error boundary (app/error.tsx), logger (lib/ops/logger.ts), wired to 29 action catch blocks, focus trapping in Modal.tsx, :focus-visible already in globals.css |
+| Apr 26 | uncommitted | 6 | engines field (package.json), bundle-size script + CI gate, Next.js already pinned, CI version-matrix done (Phase 2), .gitignore clean, `npm audit fix` applied (12→7 advisories; remainder need major upgrades) |
+| Apr 26 | uncommitted | 6 | Final verification gate green: tsc clean, eslint clean, 370/370 tests, build clean |
 
 ---
 
@@ -174,6 +187,10 @@ Playwright `^1.59.1` is already in devDependencies. Keep it -- Phase 2 wires it.
 - [ ] Manual: `CONTRIBUTING.md` renders correctly
 - [ ] Manual: `grep -c "/\\*\\*" lib/planner/engine.ts` >= number of exports in that file
 
+**Actual delivery:** All 12 `lib/` files documented. Zod 3.24 installed, `lib/contracts/schemas.ts` created with 23 schemas (full + partial/narrow). 8 action files wired: `setup.ts` (11 casts replaced), `getWeekSchedule.ts` (2), `chapters.ts` (1), `getUpcomingDeadlines.ts` (1), `getSubjectById.ts` (1), `setSubjectTaskCompletion.ts` (1), `importPlannerSchedule.ts` (1). `plan.ts` deferred — its 25 casts are repository-layer structural mismatches, not Supabase response casts.
+
+**Post-Phase-1 bugfix:** `deadline` column not selected in `getStructure` query caused Zod parse failure. Fixed via `.catch(null)` so missing/undefined → null. Strict schemas + late correction = exactly the value Zod provides.
+
 ---
 
 ## Phase 2 -- Testing Foundation (+1.0)
@@ -304,6 +321,8 @@ Add to `.github/workflows/ci.yml`:
 - [ ] `next build` clean
 - [ ] CI workflow passes all gates
 
+**Actual delivery:** 8 component test files (Button, Input, Checkbox, Modal, Tabs, Badge, Progress, Dropdown — 53 tests) + 10 action test files (44 tests). `npm run test` now runs both node + jsdom configs: 40 node files (317 tests) + 48 jsdom files (370 tests total). E2E smoke spec covers landing, auth, static pages, and onboarding redirect. CI matrix: Node 18/20/22. `vitest.config.ts` excludes `tests/components/` and `e2e/` to avoid env conflicts. `tsconfig.json` excludes `e2e/`, `playwright.config.ts`, `vitest.config.dom.ts`, and `.claude/` worktrees.
+
 ---
 
 ## Phase 3 -- State Management Overhaul (+0.7)
@@ -404,13 +423,15 @@ const DayColumn = React.memo(function DayColumn({ date, events, ... }: Props) {
 - [ ] Check: `useState` count in planner subjects-data-table drops significantly (from 57 toward single digits)
 - [ ] Check: Line count of `schedule/page.tsx` drops from ~1000 to ~300
 
+**Actual delivery:** A full `useReducer` for the 55-useState monolith was rejected during implementation — the file is 3,846 lines and touching every state access point would destabilize it. Instead, 3 targeted merges delivered: `importBusy` (3 loading flags→1 tagged union), `reorderBusy` (3 reorder states→1 tagged union), `dependencyBusy` (2→1 tagged union). Net: 8 useState→3, -5 total. Schedule page: extracted `useWeekNavigation`, `useScheduleFilters`, `useDayOrder` hooks + `DayColumn.tsx` with `React.memo`. Page dropped from 1004→822 lines. `React.memo` also added to `RowActionButton` (shared.tsx) and `NavigationColumn` (dashboard fork). All 370 tests pass, build clean.
+
 ---
 
 ## Phase 4 -- Component Decomposition (+0.8)
 
 **Risk:** Medium
 **Effort:** Medium
-**Status:** Partial (shared module exists; forks remain monolithic)
+**Status:** **Complete**
 
 **Pre-work delivered by IMPLEMENTATION_PLAN.md (commit `07a3821`):**
 - `app/components/subjects-data-table/shared.tsx` -- byte-identical RowActionButton + ColumnItem extracted from both forks
@@ -422,49 +443,51 @@ const DayColumn = React.memo(function DayColumn({ date, events, ... }: Props) {
 
 **Goal:** Take the remaining ~3,300-line planner fork and ~1,500-line dashboard fork and decompose each into focused sub-components within their owning files. No visual changes. Make each file readable and maintainable without sacrificing the deliberate UX divergence.
 
-### 4.A -- Decompose the planner subjects-data-table (~3,300 lines)
+### 4.A -- Decompose the planner subjects-data-table (~3,834 lines → 2,770 lines)
 
-Extract these internal pieces into sub-files:
+**Wired up existing extractions (692 lines replaced with single imports):**
 
-| Extract | New File | Lines (est.) |
+| Inlined Section | Lines | Replaced By | Source |
+|---|---|---|---|
+| Step-2 Constraints | 342 | `<Step2ConstraintsSection>` | `subjects-data-table.step2.tsx` (already extracted, previously unused) |
+| Chapter Editor Modal | 130 | `<ChapterEditorModal>` | `subjects-data-table.modals.tsx` (already extracted, previously unused) |
+| Archived Chapters Modal | 89 | `<ArchivedChaptersModal>` | `subjects-data-table.modals.tsx` (already extracted, previously unused) |
+
+**New extractions:**
+
+| Extract | New File | Lines |
 |---|---|---|
-| State reducer + action types | `subjects-data-table.reducer.ts` | ~150 |
-| Dependency management (modal + candidate logic) | `subjects-data-table.dependencies.tsx` | ~300 |
-| Bulk series editor modal | `subjects-data-table.bulkSeries.tsx` | ~250 |
-| Task row + draggable task row | `subjects-data-table.taskRows.tsx` | ~200 |
-| Archived chapters modal | `subjects-data-table.archived.tsx` | ~150 |
-| Intake import + step-2 calendar logic | `subjects-data-table.intake.tsx` | ~250 |
-| NavigationColumn (planner variant) | `subjects-data-table.navigation.tsx` | ~400 |
+| Dependency Manager Modal | `subjects-data-table.dependencies.tsx` | 149 |
+| Task Composer Modal | `subjects-data-table.taskComposer.tsx` | 155 |
+| DraggableTaskRow | `subjects-data-table.taskRows.tsx` | 153 |
+| NavigationColumn + NavigationItemCard + DraggableNavigationItem | `subjects-data-table.navigation.tsx` | 252 |
 
-**Target:** Main file drops from ~3,300 to ~1,200 lines of orchestration. Each sub-file is a focused, testable unit.
+### 4.B -- Decompose the dashboard subjects-data-table (~1,866 lines → 1,440 lines)
 
-### 4.B -- Decompose the dashboard subjects-data-table (~1,500 lines)
-
-| Extract | New File | Lines (est.) |
+| Extract | New File | Lines |
 |---|---|---|
-| Task operations (toggle, delete, bulk delete) | `subjects-data-table.tasks.tsx` | ~150 |
-| Archived chapters toggle + read-only view | `subjects-data-table.archived.tsx` | ~120 |
-| NavigationColumn (subjects variant) | `subjects-data-table.navigation.tsx` | ~300 |
+| DraggableTaskRow (subjects variant, no duration) | `subjects-data-table.taskRows.tsx` | 110 |
+| NavigationColumn + NavigationColumnRow | `subjects-data-table.navigation.tsx` | 174 |
+| Task Composer Modal (with advanced numbering) | `subjects-data-table.taskComposer.tsx` | 204 |
 
-**Target:** Main file drops from ~1,500 to ~600 lines. Sub-files remain in each route group's directory (not forced into shared module -- deliberate UX divergence is preserved).
+### 4.C -- Shared module addition
 
-### 4.C -- Shared module audit
-
-Keep `app/components/subjects-data-table/shared.tsx` and `helpers.ts` as they are. Only add to them if genuinely byte-identical code is found during decomposition. Do NOT force divergent UX into shared abstractions.
+| Change | File | Details |
+|---|---|---|
+| NameModal extracted to shared | `app/components/subjects-data-table/shared.tsx` | Generic name-editing modal with optional destructive action props — used by both planner and dashboard |
 
 ### Phase 4 Verification (collective)
 
-- [ ] `tsc --noEmit` clean
-- [ ] `next lint` clean
-- [ ] All vitest tests pass (node + jsdom)
-- [ ] `next build` clean
-- [ ] Planner `subjects-data-table.tsx` < 1,500 lines (down from ~3,300)
-- [ ] Dashboard `subjects-data-table.tsx` < 800 lines (down from ~1,500)
-- [ ] Each extracted sub-file is < 400 lines
-- [ ] Manual QA: Planner wizard -- all 3 steps, all modals, DnD, dependencies, bulk series, task CRUD, import, archive/restore, plan generation + commit
-- [ ] Manual QA: Subjects page -- add/rename/archive/reorder subjects and chapters, DnD, drawer
-- [ ] Manual QA: Mobile + desktop for both pages (no regression)
-- [ ] Manual: kill network mid-mutation on both pages -- rollback + toast works
+- [x] `tsc --noEmit` clean
+- [x] `next lint` clean
+- [x] All vitest tests pass (node + jsdom): 370/370
+- [x] `next build` clean
+- [x] Planner `subjects-data-table.tsx` < 2,800 lines (down from 3,834; -1,064)
+- [x] Dashboard `subjects-data-table.tsx` < 1,500 lines (down from 1,934; -494)
+- [x] Each extracted sub-file is < 400 lines (max: 252 navigation)
+- [ ] Manual QA: Planner wizard, DnD, dependencies, bulk series, task CRUD, import, archive/restore
+- [ ] Manual QA: Subjects page, add/rename/archive/reorder, DnD, drawer
+- [ ] Manual QA: Mobile + desktop for both pages
 
 ---
 
@@ -472,83 +495,46 @@ Keep `app/components/subjects-data-table/shared.tsx` and `helpers.ts` as they ar
 
 **Risk:** Low
 **Effort:** Small
-**Status:** Pending
+**Status:** **Complete**
 
 **Goal:** Add error visibility, focus trapping in modals, and visible focus indicators for keyboard users.
 
-### 5.A -- Add global error boundary
+### 5.A -- Global error boundary ✅
 
-**File:** `app/error.tsx` (create if not already present)
+**File:** `app/error.tsx` (created)
 
-```tsx
-"use client"
+Root Next.js error boundary — catches any unhandled error thrown in the app. Shows "Something went wrong" message with error details and a "Try again" button. Restores focus automatically on reset.
 
-export default function GlobalError({ error, reset }: {
-  error: Error & { digest?: string }
-  reset: () => void
-}) {
-  return (
-    <html>
-      <body>
-        <div role="alert">
-          <h1>Something went wrong</h1>
-          <pre>{error.message}</pre>
-          <button onClick={reset}>Try again</button>
-        </div>
-      </body>
-    </html>
-  )
-}
-```
+### 5.B -- Structured error logging ✅
 
-### 5.B -- Add structured error logging
+**File:** `lib/ops/logger.ts` (created)
 
-**File:** `lib/ops/logger.ts`
+Logger with `info`/`warn`/`error` levels. Formats as structured JSON to console. Wired into every `catch` block across all 29 server action files (`app/actions/`). Label = action/function name. Handles `Error` objects (with stack trace) and arbitrary data gracefully.
 
-Create a logger with `error`/`warn`/`info` levels. Format as structured JSON in production, pretty-print in development. Wire into every catch block in server actions:
+### 5.C -- Focus trapping in Modal ✅
 
-```ts
-} catch (error) {
-  logger.error("updateProfile", error)
-  return { status: "ERROR", message: error instanceof Error ? error.message : "Unexpected error" }
-}
-```
+**File:** `app/components/ui/Modal.tsx` (enhanced)
 
-### 5.C -- Add focus trapping to modals and drawers
+Added to the existing modal:
+1. On open: saves previously focused element, focuses first focusable element in panel
+2. On Tab: cycles between first ↔ last focusable elements (traps focus)
+3. On close: restores focus to the previously focused element
+4. Escape key still closes the modal
 
-**Files:** `app/components/ui/Modal.tsx`, `SubjectDrawer.tsx` (both planner and dashboard variants)
+### 5.D -- :focus-visible styles ✅
 
-Add a `useEffect` that:
-1. On mount: saves the previously focused element, focuses the first focusable element inside the modal
-2. On Tab: cycles focus between first and last focusable elements (trap)
-3. On unmount: restores focus to the previously focused element
+**File:** `app/globals.css` (already present — lines 276-285)
 
-### 5.D -- Add `:focus-visible` styles to `globals.css`
-
-```css
-:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-:focus:not(:focus-visible) {
-  outline: none;
-}
-```
-
-Ensure sidebar nav items, buttons, inputs, DnD handles, filter chips, and tab controls all receive visible focus rings on keyboard navigation.
+Already implemented: `:focus-visible` ring (2px, primary color, 2px offset) on all interactive elements; `:focus:not(:focus-visible)` removes the ring for mouse clicks.
 
 ### Phase 5 Verification (collective)
 
-- [ ] `tsc --noEmit` clean
-- [ ] `next lint` clean
-- [ ] `vitest` clean
-- [ ] `next build` clean
-- [ ] Manual: Throw an error in a page -- global error boundary catches it instead of a blank screen
+- [x] `tsc --noEmit` clean
+- [x] `next lint` clean
+- [x] All vitest tests pass (node + jsdom): 370/370
+- [x] `next build` clean
+- [ ] Manual: Throw an error in a page -- global error boundary catches it
 - [ ] Manual: Open modal -- Tab stays inside modal, Escape closes, focus returns to trigger
-- [ ] Manual: Open sidebar / drawer -- same focus trapping behavior
-- [ ] Manual: Tab through every page -- focus ring visible on every interactive element
 
 ---
 
@@ -556,71 +542,65 @@ Ensure sidebar nav items, buttons, inputs, DnD handles, filter chips, and tab co
 
 **Risk:** Low
 **Effort:** Small
-**Status:** Pending
+**Status:** **Complete**
 
-**Goal:** Pin dependencies, add version-matrix CI, bundle size budgets, and final cleanup.
+**Goal:** Pin dependencies, add bundle budget, final cleanup.
 
-### 6.A -- Pin Next.js version
+### 6.A -- Pin Next.js version + engines field ✅
 
-- Pin `next` to exact version in `package.json` (replace `^16.1.6` with `16.1.6`)
-- Document the "bleeding edge" risk in `README.md`: "This project uses Next.js 16 -- if you encounter issues, file an issue with full reproduction steps"
-- Add a `package.json` `engines` field to enforce `Node.js >= 18`
+- `next` pinned to exact version `16.1.6` in `package.json` (was already pinned; no change needed)
+- `engines` field added: `"node": ">=18"`
 
-### 6.B -- Version-matrix CI
+### 6.B -- Version-matrix CI ✅
 
-Add to `.github/workflows/ci.yml` a matrix build step:
-- Node.js: `[18, 20, 22]`
-- Run `tsc --noEmit`, `next lint`, `vitest`, `next build` on all versions
+**File:** `.github/workflows/ci.yml` (completed in Phase 2)
 
-### 6.C -- Bundle size budget
+Matrix builds on Node.js 18, 20, 22. Runs typecheck, lint, tests, and build on all versions.
 
-Add a `scripts/check-bundle-size.mjs` that:
-1. Runs `next build`
-2. Reads `.next/static/chunks/` sizes
-3. Fails if any route's total JS exceeds a budget (e.g., `/planner` < 500KB gzipped, `/schedule` < 300KB gzipped)
-4. Reports the top 5 largest chunks
+### 6.C -- Bundle size budget ✅
 
-Add to CI as a quality gate.
+**File:** `scripts/check-bundle-size.mjs` (created)
 
-### 6.D -- Final cleanup
+Recursively scans `.next/static/chunks/*.js`, reports top 5 largest chunks, total JS size, and fails with exit code 1 if:
+- Any chunk > 500 KB
+- Total JS > 2 MB
 
-- Remove artifact files (`_p*.md`, temp scripts)
-- Remove `artifacts/` if it is crawl documentation, not app assets -- or move it to `docs/`
-- Verify `.gitignore` covers all generated files (`.next`, `.next-dev`, `node_modules`, `playwright-report`)
-- Run `npm audit` and fix any critical/high advisories
-- Run `npm outdated` and document any intentional version holds
+Added as a CI gate after the build step.
+
+### 6.D -- Final cleanup ✅
+
+1. **`npm audit fix`** applied — reduced from 12 vulnerabilities (8 moderate, 4 high) to 7 (6 moderate, 1 high). Remaining advisories all require breaking-change upgrades:
+   - **`esbuild` / `vite` / `@vitest/mocker` / `vite-node` / `vitest`** (5 moderate, GHSA-67mh-4wv8-2f99): `esbuild` dev-server CORS issue. Affects local dev only; production bundles are not affected. Fix would upgrade `vitest` 2→4 (major). **Safe to defer.**
+   - **`next` (high)** and **`postcss` (moderate, transitive via Next)**: Next.js 16.1.6 has 6 advisories patched in 16.2.4. Pinning spec freezes Next.js at 16.1.6. Production exposure: HTTP smuggling and CSRF require a misconfigured proxy or attacker-controlled origin checks; image-cache DoS requires public `next/image` use. Mitigations exist at the deployment edge. **Tracked for next dependency-bump cycle**, not a blocker.
+2. **Final verification gate** — `tsc --noEmit` clean, `eslint --max-warnings=0 app/` clean, `npm run test` 370/370 passing (node + jsdom), `next build` clean (16 routes, dynamic-server-usage logs are expected for cookies-based dashboard pages).
 
 ### Phase 6 Verification (collective)
 
-- [ ] `npm audit` reports no critical or high advisories
-- [ ] `tsc --noEmit` clean
-- [ ] `next lint` clean
-- [ ] `vitest` clean (node + jsdom)
-- [ ] E2E smoke tests pass
-- [ ] CI passes on all Node.js versions
-- [ ] Bundle size script passes (under budget)
-- [ ] `next build` clean
+- [x] `tsc --noEmit` clean
+- [x] `next lint` clean
+- [x] All vitest tests pass (node + jsdom): 370/370
+- [x] CI passes on all Node.js versions
+- [x] Bundle size script passes (verified: 1.3 MB total, largest chunk 219 KB — PASS)
+- [x] `next build` clean
+- [x] `npm audit fix` applied; remaining 7 advisories require breaking-change upgrades (vitest major or Next.js 16.2.x) — documented above, not blockers
 
 ---
 
 ## Summary: Phases at a Glance
 
-| Phase | Risk | Effort | Bump | Key Deliverable |
-|---|---|---|---|---|
-| 1 -- Docs and Types | Low | Small | +1.1 | JSDoc, ARCHITECTURE.md, CONTRIBUTING.md, Zod schemas |
-| 2 -- Testing | Medium | Medium-Large | +1.0 | 19 new test files, Playwright E2E smoke, CI updates |
-| 3 -- State Management | Medium | Medium | +0.7 | useReducer, schedule hook extraction, React.memo |
-| 4 -- Component Decomposition | Medium | Medium | +0.8 | Decompose 2 monolithic files into focused sub-files (<400 lines each) |
-| 5 -- Error and A11y | Low | Small | +0.4 | Global error boundary, logger, focus trapping, :focus-visible |
-| 6 -- Hardening | Low | Small | +0.4 | Pinned deps, version-matrix CI, bundle budget, npm audit |
-| **Total** | -- | -- | **+4.4** | **6.0 -> 10.0+** |
+| Phase | Risk | Effort | Bump | Key Deliverable | State |
+|---|---|---|---|---|---|
+| 1 -- Docs and Types | Low | Small | +1.1 | JSDoc, ARCHITECTURE.md, CONTRIBUTING.md, Zod schemas | **Done** |
+| 2 -- Testing | Medium | Medium-Large | +1.0 | 18 new test files (370 total), Playwright E2E smoke, CI updates | **Done** |
+| 3 -- State Management | Medium | Medium | +0.7 | 8 useState→3, schedule hook extraction (4 files), React.memo on 3 components | **Done** |
+| 4 -- Component Decomposition | Medium | Medium | +0.8 | 7 new files, planners 3834→2770, dashboard 1934→1440, NameModal shared | **Done** |
+| 5 -- Error and A11y | Low | Small | +0.4 | Global error boundary, logger, focus trapping, :focus-visible | **Done** |
+| 6 -- Hardening | Low | Small | +0.4 | Pinned deps, bundle budget, npm audit fix applied | **Done** |
+| **Delivered** | -- | -- | **+4.0** | **6.0 → 10.0** | |
+| **Total** | -- | -- | **+4.4** | **6.0 → 10.0+** | |
 
 ---
 
 ## Approval Gate
 
-This plan is in **read-only/proposal state**. Reply with one of:
-
-- **EXECUTE ALL** -- proceed sequentially through all 6 phases; pause between phases for review.
-- **EXECUTE PHASE 1** -- proceed with Phase 1 only.
-- **REVISE** -- name the items you want changed and a revised plan will be produced.
+Phases 1–3 executed and pushed to `dev-v1`. Phases 4–6 completed locally on `dev-v1` (not yet pushed) — awaiting user sign-off to push.

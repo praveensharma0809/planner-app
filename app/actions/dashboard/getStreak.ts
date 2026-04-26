@@ -1,6 +1,7 @@
 ﻿"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { logger } from "@/lib/ops/logger"
 
 export type GetStreakResponse =
   | { status: "UNAUTHORIZED" }
@@ -45,6 +46,7 @@ export async function getStreak(): Promise<GetStreakResponse> {
       streak_last_completed_date: profile.streak_last_completed_date ?? null
     }
   } catch (error) {
+    logger.error("getStreak", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

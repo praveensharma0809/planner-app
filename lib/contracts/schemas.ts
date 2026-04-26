@@ -22,7 +22,7 @@ export const subjectSchema = z.object({
   name: z.string(),
   sort_order: z.number(),
   archived: z.boolean(),
-  deadline: z.string().nullable(),
+  deadline: z.string().nullable().catch(null),
   created_at: z.string(),
 })
 

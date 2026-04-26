@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { logger } from "@/lib/ops/logger"
 
 interface UpdateProfileInput {
   full_name: string
@@ -117,6 +118,7 @@ export async function updateProfile(input: UpdateProfileInput): Promise<UpdatePr
 
     return { status: "SUCCESS", saved: savedNamePhone }
   } catch (error) {
+    logger.error("updateProfile", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

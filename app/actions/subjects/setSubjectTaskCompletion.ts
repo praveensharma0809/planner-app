@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { syncTopicTaskCompletionRowSchema } from "@/lib/contracts/schemas"
+import { logger } from "@/lib/ops/logger"
 
 export type SetSubjectTaskCompletionResponse =
   | { status: "SUCCESS" }
@@ -61,6 +62,7 @@ export async function setSubjectTaskCompletion(
     revalidateSubjectToggleViews()
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("setSubjectTaskCompletion", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

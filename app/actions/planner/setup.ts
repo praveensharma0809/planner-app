@@ -25,6 +25,7 @@ import {
 } from "@/lib/planner/engine"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isReservedSubjectName } from "@/lib/constants"
+import { logger } from "@/lib/ops/logger"
 import type {
   Subject,
   TopicTask,
@@ -415,6 +416,7 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
       },
     }
   } catch (error) {
+    logger.error("getStructure", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -557,6 +559,7 @@ export async function saveStructure(
     revalidatePath("/planner")
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("saveStructure", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -652,7 +655,8 @@ export async function getTopicParams(): Promise<GetTopicParamsResponse> {
         study_frequency: row.study_frequency ?? "daily",
       })),
     }
-  } catch {
+  } catch (error) {
+    logger.error("getTopicParams", error)
     return { status: "SUCCESS", params: [] }
   }
 }
@@ -816,6 +820,7 @@ export async function saveTopicParams(
     revalidatePath("/planner")
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("saveTopicParams", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -928,6 +933,7 @@ export async function getPlanConfig(): Promise<GetPlanConfigResponse> {
       },
     }
   } catch (error) {
+    logger.error("getPlanConfig", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -959,6 +965,7 @@ export async function getIntakeImportMode(): Promise<GetIntakeImportModeResponse
       mode: normalizeIntakeImportMode(data?.intake_import_mode),
     }
   } catch (error) {
+    logger.error("getIntakeImportMode", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -1028,6 +1035,7 @@ export async function saveIntakeImportMode(
     revalidatePath("/planner")
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("saveIntakeImportMode", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -1116,6 +1124,7 @@ export async function savePlanConfig(
     revalidatePath("/planner")
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("savePlanConfig", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -1211,7 +1220,8 @@ export async function getDraftFeasibility(
         offDays
       ),
     }
-  } catch {
+  } catch (error) {
+    logger.error("getDraftFeasibility", error)
     return { status: "SUCCESS", feasibility: emptyFeasibility() }
   }
 }
@@ -1239,6 +1249,7 @@ export async function reorderSubjects(
 
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("reorderSubjects", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -1269,6 +1280,7 @@ export async function reorderTopics(
 
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("reorderTopics", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -1299,6 +1311,7 @@ export async function saveSubjectDeadlines(
 
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("saveSubjectDeadlines", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

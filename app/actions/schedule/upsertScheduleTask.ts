@@ -8,6 +8,7 @@ import {
   assertValidSubjectAssignment,
   isReservedSubjectName,
 } from "@/lib/constants"
+import { logger } from "@/lib/ops/logger"
 
 type UpsertTaskInput = {
   taskId?: string
@@ -187,6 +188,7 @@ export async function upsertScheduleTask(
 
     return { status: "SUCCESS", taskId: created.id }
   } catch (error) {
+    logger.error("upsertScheduleTask", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

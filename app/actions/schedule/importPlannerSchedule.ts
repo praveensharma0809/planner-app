@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { getTodayLocalDate, normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
 import { plannerImportRowArraySchema } from "@/lib/contracts/schemas"
+import { logger } from "@/lib/ops/logger"
 
 type SessionType = "core" | "revision" | "practice"
 
@@ -131,6 +132,7 @@ export async function importPlannerSchedule(
       tasks: resolvedTasks,
     }
   } catch (error) {
+    logger.error("importPlannerSchedule", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

@@ -1,10 +1,8 @@
 // Cross-page primitives shared by both the planner and dashboard
-// `subjects-data-table.tsx` files. Kept intentionally small — only
-// truly identical pieces live here. Page-specific NavigationColumn /
-// NameModal implementations stay in their owning files because their
-// drag-handle UX, column widths, and footer affordances diverge.
+// `subjects-data-table.tsx` files.
 
-import { memo } from "react"
+import { memo, type FormEvent } from "react"
+import { Button, Input, Modal } from "@/app/components/ui"
 
 interface RowActionButtonProps {
   label: string
@@ -63,4 +61,71 @@ export interface ColumnItem {
   hint?: string
   onEdit?: () => void
   onDelete?: () => void
+}
+
+interface NameModalProps {
+  open: boolean
+  title: string
+  fieldLabel: string
+  value: string
+  placeholder: string
+  submitLabel: string
+  loading: boolean
+  onChange: (value: string) => void
+  onClose: () => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  destructiveActionLabel?: string
+  onDestructiveAction?: () => void
+  destructiveDisabled?: boolean
+}
+
+export function NameModal({
+  open,
+  title,
+  fieldLabel,
+  value,
+  placeholder,
+  submitLabel,
+  loading,
+  onChange,
+  onClose,
+  onSubmit,
+  destructiveActionLabel,
+  onDestructiveAction,
+  destructiveDisabled = false,
+}: NameModalProps) {
+  return (
+    <Modal open={open} onClose={onClose} title={title} size="sm">
+      <form className="space-y-4" onSubmit={onSubmit}>
+        <Input
+          autoFocus
+          required
+          label={fieldLabel}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+        />
+
+        <div className="flex items-center justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          {destructiveActionLabel && onDestructiveAction && (
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={onDestructiveAction}
+              disabled={destructiveDisabled}
+            >
+              {destructiveActionLabel}
+            </Button>
+          )}
+          <Button type="submit" variant="primary" size="sm" disabled={loading}>
+            {loading ? "Saving..." : submitLabel}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
 }

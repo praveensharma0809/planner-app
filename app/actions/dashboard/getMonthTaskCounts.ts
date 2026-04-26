@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isCanonicalIntakeManualTask } from "@/lib/planner/contracts"
 import { normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
+import { logger } from "@/lib/ops/logger"
 
 export interface DayTaskCount {
   date: string
@@ -77,6 +78,7 @@ export async function getMonthTaskCounts(
 
     return { status: "SUCCESS", days }
   } catch (error) {
+    logger.error("getMonthTaskCounts", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

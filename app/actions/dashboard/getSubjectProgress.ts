@@ -1,6 +1,7 @@
 ﻿"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { logger } from "@/lib/ops/logger"
 
 export interface SubjectProgress {
   id: string
@@ -138,6 +139,7 @@ export async function getSubjectProgress(): Promise<GetSubjectProgressResponse> 
 
     return { status: "SUCCESS", subjects: result }
   } catch (error) {
+    logger.error("getSubjectProgress", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
