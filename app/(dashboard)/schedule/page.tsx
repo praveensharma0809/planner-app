@@ -17,17 +17,14 @@ import {
   PointerSensor,
   pointerWithin,
   rectIntersection,
-  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core"
 import {
-  SortableContext,
   arrayMove,
   sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { useToast } from "@/app/components/Toast"
 import {
@@ -43,7 +40,6 @@ import { setTaskCompletion } from "@/app/actions/plan/setTaskCompletion"
 import { rescheduleTask } from "@/app/actions/plan/rescheduleTask"
 import {
   useScheduleTopbar,
-  type ScheduleTopbarStatusFilter,
 } from "@/app/components/layout/ScheduleTopbarContext"
 import { saveTaskViaUnifiedFlow } from "@/app/components/tasks/taskWriteGateway"
 import { STANDALONE_SUBJECT_ID, STANDALONE_SUBJECT_LABEL } from "@/lib/constants"
@@ -55,28 +51,16 @@ import {
   type CalendarEvent,
   type DayOrderMap,
   DAY_LABELS,
-  addDaysISO,
   addMonthsISO,
-  clamp,
-  dayIndexFromWeekStart,
-  emptyDayOrderMap,
   formatDayDateLabel,
-  getWeekRangeMeta,
   mapTasksToEvents,
-  parseISODate,
-  readDayOrderStorage,
-  writeDayOrderStorage,
 } from "./schedule-page.helpers"
-import { DragPreviewCard, EventCard, QuickAddButton } from "./schedule-page.cards"
+import { DragPreviewCard } from "./schedule-page.cards"
 import { AddEventModal } from "./schedule-page.modal"
-
-type StatusFilter = ScheduleTopbarStatusFilter
-
-type FilterChip = {
-  id: string
-  label: string
-  subjectId: string | "all"
-}
+import { useWeekNavigation } from "./useWeekNavigation"
+import { useScheduleFilters } from "./useScheduleFilters"
+import { useDayOrder } from "./useDayOrder"
+import DayColumn from "./DayColumn"
 
 type EventDraft = {
   title: string
@@ -91,30 +75,27 @@ export default function SchedulePage() {
 
   const [tasks, setTasks] = useState<ScheduleWeekTask[]>([])
   const [subjects, setSubjects] = useState<ScheduleSubjectOption[]>([])
-  const [weekAnchorISO, setWeekAnchorISO] = useState(() => getTodayLocalDate())
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
-  const [activeChipId, setActiveChipId] = useState("all")
   const [isLoadingWeek, setIsLoadingWeek] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editEventId, setEditEventId] = useState<string | null>(null)
   const [quickAddDay, setQuickAddDay] = useState(0)
-  const [mobileDay, setMobileDay] = useState(0)
-  const [dayOrderMap, setDayOrderMap] = useState<DayOrderMap>(emptyDayOrderMap)
-  const [didHydrateDayOrder, setDidHydrateDayOrder] = useState(false)
   const [activeDragEventId, setActiveDragEventId] = useState<string | null>(null)
   const [busyTaskIds, setBusyTaskIds] = useState<Set<string>>(new Set())
   const [isSavingEvent, setIsSavingEvent] = useState(false)
   const [isImportingPlanner, setIsImportingPlanner] = useState(false)
   const eventElementMapRef = useRef<Map<string, HTMLDivElement>>(new Map())
 
-  const weekMeta = useMemo(() => getWeekRangeMeta(parseISODate(weekAnchorISO)), [weekAnchorISO])
-  const currentWeekStartISO = useMemo(() => getWeekRangeMeta(new Date()).weekStartISO, [])
-  const isCurrentWeek = weekMeta.weekStartISO === currentWeekStartISO
-
-  const weekDates = useMemo(
-    () => Array.from({ length: 7 }, (_, day) => addDaysISO(weekMeta.weekStartISO, day)),
-    [weekMeta.weekStartISO]
-  )
+  const {
+    setWeekAnchorISO,
+    weekMeta,
+    weekDates,
+    isCurrentWeek,
+    mobileDay,
+    setMobileDay,
+    handleGoPrevWeek,
+    handleGoNextWeek,
+    handleGoCurrentWeek,
+  } = useWeekNavigation()
 
   const loadWeekData = useCallback(async (weekStartISO: string) => {
     setIsLoadingWeek(true)
@@ -146,62 +127,15 @@ export default function SchedulePage() {
     } finally {
       setIsLoadingWeek(false)
     }
-  }, [addToast])
+  }, [addToast, setWeekAnchorISO])
 
   useEffect(() => {
     void loadWeekData(weekMeta.weekStartISO)
   }, [loadWeekData, weekMeta.weekStartISO])
 
-  useEffect(() => {
-    const todayISO = getTodayLocalDate()
-    const nextDay = dayIndexFromWeekStart(todayISO, weekMeta.weekStartISO)
-    setMobileDay(clamp(nextDay, 0, 6))
-  }, [weekMeta.weekStartISO])
-
-  useEffect(() => {
-    const storage = readDayOrderStorage()
-    setDayOrderMap(storage[weekMeta.weekStartISO] ?? emptyDayOrderMap())
-    setDidHydrateDayOrder(true)
-  }, [weekMeta.weekStartISO])
-
-  useEffect(() => {
-    if (!didHydrateDayOrder) return
-    const storage = readDayOrderStorage()
-    writeDayOrderStorage({
-      ...storage,
-      [weekMeta.weekStartISO]: dayOrderMap,
-    })
-  }, [dayOrderMap, didHydrateDayOrder, weekMeta.weekStartISO])
-
   const subjectNameById = useMemo(
     () => new Map(subjects.map((subject) => [subject.id, subject.name])),
     [subjects]
-  )
-
-  const filterChips = useMemo<FilterChip[]>(() => {
-    return [
-      { id: "all", label: "All", subjectId: "all" },
-      ...subjects.map((subject) => ({
-        id: `subject-${subject.id}`,
-        label: subject.name,
-        subjectId: subject.id,
-      })),
-      {
-        id: `subject-${STANDALONE_SUBJECT_ID}`,
-        label: STANDALONE_SUBJECT_LABEL,
-        subjectId: STANDALONE_SUBJECT_ID,
-      },
-    ]
-  }, [subjects])
-
-  useEffect(() => {
-    if (filterChips.some((chip) => chip.id === activeChipId)) return
-    setActiveChipId("all")
-  }, [activeChipId, filterChips])
-
-  const selectedChip = useMemo(
-    () => filterChips.find((chip) => chip.id === activeChipId) ?? filterChips[0],
-    [activeChipId, filterChips]
   )
 
   const events = useMemo(
@@ -209,36 +143,16 @@ export default function SchedulePage() {
     [tasks, weekDates, subjectNameById]
   )
 
-  useEffect(() => {
-    setDayOrderMap((previous) => {
-      const next: DayOrderMap = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }
+  const { dayOrderMap, setDayOrderMap } = useDayOrder({ events, weekStartISO: weekMeta.weekStartISO })
 
-      for (let day = 0; day < 7; day++) {
-        const dayIds = events.filter((event) => event.day === day).map((event) => event.id)
-        const previousForDay = previous[day] ?? []
-        const kept = previousForDay.filter((id) => dayIds.includes(id))
-        const missing = dayIds.filter((id) => !kept.includes(id))
-        next[day] = [...kept, ...missing]
-      }
-
-      return next
-    })
-  }, [events])
-
-  const filteredEvents = useMemo(() => {
-    return events.filter((event) => {
-      const matchesSubject =
-        selectedChip.subjectId === "all" || selectedChip.subjectId === event.subjectId
-      const matchesStatus =
-        statusFilter === "all"
-          ? true
-          : statusFilter === "completed"
-            ? event.completed
-            : !event.completed
-
-      return matchesSubject && matchesStatus
-    })
-  }, [events, selectedChip, statusFilter])
+  const {
+    statusFilter,
+    setStatusFilter,
+    activeChipId,
+    setActiveChipId,
+    filterChips,
+    filteredEvents,
+  } = useScheduleFilters({ subjects, events })
 
   const editingEvent = useMemo(
     () => events.find((event) => event.id === editEventId) ?? null,
@@ -308,7 +222,6 @@ export default function SchedulePage() {
     if (!existing) return
     const previousCompleted = existing.completed
 
-    // Optimistic flip — keep mirror to MonthView gold-standard pattern.
     setTasks((previous) =>
       previous.map((task) =>
         task.id === taskId ? { ...task, completed: nextCompleted } : task,
@@ -348,7 +261,6 @@ export default function SchedulePage() {
     if (busyTaskIds.has(eventId)) return
 
     const previousTasks = tasks
-    // Optimistic removal — restore on non-success.
     setTasks((previous) => previous.filter((task) => task.id !== eventId))
     setTaskBusy(eventId, true)
     try {
@@ -428,7 +340,7 @@ export default function SchedulePage() {
     } finally {
       setIsSavingEvent(false)
     }
-  }, [addToast, isSavingEvent, loadWeekData, weekDates, weekMeta.weekStartISO])
+  }, [addToast, isSavingEvent, loadWeekData, weekDates, weekMeta.weekStartISO, setActiveChipId])
 
   const handleImportFromPlanner = useCallback(async () => {
     if (isImportingPlanner) return
@@ -466,27 +378,15 @@ export default function SchedulePage() {
     } finally {
       setIsImportingPlanner(false)
     }
-  }, [addToast, isImportingPlanner, loadWeekData, weekMeta.weekStartISO])
-
-  const handleGoPrevWeek = useCallback(() => {
-    setWeekAnchorISO(addDaysISO(weekMeta.weekStartISO, -7))
-  }, [weekMeta.weekStartISO])
-
-  const handleGoNextWeek = useCallback(() => {
-    setWeekAnchorISO(addDaysISO(weekMeta.weekStartISO, 7))
-  }, [weekMeta.weekStartISO])
+  }, [addToast, isImportingPlanner, loadWeekData, weekMeta.weekStartISO, setWeekAnchorISO, setActiveChipId, setStatusFilter])
 
   const handleGoPrevMonth = useCallback(() => {
     setWeekAnchorISO(addMonthsISO(weekMeta.weekStartISO, -1))
-  }, [weekMeta.weekStartISO])
+  }, [weekMeta.weekStartISO, setWeekAnchorISO])
 
   const handleGoNextMonth = useCallback(() => {
     setWeekAnchorISO(addMonthsISO(weekMeta.weekStartISO, 1))
-  }, [weekMeta.weekStartISO])
-
-  const handleGoCurrentWeek = useCallback(() => {
-    setWeekAnchorISO(getTodayLocalDate())
-  }, [])
+  }, [weekMeta.weekStartISO, setWeekAnchorISO])
 
   useEffect(() => {
     setTopbarState({
@@ -520,6 +420,8 @@ export default function SchedulePage() {
     isCurrentWeek,
     mobileDay,
     openCreateModal,
+    setActiveChipId,
+    setStatusFilter,
     setTopbarState,
     statusFilter,
     weekMeta.title,
@@ -666,7 +568,7 @@ export default function SchedulePage() {
         setTaskBusy(eventId, false)
       }
     })()
-  }, [addToast, eventById, loadWeekData, setTaskBusy, weekDates, weekMeta.weekStartISO])
+  }, [addToast, eventById, loadWeekData, setDayOrderMap, setTaskBusy, weekDates, weekMeta.weekStartISO])
 
   return (
     <div className="page-root animate-fade-in flex h-full min-h-0 flex-col overflow-hidden">
@@ -918,87 +820,3 @@ function WeeklyCalendarGrid({
     </section>
   )
 }
-
-type DayColumnProps = {
-  day: number
-  events: CalendarEvent[]
-  eventElementMapRef: MutableRefObject<Map<string, HTMLDivElement>>
-  isLast: boolean
-  busyTaskIds: Set<string>
-  onQuickAdd: (day: number) => void
-  onEditEvent: (eventId: string) => void
-  onDeleteEvent: (eventId: string) => void
-  onToggleComplete: (eventId: string, nextCompleted: boolean) => void
-}
-
-function DayColumn({
-  day,
-  events,
-  eventElementMapRef,
-  isLast,
-  busyTaskIds,
-  onQuickAdd,
-  onEditEvent,
-  onDeleteEvent,
-  onToggleComplete,
-}: DayColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: `day-${day}` })
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={isLast ? "flex h-full min-h-0 flex-col" : "flex h-full min-h-0 flex-col border-r"}
-      style={{
-        borderColor: "var(--sh-border)",
-        background: isOver ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent",
-      }}
-    >
-      <div
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2"
-        style={{
-          height: "100%",
-        }}
-      >
-        {events.length === 0 ? (
-          <div
-            className="flex h-full min-h-[180px] items-center justify-center rounded-lg border border-dashed text-xs"
-            style={{
-              borderColor: isOver ? "var(--sh-primary)" : "var(--sh-border)",
-              color: isOver ? "var(--sh-text-primary)" : "var(--sh-text-muted)",
-            }}
-          >
-            {isOver ? "Release to move task" : "No tasks for this day"}
-          </div>
-        ) : (
-          <SortableContext
-            items={events.map((event) => event.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {events.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                registerElement={(element) => {
-                  if (element) {
-                    eventElementMapRef.current.set(event.id, element)
-                  } else {
-                    eventElementMapRef.current.delete(event.id)
-                  }
-                }}
-                busy={busyTaskIds.has(event.id)}
-                onEdit={() => onEditEvent(event.id)}
-                onDelete={() => onDeleteEvent(event.id)}
-                onToggleComplete={() => onToggleComplete(event.id, !event.completed)}
-              />
-            ))}
-          </SortableContext>
-        )}
-      </div>
-
-      <div className="flex h-10 items-center justify-center border-t" style={{ borderColor: "var(--sh-border)" }}>
-        <QuickAddButton onClick={() => onQuickAdd(day)} />
-      </div>
-    </div>
-  )
-}
-

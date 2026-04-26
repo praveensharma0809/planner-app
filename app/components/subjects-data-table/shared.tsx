@@ -4,6 +4,8 @@
 // NameModal implementations stay in their owning files because their
 // drag-handle UX, column widths, and footer affordances diverge.
 
+import { memo } from "react"
+
 interface RowActionButtonProps {
   label: string
   onClick: () => void
@@ -11,7 +13,7 @@ interface RowActionButtonProps {
   disabled?: boolean
 }
 
-export function RowActionButton({
+export const RowActionButton = memo(function RowActionButton({
   label,
   onClick,
   danger = false,
@@ -53,7 +55,7 @@ export function RowActionButton({
       )}
     </button>
   )
-}
+})
 
 export interface ColumnItem {
   id: string

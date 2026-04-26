@@ -237,13 +237,9 @@ export function SubjectsDataTable({
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null)
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
   const [manualOrderChapterIds, setManualOrderChapterIds] = useState<Set<string>>(new Set())
-  const [reorderingTaskIds, setReorderingTaskIds] = useState<string[]>([])
-  const [reorderingSubjects, setReorderingSubjects] = useState(false)
-  const [reorderingChapters, setReorderingChapters] = useState(false)
+  const [reorderBusy, setReorderBusy] = useState<{ type: "tasks"; ids: string[] } | { type: "subjects" } | { type: "chapters" } | null>(null)
 
-  const [importingAll, setImportingAll] = useState(false)
-  const [importingUndone, setImportingUndone] = useState(false)
-  const [resettingIntake, setResettingIntake] = useState(false)
+  const [importBusy, setImportBusy] = useState<"all" | "undone" | "reset" | null>(null)
   const [intakeImportMode, setIntakeImportMode] = useState<IntakeImportMode>(initialImportMode)
 
   const [dependencyModalOpen, setDependencyModalOpen] = useState(false)
@@ -251,8 +247,7 @@ export function SubjectsDataTable({
   const [dependencyTargetChapterId, setDependencyTargetChapterId] = useState("")
   const [dependencySelectedIds, setDependencySelectedIds] = useState<Set<string>>(new Set())
   const [dependencySearch, setDependencySearch] = useState("")
-  const [dependencyLoading, setDependencyLoading] = useState(false)
-  const [dependencySaving, setDependencySaving] = useState(false)
+  const [dependencyBusy, setDependencyBusy] = useState<"loading" | "saving" | null>(null)
   const [topicParamsByTopic, setTopicParamsByTopic] = useState<Map<string, TopicParamDraft>>(new Map())
   const [subjectSnapshotForDrawer, setSubjectSnapshotForDrawer] = useState<{
     name: string
@@ -488,9 +483,7 @@ export function SubjectsDataTable({
     setSelectedSubjectId(null)
     setSelectedChapterId(null)
     setManualOrderChapterIds(new Set())
-    setReorderingTaskIds([])
-    setReorderingSubjects(false)
-    setReorderingChapters(false)
+    setReorderBusy(null)
     setPendingTaskIds(new Set())
     setTaskDurationDrafts({})
     setTaskDurationSavingIds(new Set())
@@ -737,7 +730,7 @@ export function SubjectsDataTable({
       const reorderedChapterTasks = arrayMove(visibleTasks, fromIndex, toIndex)
       const orderedChapterTaskIds = reorderedChapterTasks.map((task) => task.id)
 
-      setReorderingTaskIds(orderedChapterTaskIds)
+      setReorderBusy({ type: "tasks", ids: orderedChapterTaskIds })
 
       const result = await reorderTasks({
         chapterId,
@@ -758,14 +751,14 @@ export function SubjectsDataTable({
     } catch (error) {
       showMutationError(error, "Could not reorder tasks right now.")
     } finally {
-      setReorderingTaskIds([])
+      setReorderBusy(null)
       endMutation()
     }
   }
 
   useEffect(() => {
     if (!selectedChapter || showArchived) return
-    if (reorderingTaskIds.length > 0) return
+    if ((reorderBusy?.type === "tasks" ? reorderBusy.ids.length : 0) > 0) return
     if (mutationLockRef.current) return
 
     const chapterId = selectedChapter.id
@@ -777,14 +770,14 @@ export function SubjectsDataTable({
     if (unchanged) return
 
     const orderedTaskIds = autoOrderedTasks.map((task) => task.id)
-    setReorderingTaskIds(orderedTaskIds)
+    setReorderBusy({ type: "tasks", ids: orderedTaskIds })
 
     let alive = true
 
     void (async () => {
       if (!beginMutation()) {
         if (alive) {
-          setReorderingTaskIds([])
+          setReorderBusy(null)
         }
         return
       }
@@ -808,7 +801,7 @@ export function SubjectsDataTable({
         showMutationError(error, "Could not auto-order tasks.")
       } finally {
         if (alive) {
-          setReorderingTaskIds([])
+          setReorderBusy(null)
         }
         endMutation()
       }
@@ -820,7 +813,7 @@ export function SubjectsDataTable({
   // Intentionally scoped to ordering state inputs so auto-order does not rerun
   // on helper closure churn from unrelated renders.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chapterTasks, manualOrderChapterIds, reorderingTaskIds.length, selectedChapter, showArchived, showMutationError])
+  }, [chapterTasks, manualOrderChapterIds, reorderBusy, selectedChapter, showArchived, showMutationError])
 
 
   async function handleSaveChapter(event: FormEvent<HTMLFormElement>) {
@@ -1527,11 +1520,11 @@ export function SubjectsDataTable({
   }
 
   async function handleReorderSubjects(orderedIds: string[]) {
-    if (showArchived || reorderingSubjects) return
+    if (showArchived || reorderBusy?.type === "subjects") return
     if (orderedIds.length <= 1) return
 
     if (!beginMutation()) return
-    setReorderingSubjects(true)
+    setReorderBusy({ type: "subjects" })
 
     try {
       const result = await reorderSubjectsAction(
@@ -1551,18 +1544,18 @@ export function SubjectsDataTable({
     } catch (error) {
       showMutationError(error, "Could not reorder subjects.")
     } finally {
-      setReorderingSubjects(false)
+      setReorderBusy(null)
       endMutation()
     }
   }
 
   async function handleReorderChapters(orderedIds: string[]) {
-    if (showArchived || reorderingChapters || !selectedSubject) return
+    if (showArchived || reorderBusy?.type === "chapters" || !selectedSubject) return
     if (orderedIds.length <= 1) return
 
     if (!beginMutation()) return
 
-    setReorderingChapters(true)
+    setReorderBusy({ type: "chapters" })
     try {
       const result = await reorderChaptersAction(
         selectedSubject.id,
@@ -1582,7 +1575,7 @@ export function SubjectsDataTable({
     } catch (error) {
       showMutationError(error, "Could not reorder chapters.")
     } finally {
-      setReorderingChapters(false)
+      setReorderBusy(null)
       endMutation()
     }
   }
@@ -1651,11 +1644,7 @@ export function SubjectsDataTable({
     const trackLoading = options?.trackLoading !== false
 
     if (trackLoading) {
-      if (mode === "undone") {
-        setImportingUndone(true)
-      } else {
-        setImportingAll(true)
-      }
+      setImportBusy(mode === "undone" ? "undone" : "all")
     }
 
     try {
@@ -1720,7 +1709,7 @@ export function SubjectsDataTable({
       setTaskDurationSavingIds(new Set())
       setPendingTaskIds(new Set())
       setManualOrderChapterIds(new Set())
-      setReorderingTaskIds([])
+      setReorderBusy(null)
       setIntakeImportMode(mode)
 
       if (nextSubjects.length > 0) {
@@ -1747,8 +1736,7 @@ export function SubjectsDataTable({
       return false
     } finally {
       if (trackLoading) {
-        setImportingAll(false)
-        setImportingUndone(false)
+        setImportBusy(null)
       }
     }
   }
@@ -1800,7 +1788,7 @@ export function SubjectsDataTable({
 
     if (!beginMutation()) return
 
-    setResettingIntake(true)
+    setImportBusy("reset")
     try {
       resetTransientIntakeState()
 
@@ -1812,7 +1800,7 @@ export function SubjectsDataTable({
     } catch (error) {
       showMutationError(error, "Could not reset intake view.")
     } finally {
-      setResettingIntake(false)
+      setImportBusy(null)
       endMutation()
     }
   }
@@ -1850,7 +1838,7 @@ export function SubjectsDataTable({
     if (!dependencyModalOpen || !dependencyTargetChapterId) return
 
     let alive = true
-    setDependencyLoading(true)
+    setDependencyBusy("loading")
     void (async () => {
       try {
         const map = await loadTopicParamsSnapshot(true)
@@ -1873,7 +1861,7 @@ export function SubjectsDataTable({
       } catch (error) {
         if (alive) showMutationError(error, "Could not load dependencies.")
       } finally {
-        if (alive) setDependencyLoading(false)
+        if (alive) setDependencyBusy(null)
       }
     })()
 
@@ -1933,7 +1921,7 @@ export function SubjectsDataTable({
     }
 
     if (!beginMutation()) return
-    setDependencySaving(true)
+    setDependencyBusy("saving")
 
     try {
       let payload: ReturnType<typeof buildTopicParamPayload>[]
@@ -1988,7 +1976,7 @@ export function SubjectsDataTable({
     } catch (error) {
       showMutationError(error, "Could not save dependencies.")
     } finally {
-      setDependencySaving(false)
+      setDependencyBusy(null)
       endMutation()
     }
   }
@@ -2118,9 +2106,9 @@ export function SubjectsDataTable({
                 onClick={() => {
                   void handleImportModeClick("all")
                 }}
-                disabled={isMutating || importingAll || importingUndone || resettingIntake}
+                disabled={isMutating || importBusy !== null}
               >
-                {importingAll ? "Importing..." : "Import All"}
+                {importBusy === "all" ? "Importing..." : "Import All"}
               </Button>
               <Button
                 variant="ghost"
@@ -2129,9 +2117,9 @@ export function SubjectsDataTable({
                 onClick={() => {
                   void handleImportModeClick("undone")
                 }}
-                disabled={isMutating || importingAll || importingUndone || resettingIntake}
+                disabled={isMutating || importBusy !== null}
               >
-                {importingUndone ? "Importing..." : "Import Undone Only"}
+                {importBusy === "undone" ? "Importing..." : "Import Undone Only"}
               </Button>
               <Button
                 variant="ghost"
@@ -2140,9 +2128,9 @@ export function SubjectsDataTable({
                 onClick={() => {
                   void handleResetIntakeView()
                 }}
-                disabled={isMutating || resettingIntake || importingAll || importingUndone}
+                disabled={isMutating || importBusy !== null}
               >
-                {resettingIntake ? "Resetting..." : "Reload Saved Intake Data"}
+                {importBusy === "reset" ? "Resetting..." : "Reload Saved Intake Data"}
               </Button>
             </div>
           </div>
@@ -2154,7 +2142,7 @@ export function SubjectsDataTable({
               activeId={selectedSubjectId}
               emptyMessage="No subjects available."
               onSelect={setSelectedSubjectId}
-              reorderEnabled={!showArchived && !reorderingSubjects && !importingAll && !importingUndone}
+              reorderEnabled={!showArchived && reorderBusy?.type !== "subjects" && importBusy === null}
               onReorder={(orderedIds) => {
                 void handleReorderSubjects(orderedIds)
               }}
@@ -2201,7 +2189,7 @@ export function SubjectsDataTable({
               activeId={selectedChapterId}
               emptyMessage="No chapters in this subject."
               onSelect={setSelectedChapterId}
-              reorderEnabled={!showArchived && !!selectedSubject && !reorderingChapters}
+              reorderEnabled={!showArchived && !!selectedSubject && reorderBusy?.type !== "chapters"}
               onReorder={(orderedIds) => {
                 void handleReorderChapters(orderedIds)
               }}
@@ -2427,7 +2415,7 @@ export function SubjectsDataTable({
                                   task={task}
                                   isPending={pendingTaskIds.has(task.id)}
                                   isDurationSaving={taskDurationSavingIds.has(task.id)}
-                                  isReordering={reorderingTaskIds.includes(task.id)}
+                                  isReordering={reorderBusy?.type === "tasks" && reorderBusy.ids.includes(task.id)}
                                   canEdit={!showArchived && !isMutating}
                                   durationDraft={taskDurationDrafts[task.id] ?? String(task.durationMinutes)}
                                   onToggle={(nextCompleted) => handleToggleTask(task.id, nextCompleted)}
@@ -3183,7 +3171,7 @@ export function SubjectsDataTable({
       <Modal
         open={dependencyModalOpen}
         onClose={() => {
-          if (isMutating || dependencySaving) return
+          if (isMutating || dependencyBusy === "saving") return
           setDependencyModalOpen(false)
         }}
         title={dependencyScope === "subject" ? "Set Dependencies (Subject)" : "Set Dependencies (Chapter)"}
@@ -3208,7 +3196,7 @@ export function SubjectsDataTable({
             className="max-h-[280px] space-y-1.5 overflow-y-auto rounded-lg border p-2"
             style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
           >
-            {dependencyLoading ? (
+            {dependencyBusy === "loading" ? (
               <p className="px-1 py-2 text-xs" style={{ color: "var(--sh-text-muted)" }}>
                 {dependencyScope === "subject" ? "Loading subject parameters..." : "Loading chapter parameters..."}
               </p>
@@ -3230,7 +3218,7 @@ export function SubjectsDataTable({
                       borderColor: selected ? "var(--sh-primary-glow)" : "var(--sh-border)",
                       background: selected ? "var(--sh-primary-muted)" : "transparent",
                     }}
-                    disabled={isMutating || dependencySaving}
+                    disabled={isMutating || dependencyBusy === "saving"}
                   >
                     <p
                       className="text-sm font-semibold"
@@ -3259,7 +3247,7 @@ export function SubjectsDataTable({
               variant="ghost"
               size="sm"
               onClick={() => setDependencySelectedIds(new Set())}
-              disabled={isMutating || dependencySaving || dependencySelectedIds.size === 0}
+              disabled={isMutating || dependencyBusy === "saving" || dependencySelectedIds.size === 0}
             >
               Clear
             </Button>
@@ -3270,7 +3258,7 @@ export function SubjectsDataTable({
                 variant="ghost"
                 size="sm"
                 onClick={() => setDependencyModalOpen(false)}
-                disabled={isMutating || dependencySaving}
+                disabled={isMutating || dependencyBusy !== null}
               >
                 Cancel
               </Button>
@@ -3281,9 +3269,9 @@ export function SubjectsDataTable({
                 onClick={() => {
                   void handleSaveDependencies()
                 }}
-                disabled={isMutating || dependencySaving || dependencyLoading || !dependencyTargetChapterId}
+                disabled={isMutating || dependencyBusy !== null || !dependencyTargetChapterId}
               >
-                {dependencySaving ? "Saving..." : "Save Dependencies"}
+                {dependencyBusy === "saving" ? "Saving..." : "Save Dependencies"}
               </Button>
             </div>
           </div>

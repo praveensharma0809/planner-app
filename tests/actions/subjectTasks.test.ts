@@ -147,7 +147,6 @@ function createChapterAndInsertMock(
 }
 
 function buildTopicTasksTable(existing: unknown) {
-  let callCount = 0
   const eqMaybeSingle = vi.fn().mockResolvedValue({
     data: existing,
     error: existing ? null : null,

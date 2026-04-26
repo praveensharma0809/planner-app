@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, useTransition, type CSSProperties, type FormEvent, type ReactNode } from "react"
+import { memo, useCallback, useEffect, useMemo, useState, useTransition, type CSSProperties, type FormEvent, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core"
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
@@ -1695,7 +1695,7 @@ interface NavigationColumnProps {
   sensors?: ReturnType<typeof useSensors>
 }
 
-function NavigationColumn({
+const NavigationColumn = memo(function NavigationColumn({
   title,
   items,
   activeId,
@@ -1783,7 +1783,7 @@ function NavigationColumn({
       )}
     </section>
   )
-}
+})
 
 interface NavigationColumnRowProps {
   item: ColumnItem

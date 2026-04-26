@@ -88,7 +88,6 @@ describe("upsertScheduleTask", () => {
   })
 
   it("returns SUCCESS with taskId on insert", async () => {
-    let callCount = 0
     const supabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) },
       from: vi.fn((table: string) => {
