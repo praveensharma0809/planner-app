@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- this module is the sanctioned console wrapper */
 type LogLevel = "info" | "warn" | "error"
 
 interface LogEntry {
