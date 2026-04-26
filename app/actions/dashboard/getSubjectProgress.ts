@@ -1,6 +1,7 @@
 ﻿"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { logger } from "@/lib/ops/logger"
 
 export interface SubjectProgress {
   id: string
@@ -38,8 +39,6 @@ export async function getSubjectProgress(): Promise<GetSubjectProgressResponse> 
       .select("id, name")
       .eq("user_id", user.id)
       .eq("archived", false)
-      .not("name", "ilike", "others")
-      .not("name", "ilike", "__deprecated_others__")
       .order("sort_order", { ascending: true })
 
     if (subjectsError) {
@@ -140,6 +139,7 @@ export async function getSubjectProgress(): Promise<GetSubjectProgressResponse> 
 
     return { status: "SUCCESS", subjects: result }
   } catch (error) {
+    logger.error("getSubjectProgress", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

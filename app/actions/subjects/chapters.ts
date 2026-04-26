@@ -3,6 +3,8 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { normalizeOptionalDate, validateDateWindow } from "@/lib/planner/contracts"
+import { archivedChapterArraySchema } from "@/lib/contracts/schemas"
+import { logger } from "@/lib/ops/logger"
 
 function revalidateStructureViews() {
   revalidatePath("/dashboard/subjects")
@@ -70,9 +72,10 @@ export async function getArchivedChapters(subjectId?: string): Promise<GetArchiv
 
     return {
       status: "SUCCESS",
-      chapters: (data ?? []) as ArchivedChapterListItem[],
+      chapters: archivedChapterArraySchema.parse(data ?? []),
     }
   } catch (error) {
+    logger.error("getArchivedChapters", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -144,6 +147,7 @@ export async function addChapter(subjectId: string, name: string): Promise<AddCh
     revalidateStructureViews()
     return { status: "SUCCESS", chapterId: inserted.id }
   } catch (error) {
+    logger.error("addChapter", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -249,6 +253,7 @@ export async function updateChapter(
     revalidateStructureViews()
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("updateChapter", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -305,6 +310,7 @@ export async function deleteChapter(chapterId: string): Promise<ChapterActionRes
     revalidateStructureViews()
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("deleteChapter", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -351,6 +357,7 @@ export async function archiveChapter(chapterId: string): Promise<ChapterActionRe
     revalidateStructureViews()
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("archiveChapter", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -397,6 +404,7 @@ export async function unarchiveChapter(chapterId: string): Promise<ChapterAction
     revalidateStructureViews()
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("unarchiveChapter", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

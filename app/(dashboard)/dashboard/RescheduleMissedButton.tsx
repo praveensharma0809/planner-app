@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/app/components/Toast"
 import { rescheduleMissedPlan } from "@/app/actions/planner/plan"
@@ -9,6 +9,7 @@ export function RescheduleMissedButton() {
   const [loading, setLoading] = useState(false)
   const { addToast } = useToast()
   const router = useRouter()
+  const [, startBackgroundRefresh] = useTransition()
 
   const handleClick = async () => {
     setLoading(true)
@@ -34,7 +35,9 @@ export function RescheduleMissedButton() {
           addToast(baseMessage, "success")
         }
 
-        router.refresh()
+        startBackgroundRefresh(() => {
+          router.refresh()
+        })
         return
       }
 

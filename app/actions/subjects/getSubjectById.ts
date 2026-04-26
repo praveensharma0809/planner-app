@@ -1,6 +1,8 @@
 ﻿"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { subjectSchema } from "@/lib/contracts/schemas"
+import { logger } from "@/lib/ops/logger"
 import type { Subject } from "@/lib/types/db"
 
 export type GetSubjectByIdResponse =
@@ -28,8 +30,9 @@ export async function getSubjectById(subjectId: string): Promise<GetSubjectByIdR
       return { status: "ERROR", message: "Subject not found." }
     }
 
-    return { status: "SUCCESS", subject: data as Subject }
+    return { status: "SUCCESS", subject: subjectSchema.parse(data) }
   } catch (error) {
+    logger.error("getSubjectById", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

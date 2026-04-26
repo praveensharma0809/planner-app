@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { logger } from "@/lib/ops/logger"
 
 export type UncompleteTaskResponse =
   | { status: "SUCCESS" }
@@ -76,6 +77,7 @@ export async function uncompleteTask(taskId: string) {
     revalidatePath("/planner")
     return { status: "SUCCESS" } satisfies UncompleteTaskResponse
   } catch (error) {
+    logger.error("uncompleteTask", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

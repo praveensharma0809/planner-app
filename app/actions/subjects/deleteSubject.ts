@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { logger } from "@/lib/ops/logger"
 
 export async function deleteSubject(subjectId: string) {
   try {
@@ -80,6 +81,7 @@ export async function deleteSubject(subjectId: string) {
     revalidatePath("/planner")
     return { status: "SUCCESS" as const }
   } catch (error) {
+    logger.error("deleteSubject", error)
     return {
       status: "ERROR" as const,
       message: error instanceof Error ? error.message : "Unexpected error",

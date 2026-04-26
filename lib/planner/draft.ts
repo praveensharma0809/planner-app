@@ -6,12 +6,32 @@
   TopicOrderingMode,
 } from "./engine"
 
+/**
+ * Minimal topic reference used in planner parameter forms.
+ *
+ * @param id - Unique topic identifier.
+ * @param subject_name - Human-readable subject name.
+ * @param topic_name - Human-readable topic name.
+ */
 export interface PlannerTopicForParams {
   id: string
   subject_name: string
   topic_name: string
 }
 
+/**
+ * Per-topic parameters configurable by the user before plan generation.
+ *
+ * @param topic_id - ID of the topic these parameters apply to.
+ * @param estimated_hours - Total estimated effort in hours.
+ * @param deadline - ISO date string deadline for this topic.
+ * @param earliest_start - ISO date string before which scheduling is not allowed.
+ * @param depends_on - IDs of topics this topic depends on.
+ * @param session_length_minutes - Duration of each session in minutes.
+ * @param rest_after_days - Rest days enforced after topic completion.
+ * @param max_sessions_per_day - Maximum sessions allowed per day for this topic.
+ * @param study_frequency - `"daily"` or `"spaced"` session distribution.
+ */
 export interface PlannerParamValues {
   topic_id: string
   estimated_hours: number
@@ -24,6 +44,26 @@ export interface PlannerParamValues {
   study_frequency: StudyFrequency
 }
 
+/**
+ * Global constraint values editable in the planner UI before plan generation.
+ *
+ * @param study_start_date - ISO date when studying can begin.
+ * @param exam_date - ISO date of the exam / final deadline.
+ * @param weekday_capacity_minutes - Default study minutes on weekdays.
+ * @param weekend_capacity_minutes - Default study minutes on weekends.
+ * @param plan_order - High-level ordering: `"deadline"`, `"subject"`, or `"balanced"`.
+ * @param final_revision_days - Days reserved for revision before the exam.
+ * @param buffer_percentage - Extra capacity reserved as buffer (0–100).
+ * @param max_active_subjects - Max distinct subjects per day.
+ * @param day_of_week_capacity - Per-day-of-week capacity overrides (index 0 = Sunday).
+ * @param custom_day_capacity - Per-date capacity overrides (ISO date → minutes).
+ * @param plan_order_stack - Ordered criteria for topic prioritisation.
+ * @param flexibility_minutes - Overflow minutes allowed per day beyond base capacity.
+ * @param max_topics_per_subject_per_day - Max distinct topics per subject per day.
+ * @param min_subject_gap_days - Minimum calendar days between sessions of the same subject.
+ * @param subject_ordering - Per-subject topic ordering mode.
+ * @param flexible_threshold - Per-subject completion threshold for flexible_sequential mode (0–1).
+ */
 export interface PlannerConstraintValues {
   study_start_date: string
   exam_date: string
@@ -43,6 +83,15 @@ export interface PlannerConstraintValues {
   flexible_threshold: Record<string, number>
 }
 
+/**
+ * A subject option presented in the planner subject selector.
+ *
+ * @param id - Unique subject identifier.
+ * @param name - Human-readable subject name.
+ * @param deadline - Optional ISO deadline date associated with the subject.
+ * @param topicIds - List of topic IDs belonging to this subject.
+ * @param topics - List of topic references with id and name.
+ */
 export interface PlannerSubjectOption {
   id: string
   name: string
@@ -51,16 +100,45 @@ export interface PlannerSubjectOption {
   topics?: Array<{ id: string; name: string }>
 }
 
+/** Minimum allowed session length in minutes. Sessions shorter than this are clamped. */
 export const MIN_SESSION_LENGTH_MINUTES = 15
+
+/** Maximum allowed session length in minutes. Sessions longer than this are clamped. */
 export const MAX_SESSION_LENGTH_MINUTES = 240
+
+/**
+ * Default session length used as a fallback when no task-based or configured value is available.
+ * Also used to detect legacy rows where the configured value may need to be overridden by
+ * task-derived durations.
+ */
 export const LEGACY_DEFAULT_SESSION_LENGTH_MINUTES = 60
 
+/**
+ * Predefined options for per-date custom day capacity (in minutes).
+ */
 export const CUSTOM_DAY_CAPACITY_PRESETS = [0, 30, 60, 90, 120, 180, 240] as const
 
 function clampInteger(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
+/**
+ * Determines the session length in minutes by combining task durations and a user-configured
+ * value with legacy-awareness.
+ *
+ * **Resolution priority:**
+ * 1. If a configured value exists and it is not the legacy default (60), use it (clamped).
+ * 2. If configured is the legacy default and task-derived duration is longer, use task-derived.
+ * 3. If configured is the legacy default and no longer task duration exists, use configured.
+ * 4. If no configured value, use task-derived duration if available.
+ * 5. Fall back to {@link LEGACY_DEFAULT_SESSION_LENGTH_MINUTES} (60).
+ *
+ * All values are clamped to [{@link MIN_SESSION_LENGTH_MINUTES}, {@link MAX_SESSION_LENGTH_MINUTES}].
+ *
+ * @param taskDurations - Array of task durations (in minutes) to derive a session length from.
+ * @param configuredMinutes - User-configured session length, or null/undefined if not set.
+ * @returns The resolved session length in minutes.
+ */
 export function inferSessionLengthMinutes(
   taskDurations: number[],
   configuredMinutes?: number | null
@@ -107,10 +185,24 @@ export function inferSessionLengthMinutes(
   return LEGACY_DEFAULT_SESSION_LENGTH_MINUTES
 }
 
+/**
+ * Normalizes a planner entity name for comparison: trims whitespace, collapses
+ * multiple spaces into one, and lowercases.
+ *
+ * @param name - Raw name string to normalize.
+ * @returns The normalized name.
+ */
 export function normalizePlannerName(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLowerCase()
 }
 
+/**
+ * Detects a dependency cycle in a directed graph using depth-first search.
+ *
+ * @param edges - Map from node ID to its list of dependency IDs.
+ * @returns An array of node IDs forming a cycle (starting and ending with the same
+ *          node), or `null` if the graph is acyclic.
+ */
 export function findDependencyCycle(
   edges: Map<string, string[]>
 ): string[] | null {
@@ -154,8 +246,17 @@ export function findDependencyCycle(
   return null
 }
 
+/**
+ * Severity level for a plan issue.
+ *
+ * - `"critical"`: Blocks plan commitment; must be resolved.
+ * - `"warning"`: Non-blocking but indicates suboptimal conditions.
+ */
 export type PlanIssueSeverity = "critical" | "warning"
 
+/**
+ * Constraint field identifiers that can be inline-edited from the plan issues UI.
+ */
 export type PlanIssueConstraintField =
   | "study_start_date"
   | "exam_date"
@@ -164,6 +265,16 @@ export type PlanIssueConstraintField =
   | "max_active_subjects"
   | "flexibility_minutes"
 
+/**
+ * Describes an inline-editable constraint field shown alongside a plan issue.
+ *
+ * @param field - Which constraint field can be edited.
+ * @param label - Human-readable label for the field.
+ * @param type - Input type: `"number"` or `"date"`.
+ * @param min - Optional minimum value for number fields.
+ * @param max - Optional maximum value for number fields.
+ * @param step - Optional step increment for number fields.
+ */
 export interface PlanIssueInlineConstraint {
   field: PlanIssueConstraintField
   label: string
@@ -173,6 +284,23 @@ export interface PlanIssueInlineConstraint {
   step?: number
 }
 
+/**
+ * A single action the user can take to resolve a plan issue.
+ *
+ * Discriminated union by `kind`:
+ * - `"jump"`: Navigate to a different planner phase (e.g., back to intake).
+ *   - `jumpPhase`: Target phase number.
+ * - `"constraint_delta"`: Adjust a numeric constraint by a delta.
+ *   - `field`: The constraint field to modify.
+ *   - `delta`: Amount to add (can be negative).
+ * - `"date_delta"`: Shift a date constraint by a number of days.
+ *   - `field`: `"study_start_date"` or `"exam_date"`.
+ *   - `days`: Number of days to add.
+ *
+ * @param id - Unique identifier for this action.
+ * @param label - Human-readable action label.
+ * @param kind - Action kind discriminator.
+ */
 export type PlanIssueAction =
   | {
       id: string
@@ -197,6 +325,18 @@ export type PlanIssueAction =
       days: number
     }
 
+/**
+ * A single detected issue with the current plan, presented to the user.
+ *
+ * @param issueId - Unique identifier for this issue type (e.g., `"no-usable-days"`).
+ * @param severity - `"critical"` (blocks commit) or `"warning"` (informational).
+ * @param title - Short issue title.
+ * @param userMessage - Detailed message explaining the issue to the user.
+ * @param resolverHint - Guidance on how to resolve the issue.
+ * @param rootCauseValues - Key-value pairs showing the data that triggered the issue.
+ * @param options - Actionable suggestions the user can apply.
+ * @param inlineEdits - Constraint fields that can be edited inline alongside the issue.
+ */
 export interface PlanIssue {
   issueId: string
   severity: PlanIssueSeverity
@@ -208,6 +348,15 @@ export interface PlanIssue {
   inlineEdits: PlanIssueInlineConstraint[]
 }
 
+/**
+ * Input to {@link buildPlanIssues} containing all data needed to detect plan issues.
+ *
+ * @param constraints - Current planner constraint values (null if not yet configured).
+ * @param params - Per-topic parameter values.
+ * @param feasibility - Feasibility check result, or null if not yet computed.
+ * @param sessions - Currently scheduled sessions.
+ * @param planStatus - Status of the plan generation (`"READY"`, `"PARTIAL"`, `"INFEASIBLE"`, etc.).
+ */
 export interface BuildPlanIssuesInput {
   constraints: PlannerConstraintValues | null
   params: PlannerParamValues[]
@@ -216,6 +365,14 @@ export interface BuildPlanIssuesInput {
   planStatus?: string | null
 }
 
+/**
+ * Counts of generated vs. manual sessions compared to the expected total.
+ *
+ * @param expectedSessions - Total sessions the feasibility check expects.
+ * @param generatedSessions - Number of auto-generated sessions present.
+ * @param manualSessions - Number of manually created sessions.
+ * @param missingGeneratedSessions - Shortfall: `expectedSessions - generatedSessions` (0 if none).
+ */
 export interface GeneratedSessionCoverage {
   expectedSessions: number
   generatedSessions: number
@@ -223,6 +380,9 @@ export interface GeneratedSessionCoverage {
   missingGeneratedSessions: number
 }
 
+/**
+ * Warning message shown when the user has removed auto-generated sessions.
+ */
 export const MISSING_GENERATED_SESSIONS_MESSAGE =
   "You have removed required planned sessions. Add them back or regenerate plan."
 
@@ -259,10 +419,24 @@ function daySpreadMinutes(sessions: ScheduledSession[]): number {
   return Math.max(...values) - Math.min(...values)
 }
 
+/**
+ * Checks whether any issue in the list has `"critical"` severity.
+ *
+ * @param issues - Array of plan issues to inspect.
+ * @returns `true` if at least one issue is critical, `false` otherwise.
+ */
 export function hasCriticalIssues(issues: PlanIssue[]): boolean {
   return issues.some((issue) => issue.severity === "critical")
 }
 
+/**
+ * Computes session coverage metrics by comparing feasibility expectations against
+ * the current session list.
+ *
+ * @param feasibility - Feasibility result containing expected session counts, or null.
+ * @param sessions - Current list of scheduled sessions (both generated and manual).
+ * @returns A {@link GeneratedSessionCoverage} with counts and the shortfall.
+ */
 export function getSessionCoverage(
   feasibility: FeasibilityResult | null,
   sessions: ScheduledSession[]
@@ -281,6 +455,36 @@ export function getSessionCoverage(
   }
 }
 
+/**
+ * Detects issues with the current plan state and returns actionable suggestions.
+ *
+ * **Detection algorithm:**
+ *
+ * 1. **No usable days** — If `planStatus` is `"NO_DAYS"` or feasibility reports
+ *    zero available slots, generates a `"no-usable-days"` critical issue.
+ *
+ * 2. **Unscheduled sessions** — If `planStatus` is `"PARTIAL"` or `"INFEASIBLE"`,
+ *    or the session coverage shows dropped sessions, generates an
+ *    `"unscheduled-sessions"` critical issue.
+ *
+ * 3. **Impossible topics** — If any topic has `"impossible"` feasibility status
+ *    (time window too small for required sessions), generates a
+ *    `"topic-window-impossible"` critical issue.
+ *
+ * 4. **Flexibility dependency** — If the plan requires flex/overflow minutes to
+ *    fit (`flexFeasible` is true), generates a `"flex-heavy"` warning.
+ *
+ * 5. **Late sessions** — If any session is scheduled after its topic deadline,
+ *    generates a `"late-sessions"` critical issue.
+ *
+ * 6. **Load volatility** — If the spread between the busiest and lightest day
+ *    exceeds 180 minutes, generates a `"load-volatility"` warning.
+ *
+ * Results are sorted with critical issues first.
+ *
+ * @param input - All data needed to analyze the plan for issues.
+ * @returns An array of {@link PlanIssue} objects sorted by severity (critical first).
+ */
 export function buildPlanIssues(input: BuildPlanIssuesInput): PlanIssue[] {
   const { constraints, params, feasibility, sessions, planStatus } = input
 

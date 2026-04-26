@@ -1,11 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useState, useTransition, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core"
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
-import { useSortable } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
 import {
   addChapter,
   archiveChapter,
@@ -24,13 +22,29 @@ import {
 import { setSubjectTaskCompletion } from "@/app/actions/subjects/setSubjectTaskCompletion"
 import { deleteSubject } from "@/app/actions/subjects/deleteSubject"
 import { toggleArchiveSubject } from "@/app/actions/subjects/toggleArchiveSubject"
+import { reorderSubjects as reorderSubjectsAction } from "@/app/actions/subjects/reorderSubjects"
+import { reorderChapters as reorderChaptersAction } from "@/app/actions/subjects/reorderChapters"
 import { useSidebar } from "@/app/components/layout/AppShell"
 import { PageHeader } from "@/app/components/layout/PageHeader"
 import { FlowTutorialButton } from "@/app/components/onboarding/FlowTutorialButton"
 import { SUBJECTS_FLOW_SLIDES } from "@/app/components/onboarding/flowSlides"
 import { useToast } from "@/app/components/Toast"
-import { Button, Input, Modal } from "@/app/components/ui"
+import { Button } from "@/app/components/ui"
+import {
+  RowActionButton,
+  type ColumnItem,
+  NameModal,
+} from "@/app/components/subjects-data-table/shared"
+import {
+  clampInteger,
+  compareTasksNaturally,
+  composeSeriesName,
+  shouldAutoOrderTasks,
+} from "@/app/components/subjects-data-table/helpers"
 import { SubjectDrawer } from "./SubjectDrawer"
+import { DraggableTaskRow } from "./subjects-data-table.taskRows"
+import { NavigationColumn } from "./subjects-data-table.navigation"
+import { TaskComposerModal } from "./subjects-data-table.taskComposer"
 
 export interface SubjectNavTopic {
   id: string
@@ -63,13 +77,9 @@ interface Props {
   initialTasksByChapter: Record<string, TopicTaskItem[]>
 }
 
-interface ColumnItem {
-  id: string
-  label: string
-  hint?: string
-  onEdit?: () => void
-  onDelete?: () => void
-}
+// ColumnItem and RowActionButton are imported from
+// @/app/components/subjects-data-table/shared so this view and the
+// planner stay in sync on the row primitives.
 
 type NameDialogState = {
   open: boolean
@@ -88,111 +98,26 @@ const CLOSED_DIALOG_STATE: NameDialogState = {
   value: "",
 }
 
-function clampInteger(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
-
-function composeSeriesName(
-  baseName: string,
-  index: number,
-  placement: NumberPlacement,
-  separator: string,
-  numberPadding: number
-): string {
-  const numeric = String(index).padStart(Math.max(0, numberPadding), "0")
-  const cleanSeparator = separator.trim()
-
-  if (placement === "prefix") {
-    return cleanSeparator ? `${numeric}${cleanSeparator}${baseName}` : `${numeric}${baseName}`
-  }
-
-  return cleanSeparator ? `${baseName}${cleanSeparator}${numeric}` : `${baseName}${numeric}`
-}
-
-function buildNumericPatternKey(title: string): string | null {
-  const normalized = title.trim().toLowerCase()
-  if (!normalized) return null
-
-  if (!/\d/.test(normalized)) return null
-  return normalized.replace(/\d+/g, "#")
-}
-
-function extractNumericParts(title: string): number[] {
-  const matches = title.match(/\d+/g)
-  if (!matches) return []
-
-  return matches
-    .map((token) => Number.parseInt(token, 10))
-    .filter((value) => Number.isFinite(value))
-}
-
-function shouldAutoOrderTasks(tasks: TopicTaskItem[]): boolean {
-  if (tasks.length < 2) return false
-
-  const patternCounts = new Map<string, number>()
-  for (const task of tasks) {
-    const key = buildNumericPatternKey(task.title)
-    if (!key) continue
-    patternCounts.set(key, (patternCounts.get(key) ?? 0) + 1)
-  }
-
-  let maxPatternCount = 0
-  for (const count of patternCounts.values()) {
-    if (count > maxPatternCount) {
-      maxPatternCount = count
-    }
-  }
-
-  return maxPatternCount >= 2
-}
-
-function compareTasksNaturally(left: TopicTaskItem, right: TopicTaskItem): number {
-  const leftTitle = left.title.trim()
-  const rightTitle = right.title.trim()
-
-  if (!leftTitle && !rightTitle) {
-    return left.id.localeCompare(right.id)
-  }
-  if (!leftTitle) return 1
-  if (!rightTitle) return -1
-
-  const leftPattern = buildNumericPatternKey(leftTitle)
-  const rightPattern = buildNumericPatternKey(rightTitle)
-
-  if (leftPattern && rightPattern && leftPattern === rightPattern) {
-    const leftNumbers = extractNumericParts(leftTitle)
-    const rightNumbers = extractNumericParts(rightTitle)
-    const maxLength = Math.max(leftNumbers.length, rightNumbers.length)
-
-    for (let index = 0; index < maxLength; index += 1) {
-      const leftValue = leftNumbers[index]
-      const rightValue = rightNumbers[index]
-
-      if (leftValue === undefined && rightValue === undefined) break
-      if (leftValue === undefined) return -1
-      if (rightValue === undefined) return 1
-      if (leftValue !== rightValue) return leftValue - rightValue
-    }
-  }
-
-  const byTitle = leftTitle.localeCompare(rightTitle, undefined, {
-    numeric: true,
-    sensitivity: "base",
-  })
-
-  if (byTitle !== 0) return byTitle
-  return left.id.localeCompare(right.id)
-}
+// Task ordering + bulk-naming helpers (clampInteger, composeSeriesName,
+// shouldAutoOrderTasks, compareTasksNaturally) live in
+// @/app/components/subjects-data-table/helpers and are imported above.
 
 export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Props) {
   const router = useRouter()
   const { addToast } = useToast()
   const { collapsed } = useSidebar()
   const sidebarExpanded = !collapsed
+  const [, startBackgroundRefresh] = useTransition()
+  const refreshInBackground = useCallback(() => {
+    startBackgroundRefresh(() => {
+      router.refresh()
+    })
+  }, [router])
   const [subjects, setSubjects] = useState<SubjectNavItem[]>(initialSubjects)
   const [tasksByChapter, setTasksByChapter] =
     useState<Record<string, TopicTaskItem[]>>(initialTasksByChapter)
   const [showArchived, setShowArchived] = useState(false)
+  const [showArchivedChapters, setShowArchivedChapters] = useState(false)
   const [pendingSubjectId, setPendingSubjectId] = useState<string | null>(null)
   const [pendingChapterId, setPendingChapterId] = useState<string | null>(null)
   const [pendingTaskIds, setPendingTaskIds] = useState<Set<string>>(new Set())
@@ -248,7 +173,13 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     () => subjects.filter((subject) => subject.archived),
     [subjects]
   )
-  const displaySubjects = showArchived ? archivedSubjects : activeSubjects
+  // Memoized so the reference is stable when the underlying lists don't
+  // change — the selection-sync effects below depend on this and a fresh
+  // array every render would loop them indefinitely.
+  const displaySubjects = useMemo(
+    () => (showArchived ? archivedSubjects : activeSubjects),
+    [showArchived, archivedSubjects, activeSubjects]
+  )
 
   useEffect(() => {
     if (displaySubjects.length === 0) {
@@ -262,24 +193,46 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     })
   }, [displaySubjects])
 
-  const selectedSubject =
-    displaySubjects.find((subject) => subject.id === selectedSubjectId) ?? null
+  const selectedSubject = useMemo(
+    () => displaySubjects.find((subject) => subject.id === selectedSubjectId) ?? null,
+    [displaySubjects, selectedSubjectId]
+  )
+
+  const visibleChapters = useMemo(() => {
+    const chapters = selectedSubject?.chapters ?? []
+    if (showArchived) return chapters
+    return chapters.filter((chapter) => Boolean(chapter.archived) === showArchivedChapters)
+  }, [selectedSubject, showArchived, showArchivedChapters])
+
+  const archivedChapterCount = useMemo(() => {
+    if (!selectedSubject) return 0
+    return selectedSubject.chapters.filter((chapter) => chapter.archived).length
+  }, [selectedSubject])
 
   useEffect(() => {
-    const chapters = selectedSubject?.chapters ?? []
-    if (chapters.length === 0) {
+    if (visibleChapters.length === 0) {
       setSelectedChapterId(null)
       return
     }
 
     setSelectedChapterId((current) => {
-      if (current && chapters.some((chapter) => chapter.id === current)) return current
-      return chapters[0].id
+      if (current && visibleChapters.some((chapter) => chapter.id === current)) return current
+      return visibleChapters[0].id
     })
+  }, [visibleChapters])
+
+  useEffect(() => {
+    if (!selectedSubject) return
+    if (selectedSubject.chapters.every((chapter) => !chapter.archived)) {
+      setShowArchivedChapters(false)
+    }
   }, [selectedSubject])
 
-  const selectedChapter =
-    selectedSubject?.chapters.find((chapter) => chapter.id === selectedChapterId) ?? null
+  const selectedChapter = useMemo(
+    () =>
+      selectedSubject?.chapters.find((chapter) => chapter.id === selectedChapterId) ?? null,
+    [selectedSubject, selectedChapterId]
+  )
 
   useEffect(() => {
     setSelectedTaskIds(new Set())
@@ -292,6 +245,78 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   )
   const completedCount = chapterTasks.filter((task) => task.completed).length
   const visibleTasks = chapterTasks
+
+  const handleReorderSubjects = useCallback(
+    async (newOrderIds: string[]) => {
+      const idToActive = new Map(activeSubjects.map((s) => [s.id, s]))
+      const reorderedActive = newOrderIds
+        .map((id) => idToActive.get(id))
+        .filter((s): s is SubjectNavItem => Boolean(s))
+
+      if (reorderedActive.length !== activeSubjects.length) return
+
+      const previous = subjects
+      const archivedKept = subjects.filter((s) => s.archived)
+      setSubjects([...reorderedActive, ...archivedKept])
+
+      const updates = reorderedActive.map((subject, index) => ({
+        id: subject.id,
+        sort_order: index,
+      }))
+
+      const result = await reorderSubjectsAction(updates)
+      if (result.status !== "SUCCESS") {
+        setSubjects(previous)
+        addToast(
+          result.status === "ERROR" ? result.message : "Failed to reorder subjects.",
+          "error"
+        )
+        return
+      }
+      refreshInBackground()
+    },
+    [activeSubjects, addToast, refreshInBackground, subjects]
+  )
+
+  const handleReorderChapters = useCallback(
+    async (newOrderIds: string[]) => {
+      if (!selectedSubject) return
+      const subjectId = selectedSubject.id
+
+      const idToChapter = new Map(selectedSubject.chapters.map((c) => [c.id, c]))
+      const reorderedChapters = newOrderIds
+        .map((id) => idToChapter.get(id))
+        .filter((c): c is SubjectNavChapter => Boolean(c))
+
+      if (reorderedChapters.length !== selectedSubject.chapters.length) return
+
+      const previous = subjects
+      setSubjects((current) =>
+        current.map((subject) =>
+          subject.id === subjectId
+            ? { ...subject, chapters: reorderedChapters }
+            : subject
+        )
+      )
+
+      const updates = reorderedChapters.map((chapter, index) => ({
+        id: chapter.id,
+        sort_order: index,
+      }))
+
+      const result = await reorderChaptersAction(subjectId, updates)
+      if (result.status !== "SUCCESS") {
+        setSubjects(previous)
+        addToast(
+          result.status === "ERROR" ? result.message : "Failed to reorder chapters.",
+          "error"
+        )
+        return
+      }
+      refreshInBackground()
+    },
+    [addToast, refreshInBackground, selectedSubject, subjects]
+  )
 
   const subjectColumnItems: ColumnItem[] = displaySubjects.map((subject) => ({
     id: subject.id,
@@ -306,18 +331,18 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
           },
   }))
 
-  const chapterColumnItems: ColumnItem[] = (selectedSubject?.chapters ?? []).map((chapter) => ({
-    id: chapter.id,
-    label: chapter.name,
-    hint: `${(tasksByChapter[chapter.id] ?? []).length} task${(tasksByChapter[chapter.id] ?? []).length === 1 ? "" : "s"}`,
-    onEdit: showArchived ? undefined : () => openEditChapter(chapter.id, chapter.name),
-    onDelete:
-      showArchived
-        ? undefined
-        : () => {
-            void handleDeleteChapter(chapter.id, chapter.name)
-          },
-  }))
+  const chapterColumnItems: ColumnItem[] = visibleChapters.map((chapter) => {
+    const isReadOnly = showArchived || showArchivedChapters
+    return {
+      id: chapter.id,
+      label: chapter.name,
+      hint: `${(tasksByChapter[chapter.id] ?? []).length} task${(tasksByChapter[chapter.id] ?? []).length === 1 ? "" : "s"}`,
+      onEdit: isReadOnly ? undefined : () => openEditChapter(chapter.id, chapter.name),
+      onDelete: isReadOnly ? undefined : () => {
+        void handleDeleteChapter(chapter.id, chapter.name)
+      },
+    }
+  })
 
   const allVisibleSelected =
     visibleTasks.length > 0 && visibleTasks.every((task) => selectedTaskIds.has(task.id))
@@ -419,7 +444,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         )
       )
       addToast(result.archived ? "Subject archived." : "Subject restored.", "success")
-      router.refresh()
+      refreshInBackground()
     } else {
       addToast(result.status === "ERROR" ? result.message : "Unauthorized", "error")
     }
@@ -449,7 +474,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
       if (result.status === "SUCCESS") {
         addToast(archived ? "Chapter restored." : "Chapter archived.", "success")
-        router.refresh()
+        refreshInBackground()
         return
       }
 
@@ -514,7 +539,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         })
       }
       addToast(result.status === "ERROR" ? result.message : "Failed to reorder tasks.", "error")
-      router.refresh()
+      refreshInBackground()
     }
 
     setReorderingTaskIds([])
@@ -551,7 +576,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
       if (result.status !== "SUCCESS") {
         addToast(result.status === "ERROR" ? result.message : "Failed to auto-order tasks.", "error")
-        router.refresh()
+        refreshInBackground()
       }
 
       setReorderingTaskIds([])
@@ -560,7 +585,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     return () => {
       alive = false
     }
-  }, [addToast, chapterTasks, manualOrderChapterIds, reorderingTaskIds.length, router, selectedChapter, showArchived])
+  }, [addToast, chapterTasks, manualOrderChapterIds, refreshInBackground, reorderingTaskIds.length, selectedChapter, showArchived])
 
 
   async function handleSaveChapter(event: FormEvent<HTMLFormElement>) {
@@ -582,7 +607,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
           setSelectedChapterId(result.chapterId)
           setChapterDialog(CLOSED_DIALOG_STATE)
           addToast("Chapter added.", "success")
-          router.refresh()
+          refreshInBackground()
           return
         }
 
@@ -601,7 +626,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       if (result.status === "SUCCESS") {
         setChapterDialog(CLOSED_DIALOG_STATE)
         addToast("Chapter updated.", "success")
-        router.refresh()
+        refreshInBackground()
         return
       }
 
@@ -645,7 +670,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
         setTaskDialog(CLOSED_DIALOG_STATE)
         addToast("Task updated.", "success")
-        router.refresh()
+        refreshInBackground()
         return
       }
 
@@ -668,7 +693,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     const result = await deleteChapter(chapterId)
     if (result.status === "SUCCESS") {
       addToast("Chapter deleted.", "success")
-      router.refresh()
+      refreshInBackground()
       return
     }
 
@@ -688,7 +713,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     const result = await deleteSubject(subjectId)
     if (result.status === "SUCCESS") {
       addToast("Subject deleted.", "success")
-      router.refresh()
+      refreshInBackground()
       return
     }
 
@@ -705,12 +730,29 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       return
     }
 
+    const previousTasksByChapter = tasksByChapter
+    setTasksByChapter((previous) => {
+      const next: Record<string, TopicTaskItem[]> = {}
+      for (const [chapterId, tasks] of Object.entries(previous)) {
+        next[chapterId] = tasks.filter((task) => task.id !== taskId)
+      }
+      return next
+    })
+    setSelectedTaskIds((current) => {
+      if (!current.has(taskId)) return current
+      const next = new Set(current)
+      next.delete(taskId)
+      return next
+    })
+
     const result = await deleteSubjectTask(taskId)
     if (result.status === "SUCCESS") {
       addToast("Task deleted.", "success")
-      router.refresh()
+      refreshInBackground()
       return
     }
+
+    setTasksByChapter(previousTasksByChapter)
 
     if (result.status === "UNAUTHORIZED") {
       addToast("Unauthorized", "error")
@@ -747,7 +789,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
           addToast("Task added.", "success")
           setTaskComposerOpen(false)
           resetTaskComposerFields()
-          router.refresh()
+          refreshInBackground()
           return
         }
 
@@ -799,7 +841,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         addToast(`Added ${result.createdCount} tasks.`, "success")
         setTaskComposerOpen(false)
         resetTaskComposerFields()
-        router.refresh()
+        refreshInBackground()
         return
       }
 
@@ -855,7 +897,19 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       return
     }
 
+    const selectedIdSet = new Set(taskIds)
+    const previousTasksByChapter = tasksByChapter
+    const previousSelected = selectedTaskIds
+
+    setTasksByChapter((previous) => ({
+      ...previous,
+      [selectedChapter.id]: (previous[selectedChapter.id] ?? []).filter(
+        (task) => !selectedIdSet.has(task.id)
+      ),
+    }))
+    setSelectedTaskIds(new Set())
     setDeletingSelectedTasks(true)
+
     try {
       const result = await deleteSubjectTasks({
         chapterId: selectedChapter.id,
@@ -863,18 +917,13 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       })
 
       if (result.status === "SUCCESS") {
-        const selectedIdSet = new Set(taskIds)
-        setTasksByChapter((previous) => ({
-          ...previous,
-          [selectedChapter.id]: (previous[selectedChapter.id] ?? []).filter(
-            (task) => !selectedIdSet.has(task.id)
-          ),
-        }))
-        setSelectedTaskIds(new Set())
         addToast(`Deleted ${result.deletedCount} task${result.deletedCount === 1 ? "" : "s"}.`, "success")
-        router.refresh()
+        refreshInBackground()
         return
       }
+
+      setTasksByChapter(previousTasksByChapter)
+      setSelectedTaskIds(previousSelected)
 
       if (result.status === "UNAUTHORIZED") {
         addToast("Unauthorized", "error")
@@ -888,11 +937,14 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   }
 
   async function handleToggleTask(taskId: string, nextCompleted: boolean) {
-    if (!selectedChapter || showArchived) return
+    if (!selectedChapter || showArchived || showArchivedChapters) return
     if (pendingTaskIds.has(taskId)) return
 
     const chapterId = selectedChapter.id
-    if (!(tasksByChapter[chapterId] ?? []).some((task) => task.id === taskId)) return
+    const chapterTasksForChapter = tasksByChapter[chapterId] ?? []
+    const previousTask = chapterTasksForChapter.find((task) => task.id === taskId)
+    if (!previousTask) return
+    const previousCompleted = previousTask.completed
 
     setPendingTaskIds((current) => {
       const next = new Set(current)
@@ -900,9 +952,22 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       return next
     })
 
+    setTasksByChapter((previous) => ({
+      ...previous,
+      [chapterId]: (previous[chapterId] ?? []).map((task) =>
+        task.id === taskId ? { ...task, completed: nextCompleted } : task
+      ),
+    }))
+
     try {
       const result = await setSubjectTaskCompletion(taskId, nextCompleted)
       if (result.status !== "SUCCESS") {
+        setTasksByChapter((previous) => ({
+          ...previous,
+          [chapterId]: (previous[chapterId] ?? []).map((task) =>
+            task.id === taskId ? { ...task, completed: previousCompleted } : task
+          ),
+        }))
         if (result.status === "UNAUTHORIZED") {
           addToast("Unauthorized", "error")
         } else if (result.status === "NOT_FOUND") {
@@ -913,8 +978,14 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         return
       }
 
-      router.refresh()
+      refreshInBackground()
     } catch {
+      setTasksByChapter((previous) => ({
+        ...previous,
+        [chapterId]: (previous[chapterId] ?? []).map((task) =>
+          task.id === taskId ? { ...task, completed: previousCompleted } : task
+        ),
+      }))
       addToast("Could not update task status.", "error")
     } finally {
       setPendingTaskIds((current) => {
@@ -976,6 +1047,8 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
               activeId={selectedSubjectId}
               emptyMessage="No subjects available."
               onSelect={setSelectedSubjectId}
+              onReorder={showArchived ? undefined : handleReorderSubjects}
+              sensors={sensors}
               footer={
                 <>
                   <Button
@@ -1016,6 +1089,8 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
               activeId={selectedChapterId}
               emptyMessage="No chapters in this subject."
               onSelect={setSelectedChapterId}
+              onReorder={showArchived || showArchivedChapters ? undefined : handleReorderChapters}
+              sensors={sensors}
               footer={
                 <>
                   <Button
@@ -1023,7 +1098,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                     size="sm"
                     className="w-full justify-center"
                     onClick={openCreateChapter}
-                    disabled={!selectedSubject || showArchived}
+                    disabled={!selectedSubject || showArchived || showArchivedChapters}
                   >
                     Add Chapter
                   </Button>
@@ -1036,6 +1111,19 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                   >
                     {selectedChapter?.archived ? "Restore Chapter" : "Archive Chapter"}
                   </Button>
+                  {!showArchived && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-center"
+                      onClick={() => setShowArchivedChapters((value) => !value)}
+                      disabled={!selectedSubject || (archivedChapterCount === 0 && !showArchivedChapters)}
+                    >
+                      {showArchivedChapters
+                        ? "Show Active Chapters"
+                        : `Archived Chapters (${archivedChapterCount})`}
+                    </Button>
+                  )}
                 </>
               }
             />
@@ -1079,7 +1167,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                         variant="primary"
                         size="sm"
                         onClick={openTaskComposer}
-                        disabled={showArchived}
+                        disabled={showArchived || showArchivedChapters}
                       >
                         Add Task
                       </Button>
@@ -1087,7 +1175,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                         variant="ghost"
                         size="sm"
                         onClick={() => setManageMode((value) => !value)}
-                        disabled={showArchived || chapterTasks.length === 0}
+                        disabled={showArchived || showArchivedChapters || chapterTasks.length === 0}
                       >
                         {manageMode ? "Done" : "Manage"}
                       </Button>
@@ -1276,7 +1364,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         onClose={() => setDrawerOpen(false)}
         onSaved={() => {
           setDrawerOpen(false)
-          router.refresh()
+          refreshInBackground()
         }}
       />
 
@@ -1318,504 +1406,35 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         onSubmit={handleSaveTaskTitle}
       />
 
-      <Modal
+      <TaskComposerModal
         open={taskComposerOpen}
+        saving={taskComposerSaving}
+        taskCreateMode={taskCreateMode}
+        singleTaskTitle={singleTaskTitle}
+        bulkBaseName={bulkBaseName}
+        bulkCount={bulkCount}
+        bulkStartAt={bulkStartAt}
+        bulkNumberPadding={bulkNumberPadding}
+        bulkSeparator={bulkSeparator}
+        bulkPlacement={bulkPlacement}
+        bulkPreview={bulkPreview}
         onClose={() => {
           setTaskComposerOpen(false)
           resetTaskComposerFields()
         }}
-        title="Add Tasks"
-        size="md"
-      >
-        <form className="space-y-4" onSubmit={handleCreateTasks}>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setTaskCreateMode("single")}
-              className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-              style={{
-                borderColor:
-                  taskCreateMode === "single" ? "var(--sh-primary-glow)" : "var(--sh-border)",
-                color:
-                  taskCreateMode === "single" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-                background:
-                  taskCreateMode === "single" ? "var(--sh-primary-muted)" : "transparent",
-              }}
-            >
-              Single Task
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setTaskCreateMode("bulk")}
-              className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-              style={{
-                borderColor:
-                  taskCreateMode === "bulk" ? "var(--sh-primary-glow)" : "var(--sh-border)",
-                color:
-                  taskCreateMode === "bulk" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-                background:
-                  taskCreateMode === "bulk" ? "var(--sh-primary-muted)" : "transparent",
-              }}
-            >
-              Bulk Series
-            </button>
-          </div>
-
-          {taskCreateMode === "single" ? (
-            <Input
-              required
-              label="Task Title"
-              value={singleTaskTitle}
-              onChange={(event) => setSingleTaskTitle(event.target.value)}
-              placeholder="e.g. Lecture review"
-            />
-          ) : (
-            <div className="space-y-3">
-              <Input
-                required
-                label="Base Name"
-                value={bulkBaseName}
-                onChange={(event) => setBulkBaseName(event.target.value)}
-                placeholder="e.g. Lecture"
-              />
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  required
-                  label="Count"
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={bulkCount}
-                  onChange={(event) => setBulkCount(event.target.value)}
-                />
-                <Input
-                  required
-                  label="Start Number"
-                  type="number"
-                  min={1}
-                  max={10000}
-                  value={bulkStartAt}
-                  onChange={(event) => setBulkStartAt(event.target.value)}
-                />
-                <Input
-                  required
-                  label="Number Padding"
-                  type="number"
-                  min={0}
-                  max={6}
-                  value={bulkNumberPadding}
-                  onChange={(event) => setBulkNumberPadding(event.target.value)}
-                  hint="Adds leading zeros: 0 -> Lecture-1, 1 -> Lecture-01, 2 -> Lecture-001"
-                />
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                    Number Placement
-                  </label>
-                  <select
-                    value={bulkPlacement}
-                    onChange={(event) =>
-                      setBulkPlacement(event.target.value === "prefix" ? "prefix" : "suffix")
-                    }
-                    className="ui-input"
-                  >
-                    <option value="suffix">Lecture-1</option>
-                    <option value="prefix">1-Lecture</option>
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                    Separator (what goes between name and number)
-                  </label>
-                  <select
-                    value={bulkSeparator}
-                    onChange={(event) => setBulkSeparator(event.target.value)}
-                    className="ui-input"
-                  >
-                    <option value="-">Hyphen: Lecture-1</option>
-                    <option value=" ">Space: Lecture 1</option>
-                    <option value="_">Underscore: Lecture_1</option>
-                    <option value="">None: Lecture1</option>
-                    <option value="·">Dot: Lecture·1</option>
-                  </select>
-                </div>
-              </div>
-
-              {bulkPreview.length > 0 && (
-                <div
-                  className="rounded-md border p-2.5"
-                  style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.015)" }}
-                >
-                  <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                    Preview
-                  </p>
-                  <p className="mt-1 text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                    {bulkPreview.join("  |  ")}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setTaskComposerOpen(false)
-                resetTaskComposerFields()
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm" disabled={taskComposerSaving}>
-              {taskComposerSaving
-                ? "Saving..."
-                : taskCreateMode === "single"
-                  ? "Add Task"
-                  : "Create Series"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        onSubmit={handleCreateTasks}
+        onTaskCreateModeChange={setTaskCreateMode}
+        onSingleTaskTitleChange={setSingleTaskTitle}
+        onBulkBaseNameChange={setBulkBaseName}
+        onBulkCountChange={setBulkCount}
+        onBulkStartAtChange={setBulkStartAt}
+        onBulkNumberPaddingChange={setBulkNumberPadding}
+        onBulkSeparatorChange={setBulkSeparator}
+        onBulkPlacementChange={setBulkPlacement}
+      />
     </div>
   )
 }
 
-interface DraggableTaskRowProps {
-  task: TopicTaskItem
-  isPending: boolean
-  isReordering: boolean
-  showFullTitle: boolean
-  canEdit: boolean
-  onToggle: (completed: boolean) => void
-  onEdit: () => void
-  onDelete: () => void
-}
 
-function DraggableTaskRow({
-  task,
-  isPending,
-  isReordering,
-  showFullTitle,
-  canEdit,
-  onToggle,
-  onEdit,
-  onDelete,
-}: DraggableTaskRowProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: task.id,
-  })
 
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging || isReordering ? 0.7 : 1,
-        borderColor: isDragging ? "var(--sh-primary-glow)" : "var(--sh-border)",
-        background: task.completed
-          ? "rgba(52, 211, 153, 0.08)"
-          : isDragging
-            ? "rgba(124, 108, 255, 0.1)"
-            : "rgba(255, 255, 255, 0.02)",
-        cursor: isDragging ? "grabbing" : "grab",
-      }}
-      className="group rounded-lg border px-2.5 py-1.5 transition-colors"
-    >
-      <div className={`flex gap-1.5 ${showFullTitle ? "items-start" : "items-center"}`}>
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs transition-colors hover:bg-white/5 disabled:opacity-50"
-          style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-          aria-label="Drag to reorder"
-          title="Drag to reorder"
-        >
-          <svg
-            className="h-3 w-3"
-            fill="currentColor"
-            viewBox="0 0 16 16"
-          >
-            <path d="M2 5h7v1H2V5zm0 3h7v1H2V8zm0 3h7v1H2v-1z" />
-            <path d="M10 5h4v1h-4V5zm0 3h4v1h-4V8zm0 3h4v1h-4v-1z" />
-          </svg>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onToggle(!task.completed)}
-          disabled={isPending || !canEdit}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors disabled:opacity-50"
-          style={{
-            borderColor: task.completed
-              ? "var(--sh-success)"
-              : "var(--sh-border)",
-            background: task.completed ? "var(--sh-success)" : "transparent",
-          }}
-          aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
-        >
-          {task.completed && (
-            <svg
-              className="h-3 w-3 text-white"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              viewBox="0 0 24 24"
-            >
-              <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
-
-        <p
-          className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through opacity-60" : ""} ${showFullTitle ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}
-          style={{ color: "var(--sh-text-primary)" }}
-          title={task.title}
-        >
-          {task.title}
-        </p>
-
-        <RowActionButton
-          label="Edit task title"
-          onClick={onEdit}
-          disabled={isPending || !canEdit}
-        />
-        <RowActionButton
-          label="Delete task"
-          onClick={onDelete}
-          danger
-          disabled={isPending || !canEdit}
-        />
-      </div>
-    </div>
-  )
-}
-
-interface NavigationColumnProps {
-  title: string
-  items: ColumnItem[]
-  activeId: string | null
-  emptyMessage: string
-  onSelect: (id: string) => void
-  footer?: ReactNode
-}
-
-function NavigationColumn({
-  title,
-  items,
-  activeId,
-  emptyMessage,
-  onSelect,
-  footer,
-}: NavigationColumnProps) {
-  return (
-    <section
-      className="w-[220px] min-w-[208px] h-full shrink-0 rounded-xl border px-2 py-2 snap-start flex flex-col"
-      style={{
-        borderColor: "var(--sh-border)",
-        background: "color-mix(in srgb, var(--sh-card) 94%, var(--foreground) 6%)",
-      }}
-    >
-      <div className="px-1.5 pb-2">
-        <p
-          className="text-[11px] font-semibold uppercase tracking-[0.14em]"
-          style={{ color: "var(--sh-text-muted)" }}
-        >
-          {title}
-        </p>
-      </div>
-
-      <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto pr-1">
-        {items.length === 0 && (
-          <p className="px-2 py-4 text-sm" style={{ color: "var(--sh-text-muted)" }}>
-            {emptyMessage}
-          </p>
-        )}
-
-        {items.map((item) => {
-          const isActive = item.id === activeId
-
-          return (
-            <div
-              key={item.id}
-              className="rounded-lg border p-1.5 transition-colors"
-              style={{
-                borderColor: isActive ? "var(--sh-primary-glow)" : "transparent",
-                background: isActive ? "var(--sh-primary-muted)" : "transparent",
-              }}
-            >
-              <div className="flex items-start gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => onSelect(item.id)}
-                  className="min-w-0 flex-1 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-[rgba(124,108,255,0.08)]"
-                >
-                  <p
-                    className="truncate text-sm font-semibold"
-                    style={{
-                      color: isActive ? "var(--sh-primary-light)" : "var(--sh-text-primary)",
-                    }}
-                  >
-                    {item.label}
-                  </p>
-                  {item.hint && (
-                    <p className="mt-0.5 text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
-                      {item.hint}
-                    </p>
-                  )}
-                </button>
-
-                <div className="flex shrink-0 items-center gap-1 pt-1">
-                  {item.onEdit && (
-                    <RowActionButton
-                      label={`Edit ${item.label}`}
-                      onClick={item.onEdit}
-                    />
-                  )}
-                  {item.onDelete && (
-                    <RowActionButton
-                      label={`Delete ${item.label}`}
-                      onClick={item.onDelete}
-                      danger
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {footer && (
-        <div
-          className="mt-2 space-y-1.5 border-t px-1 pt-2"
-          style={{ borderColor: "var(--sh-border)" }}
-        >
-          {footer}
-        </div>
-      )}
-    </section>
-  )
-}
-
-interface NameModalProps {
-  open: boolean
-  title: string
-  fieldLabel: string
-  value: string
-  placeholder: string
-  submitLabel: string
-  loading: boolean
-  onChange: (value: string) => void
-  onClose: () => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
-  destructiveActionLabel?: string
-  onDestructiveAction?: () => void
-  destructiveDisabled?: boolean
-}
-
-function NameModal({
-  open,
-  title,
-  fieldLabel,
-  value,
-  placeholder,
-  submitLabel,
-  loading,
-  onChange,
-  onClose,
-  onSubmit,
-  destructiveActionLabel,
-  onDestructiveAction,
-  destructiveDisabled = false,
-}: NameModalProps) {
-  return (
-    <Modal open={open} onClose={onClose} title={title} size="sm">
-      <form className="flex max-h-[calc(100vh-13rem)] flex-col" onSubmit={onSubmit}>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <Input
-            autoFocus
-            required
-            label={fieldLabel}
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder={placeholder}
-          />
-        </div>
-
-        <div className="mt-4 flex items-center justify-end gap-2 border-t pt-3" style={{ borderColor: "var(--sh-border)" }}>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          {destructiveActionLabel && onDestructiveAction && (
-            <Button
-              type="button"
-              variant="danger"
-              size="sm"
-              onClick={onDestructiveAction}
-              disabled={destructiveDisabled}
-            >
-              {destructiveActionLabel}
-            </Button>
-          )}
-          <Button type="submit" variant="primary" size="sm" disabled={loading}>
-            {loading ? "Saving..." : submitLabel}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-interface RowActionButtonProps {
-  label: string
-  onClick: () => void
-  danger?: boolean
-  disabled?: boolean
-}
-
-function RowActionButton({ label, onClick, danger = false, disabled = false }: RowActionButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="rounded-md border p-1 transition-colors hover:bg-white/5 disabled:opacity-50"
-      style={{ borderColor: "var(--sh-border)", color: danger ? "#f87171" : "var(--sh-text-muted)" }}
-      aria-label={label}
-      title={label}
-    >
-      {danger ? (
-        <svg
-          className="h-3.5 w-3.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-        >
-          <path d="M3 6h18" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M8 6V4h8v2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M19 6l-1 14H6L5 6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      ) : (
-        <svg
-          className="h-3.5 w-3.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-        >
-          <path d="M12 20h9" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M16.5 3.5a2.1 2.1 0 113 3L7 19l-4 1 1-4 12.5-12.5z" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
-    </button>
-  )
-}

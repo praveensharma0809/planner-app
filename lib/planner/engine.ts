@@ -1,12 +1,34 @@
 ﻿import { normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
 
+/**
+ * Defines how topics within a subject are ordered during scheduling.
+ *
+ * - `"sequential"`: Topics must follow strict order; a new topic cannot start until the previous one is completed.
+ * - `"flexible_sequential"`: Topics may overlap once a threshold percentage of the prior topic is done.
+ * - `"parallel"`: All topics within the subject can be scheduled concurrently.
+ */
 export type TopicOrderingMode =
   | "sequential"
   | "flexible_sequential"
   | "parallel"
 
+/**
+ * Determines the cadence at which a topic's sessions are distributed.
+ *
+ * - `"daily"`: Sessions are placed on consecutive available days.
+ * - `"spaced"`: Sessions are spread out with rest days between them.
+ */
 export type StudyFrequency = "daily" | "spaced"
 
+/**
+ * Criteria used to sort or prioritize units when building the plan stack.
+ *
+ * - `"urgency"`: Prioritize units based on how close they are to their deadline relative to their remaining work.
+ * - `"deadline"`: Sort strictly by deadline date (earliest first).
+ * - `"subject_order"`: Follow the user-defined subject ordering.
+ * - `"effort"`: Prioritize units with more total estimated minutes.
+ * - `"completion"`: Prioritize units that are closer to being fully scheduled.
+ */
 export type PlanOrderCriterion =
   | "urgency"
   | "deadline"
@@ -14,6 +36,22 @@ export type PlanOrderCriterion =
   | "effort"
   | "completion"
 
+/**
+ * A single topic that needs to be scheduled in the plan.
+ *
+ * @param id - Unique identifier for this topic.
+ * @param subject_id - ID of the subject this topic belongs to.
+ * @param subject_name - Human-readable name of the subject.
+ * @param topic_name - Human-readable name of the topic.
+ * @param estimated_minutes - Total estimated time needed to complete this topic, in minutes.
+ * @param session_length_minutes - Duration of each individual study session for this topic, in minutes.
+ * @param deadline - ISO date string by which this topic must be completed.
+ * @param earliest_start - ISO date string before which scheduling is not allowed (defaults to study_start_date).
+ * @param depends_on - IDs of topics that must be completed before this topic can start.
+ * @param rest_after_days - Number of rest days to enforce after this topic is completed before a new topic in the same subject can begin.
+ * @param max_sessions_per_day - Maximum number of sessions this topic can have on a single day (0 or unset = unlimited).
+ * @param study_frequency - Cadence for session distribution (`"daily"` or `"spaced"`).
+ */
 export interface PlannableUnit {
   id: string
   subject_id: string
@@ -29,11 +67,37 @@ export interface PlannableUnit {
   study_frequency?: StudyFrequency
 }
 
+/**
+ * A pre-allocated time block on a specific date that reduces available capacity.
+ *
+ * @param date - ISO date string for the reserved slot.
+ * @param minutes - Number of minutes reserved on this date.
+ */
 export interface ReservedSlot {
   date: string
   minutes: number
 }
 
+/**
+ * Global scheduling constraints that apply to the entire plan.
+ *
+ * @param study_start_date - ISO date when studying can begin.
+ * @param exam_date - ISO date of the exam / final deadline.
+ * @param weekday_capacity_minutes - Default study minutes available on a weekday.
+ * @param weekend_capacity_minutes - Default study minutes available on a weekend day.
+ * @param day_of_week_capacity - Per-day-of-week overrides for capacity (index 0 = Sunday); null entries fall back to weekday/weekend defaults.
+ * @param custom_day_capacity - Per-date overrides for capacity (ISO date → minutes). Overrides all other capacity sources.
+ * @param plan_order_stack - Ordered list of criteria for prioritising topics.
+ * @param plan_order - High-level ordering mode: `"deadline"`, `"subject"`, or `"balanced"`.
+ * @param final_revision_days - Number of days before the exam reserved for revision (no new core sessions).
+ * @param buffer_percentage - Percentage of extra capacity to reserve as buffer (0–100).
+ * @param flexibility_minutes - Additional overflow minutes allowed per day beyond base capacity.
+ * @param max_active_subjects - Maximum number of different subjects that can be scheduled on a single day.
+ * @param max_topics_per_subject_per_day - Maximum number of distinct topics within a subject per day (default 1).
+ * @param min_subject_gap_days - Minimum number of calendar days between sessions of the same subject.
+ * @param subject_ordering - Per-subject topic ordering mode (`"sequential"`, `"flexible_sequential"`, `"parallel"`).
+ * @param flexible_threshold - Per-subject completion threshold (0–1) at which the next topic in flexible_sequential mode can start.
+ */
 export interface GlobalConstraints {
   study_start_date: string
   exam_date: string
@@ -53,12 +117,38 @@ export interface GlobalConstraints {
   flexible_threshold?: Record<string, number>
 }
 
+/**
+ * The complete input used to generate a study plan.
+ *
+ * @param units - All plannable topics to schedule.
+ * @param constraints - Global constraints governing the plan.
+ * @param offDays - Set of ISO date strings representing days when no studying can occur.
+ */
 export interface PlanInput {
   units: PlannableUnit[]
   constraints: GlobalConstraints
   offDays: Set<string>
 }
 
+/**
+ * A single scheduled study session produced by the planning engine.
+ *
+ * @param subject_id - ID of the subject this session belongs to.
+ * @param topic_id - ID of the topic this session covers.
+ * @param title - Display title (typically the topic name).
+ * @param scheduled_date - ISO date on which this session is scheduled.
+ * @param duration_minutes - Length of this session in minutes.
+ * @param session_type - Kind of session: `"core"`, `"revision"`, or `"practice"`.
+ * @param session_number - 1-indexed sequence number of this session within its topic.
+ * @param total_sessions - Total number of core sessions for this topic.
+ * @param is_flex_day - Whether this session used overflow/flex minutes on its day.
+ * @param flex_extra_minutes - Number of flex (overflow) minutes consumed by this session.
+ * @param topic_completion_after - Fraction of the topic completed after this session (0–1).
+ * @param is_topic_final_session - Whether this is the last session for its topic.
+ * @param is_pinned - Whether the user has manually pinned this session to this date.
+ * @param is_manual - Whether this session was manually created by the user.
+ * @param source_topic_task_id - ID of the source task this session was generated from, if applicable.
+ */
 export interface ScheduledSession {
   subject_id: string
   topic_id: string
@@ -77,8 +167,27 @@ export interface ScheduledSession {
   source_topic_task_id?: string | null
 }
 
+/**
+ * Feasibility classification for a single topic.
+ *
+ * - `"safe"`: Required minutes are ≤80% of available minutes.
+ * - `"tight"`: Required minutes are 81–90% of available minutes.
+ * - `"at_risk"`: Required minutes exceed 90% of available minutes.
+ * - `"impossible"`: Required minutes exceed available minutes (or no capacity exists).
+ */
 export type UnitFeasibilityStatus = "safe" | "tight" | "at_risk" | "impossible"
 
+/**
+ * Feasibility assessment for a single topic.
+ *
+ * @param unitId - ID of the topic.
+ * @param name - Human-readable topic name.
+ * @param deadline - ISO deadline date for this topic.
+ * @param totalSessions - Number of sessions needed.
+ * @param availableMinutes - Total minutes available within the topic's time window.
+ * @param status - Feasibility classification.
+ * @param suggestions - Actionable suggestions to improve feasibility.
+ */
 export interface UnitFeasibility {
   unitId: string
   name: string
@@ -89,12 +198,31 @@ export interface UnitFeasibility {
   suggestions: FeasibilitySuggestion[]
 }
 
+/**
+ * A single actionable suggestion to improve feasibility.
+ *
+ * @param kind - Category of the suggestion: `"increase_capacity"`, `"extend_deadline"`, `"reduce_effort"`, or `"remove_dependency"`.
+ * @param message - Human-readable description of the suggestion.
+ * @param value - Numeric value associated with the suggestion (e.g., extra days or minutes).
+ */
 export interface FeasibilitySuggestion {
   kind: "increase_capacity" | "extend_deadline" | "reduce_effort" | "remove_dependency"
   message: string
   value?: number
 }
 
+/**
+ * Complete feasibility check result for a set of topics and constraints.
+ *
+ * @param feasible - Whether all topics can fit within base capacity (no overflow).
+ * @param flexFeasible - Whether all topics can fit only if flex/overflow minutes are used.
+ * @param totalSessionsNeeded - Total minutes required across all topics.
+ * @param totalSlotsAvailable - Total base minutes available across all days.
+ * @param totalFlexAvailable - Total base + flex minutes available across all days.
+ * @param globalGap - Shortfall in minutes: `totalSessionsNeeded - totalSlotsAvailable` (0 if no gap).
+ * @param units - Per-topic feasibility assessments.
+ * @param suggestions - Global suggestions to resolve infeasibility.
+ */
 export interface FeasibilityResult {
   feasible: boolean
   flexFeasible?: boolean
@@ -106,6 +234,16 @@ export interface FeasibilityResult {
   suggestions: FeasibilitySuggestion[]
 }
 
+/**
+ * Internal representation of a single study day with capacity tracking.
+ *
+ * @param date - ISO date string.
+ * @param capacity - Base study minutes available on this day.
+ * @param flexCapacity - Total study minutes including flex allowance.
+ * @param remainingMinutes - Minutes still unallocated on this day.
+ * @param isWeekend - Whether this day falls on a Saturday or Sunday.
+ * @param flexUsed - Flex minutes already consumed on this day.
+ */
 export interface DaySlot {
   date: string
   capacity: number
@@ -115,6 +253,15 @@ export interface DaySlot {
   flexUsed: number
 }
 
+/**
+ * Discriminated union representing the outcome of plan generation.
+ *
+ * - `{ status: "NO_UNITS" }`: No plannable topics were provided.
+ * - `{ status: "NO_DAYS" }`: No available study days exist in the date window.
+ * - `{ status: "INFEASIBLE"; feasibility }`: The plan cannot be completed with current constraints.
+ * - `{ status: "PARTIAL"; schedule; feasibility; droppedSessions }`: Some sessions were scheduled but others could not be placed.
+ * - `{ status: "READY"; schedule; feasibility }`: All sessions were successfully scheduled.
+ */
 export type PlanResult =
   | { status: "NO_UNITS" }
   | { status: "NO_DAYS" }
@@ -161,6 +308,20 @@ function addDays(date: Date, n: number): Date {
   return next
 }
 
+/**
+ * Constructs the list of available study days (slots) from constraints and off-days.
+ *
+ * Iterates from `study_start_date` to `exam_date - final_revision_days`, creating a
+ * {@link DaySlot} for each valid calendar day that is not an off-day and has non-zero
+ * capacity. Capacity is resolved in priority order:
+ * 1. `custom_day_capacity` (per-date override)
+ * 2. `day_of_week_capacity` (per-day-of-week override)
+ * 3. Default `weekday_capacity_minutes` / `weekend_capacity_minutes`
+ *
+ * @param constraints - Global scheduling constraints containing date range and capacity settings.
+ * @param offDays - Set of ISO date strings to exclude from the schedule.
+ * @returns An array of {@link DaySlot} objects sorted by date.
+ */
 export function buildDaySlots(
   constraints: GlobalConstraints,
   offDays: Set<string>
@@ -259,6 +420,20 @@ function buildUnitSuggestions(
   return suggestions
 }
 
+/**
+ * Checks whether all topics can fit within the available schedule capacity.
+ *
+ * For each topic, calculates the number of sessions needed and the total minutes
+ * required, then compares against the total available minutes in the topic's time
+ * window (from `earliest_start` or `study_start_date` to `deadline`). Also
+ * computes a global gap and generates both per-topic and global suggestions for
+ * resolving infeasibility.
+ *
+ * @param units - All plannable topics to assess.
+ * @param constraints - Global scheduling constraints.
+ * @param offDays - Set of ISO date strings to exclude.
+ * @returns A {@link FeasibilityResult} with per-topic status and global metrics.
+ */
 export function checkFeasibility(
   units: PlannableUnit[],
   constraints: GlobalConstraints,
@@ -477,6 +652,50 @@ function getActiveTopicsForSubject(
   return []
 }
 
+/**
+ * Core scheduling algorithm that assigns topic sessions to available study days.
+ *
+ * **Algorithm overview:**
+ *
+ * 1. **Input normalization** — Deduplicates units, filters self-referencing and
+ *    unresolvable dependencies, and enforces a minimum session length of 1 minute.
+ *    If circular dependencies are detected, scheduling is aborted.
+ *
+ * 2. **Day slot construction** — Builds available study days from constraints
+ *    (see {@link buildDaySlots}). If reserved slots are present, their minutes are
+ *    subtracted from the corresponding days' capacities.
+ *
+ * 3. **State initialization** — Creates internal {@link UnitState} records tracking
+ *    remaining sessions, dependency completion, and per-day session counts.
+ *    Topics with session lengths exceeding the maximum day capacity are marked as
+ *    oversized and skipped.
+ *
+ * 4. **Capacity scaling** — When total required minutes exceed base capacity and no
+ *    explicit `flexibility_minutes` is configured, base capacities are scaled
+ *    proportionally up to the flex capacity of each day.
+ *
+ * 5. **Day-by-day placement** — For each study day in chronological order:
+ *    - Dependencies are refreshed (topics whose dependencies have been completed
+ *      become eligible).
+ *    - In-progress topics (previously started but not yet finished) are placed
+ *      first, respecting per-subject gap constraints and per-day limits on
+ *      topics per subject and minutes per subject.
+ *    - New topics are then placed iteratively until the day is full or no more
+ *      eligible topics remain.
+ *
+ * 6. **Overflow pass** — Any remaining sessions for topics whose predecessor
+ *    within the same subject has been completed are placed on any day with
+ *    available capacity, respecting deadline and start constraints.
+ *
+ * 7. **Result sorting** — Sessions are sorted by date, then by subject order.
+ *
+ * @param units - Plannable topics to schedule.
+ * @param constraints - Global scheduling constraints.
+ * @param offDays - Set of ISO date strings to exclude.
+ * @param reservedSlots - Optional pre-allocated time slots that reduce capacity.
+ * @returns An array of {@link ScheduledSession} objects, or an empty array if
+ *          scheduling could not be completed (e.g., circular dependencies).
+ */
 export function schedule(
   units: PlannableUnit[],
   constraints: GlobalConstraints,
@@ -920,6 +1139,26 @@ export function schedule(
   return sessions
 }
 
+/**
+ * Generates a complete study plan from input topics, constraints, and off-days.
+ *
+ * **Pipeline:**
+ *
+ * 1. If no units are provided, returns `{ status: "NO_UNITS" }`.
+ * 2. Runs {@link checkFeasibility} to assess whether the plan can fit.
+ * 3. Runs {@link schedule} to generate the actual session placements.
+ * 4. If no sessions were produced and the plan is infeasible, returns
+ *    `{ status: "INFEASIBLE" }` with the feasibility result.
+ * 5. If no sessions were produced but the plan was declared feasible, returns
+ *    `{ status: "NO_DAYS" }` (no usable study days).
+ * 6. Compares expected sessions (from feasibility) against generated sessions.
+ *    If sessions were dropped and the plan is not feasible, returns
+ *    `{ status: "PARTIAL" }` with the partial schedule.
+ * 7. Otherwise returns `{ status: "READY" }` with the full schedule.
+ *
+ * @param input - The complete plan input (topics, constraints, off-days).
+ * @returns A {@link PlanResult} discriminated union describing the outcome.
+ */
 export function generatePlan(input: PlanInput): PlanResult {
   const { units, constraints, offDays } = input
 

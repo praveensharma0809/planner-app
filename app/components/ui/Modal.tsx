@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useCallback, useEffect, type ReactNode } from "react"
+import { useCallback, useEffect, useRef, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
 interface ModalProps {
@@ -13,11 +13,18 @@ interface ModalProps {
   backdropClose?: boolean
 }
 
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 const sizeClass = {
   sm: "max-w-sm",
   md: "max-w-lg",
   lg: "max-w-2xl",
   xl: "max-w-4xl",
+}
+
+function getFocusableElements(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
 }
 
 export function Modal({
@@ -28,6 +35,28 @@ export function Modal({
   size = "md",
   backdropClose = true,
 }: ModalProps) {
+  const previousActiveEl = useRef<HTMLElement | null>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  const trapFocus = useCallback((e: KeyboardEvent) => {
+    if (e.key !== "Tab" || !panelRef.current) return
+    const focusable = getFocusableElements(panelRef.current)
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+  }, [])
+
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose()
@@ -36,14 +65,32 @@ export function Modal({
   )
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      if (previousActiveEl.current && typeof previousActiveEl.current.focus === "function") {
+        previousActiveEl.current.focus()
+        previousActiveEl.current = null
+      }
+      return
+    }
+
+    previousActiveEl.current = document.activeElement as HTMLElement
     document.addEventListener("keydown", handleKey)
+    document.addEventListener("keydown", trapFocus)
     document.body.style.overflow = "hidden"
+
+    requestAnimationFrame(() => {
+      if (panelRef.current) {
+        const focusable = getFocusableElements(panelRef.current)
+        if (focusable.length > 0) focusable[0].focus()
+      }
+    })
+
     return () => {
       document.removeEventListener("keydown", handleKey)
+      document.removeEventListener("keydown", trapFocus)
       document.body.style.overflow = ""
     }
-  }, [open, handleKey])
+  }, [open, handleKey, trapFocus])
 
   if (!open || typeof document === "undefined") return null
 
@@ -63,6 +110,7 @@ export function Modal({
 
       {/* Panel */}
       <div
+        ref={panelRef}
         className={`fixed left-1/2 top-1/2 z-[61] flex max-h-[90vh] w-[calc(100%-2rem)] ${sizeClass[size]} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border animate-slide-in`}
         style={{
           background: "var(--sh-card)",

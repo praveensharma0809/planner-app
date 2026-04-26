@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { isISODate } from "@/lib/planner/contracts"
 import { getTodayLocalDate } from "@/lib/tasks/getTasksForDate"
+import { logger } from "@/lib/ops/logger"
 
 export type RescheduleTaskResponse =
   | { status: "UNAUTHORIZED" }
@@ -108,6 +109,7 @@ export async function rescheduleTask(taskId: string, newDate: string): Promise<R
     revalidatePath("/schedule")
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("rescheduleTask", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { isISODate, normalizeOptionalDate } from "@/lib/planner/contracts"
 import { isReservedSubjectName } from "@/lib/constants"
+import { logger } from "@/lib/ops/logger"
 
 interface AddSubjectInput {
   name: string
@@ -68,6 +69,7 @@ export async function addSubject(input: AddSubjectInput) {
     revalidatePath("/planner")
     return { status: "SUCCESS" as const, id: data.id }
   } catch (error) {
+    logger.error("addSubject", error)
     return {
       status: "ERROR" as const,
       message: error instanceof Error ? error.message : "Unexpected error",

@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import {
   DndContext,
   closestCenter,
@@ -9,12 +9,8 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-  type DraggableAttributes,
-  type DraggableSyntheticListeners,
 } from "@dnd-kit/core"
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
-import { useSortable } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
 import {
   getPlanConfig,
   getIntakeImportMode,
@@ -51,7 +47,7 @@ import { reorderChapters as reorderChaptersAction } from "@/app/actions/subjects
 import { useSidebar } from "@/app/components/layout/AppShell"
 import { PageHeader } from "@/app/components/layout/PageHeader"
 import { useToast } from "@/app/components/Toast"
-import { Button, Input, Modal } from "@/app/components/ui"
+import { Button } from "@/app/components/ui"
 import { SubjectDrawer } from "./SubjectDrawer"
 import {
   MAX_SESSION_LENGTH_MINUTES,
@@ -71,7 +67,18 @@ import {
   shiftMonthCursor,
   shouldAutoOrderTasks,
   toMonthCursor,
-} from "./subjects-data-table.helpers"
+} from "@/app/components/subjects-data-table/helpers"
+import {
+  RowActionButton,
+  type ColumnItem,
+  NameModal,
+} from "@/app/components/subjects-data-table/shared"
+import { Step2ConstraintsSection } from "./subjects-data-table.step2"
+import { ChapterEditorModal, ArchivedChaptersModal } from "./subjects-data-table.modals"
+import { DependencyManagerModal } from "./subjects-data-table.dependencies"
+import { TaskComposerModal } from "./subjects-data-table.taskComposer"
+import { DraggableTaskRow } from "./subjects-data-table.taskRows"
+import { NavigationColumn } from "./subjects-data-table.navigation"
 
 export interface SubjectNavTopic {
   id: string
@@ -146,13 +153,8 @@ interface Props {
   onSelectedTaskIdsChange?: (taskIds: string[]) => void
 }
 
-interface ColumnItem {
-  id: string
-  label: string
-  hint?: string
-  onEdit?: () => void
-  onDelete?: () => void
-}
+// ColumnItem and RowActionButton are shared across the planner + dashboard
+// subjects tables — see app/components/subjects-data-table/shared.tsx.
 
 type NameDialogState = {
   open: boolean
@@ -165,7 +167,6 @@ type NameDialogState = {
 }
 
 type TaskCreateMode = "single" | "bulk"
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const
 
 const CLOSED_DIALOG_STATE: NameDialogState = {
   open: false,
@@ -238,13 +239,9 @@ export function SubjectsDataTable({
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null)
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
   const [manualOrderChapterIds, setManualOrderChapterIds] = useState<Set<string>>(new Set())
-  const [reorderingTaskIds, setReorderingTaskIds] = useState<string[]>([])
-  const [reorderingSubjects, setReorderingSubjects] = useState(false)
-  const [reorderingChapters, setReorderingChapters] = useState(false)
+  const [reorderBusy, setReorderBusy] = useState<{ type: "tasks"; ids: string[] } | { type: "subjects" } | { type: "chapters" } | null>(null)
 
-  const [importingAll, setImportingAll] = useState(false)
-  const [importingUndone, setImportingUndone] = useState(false)
-  const [resettingIntake, setResettingIntake] = useState(false)
+  const [importBusy, setImportBusy] = useState<"all" | "undone" | "reset" | null>(null)
   const [intakeImportMode, setIntakeImportMode] = useState<IntakeImportMode>(initialImportMode)
 
   const [dependencyModalOpen, setDependencyModalOpen] = useState(false)
@@ -252,8 +249,7 @@ export function SubjectsDataTable({
   const [dependencyTargetChapterId, setDependencyTargetChapterId] = useState("")
   const [dependencySelectedIds, setDependencySelectedIds] = useState<Set<string>>(new Set())
   const [dependencySearch, setDependencySearch] = useState("")
-  const [dependencyLoading, setDependencyLoading] = useState(false)
-  const [dependencySaving, setDependencySaving] = useState(false)
+  const [dependencyBusy, setDependencyBusy] = useState<"loading" | "saving" | null>(null)
   const [topicParamsByTopic, setTopicParamsByTopic] = useState<Map<string, TopicParamDraft>>(new Map())
   const [subjectSnapshotForDrawer, setSubjectSnapshotForDrawer] = useState<{
     name: string
@@ -427,7 +423,13 @@ export function SubjectsDataTable({
     () => subjects.filter((subject) => subject.archived),
     [subjects]
   )
-  const displaySubjects = showArchived ? archivedSubjects : activeSubjects
+  // Memoize so the reference is stable across renders that don't actually
+  // change the underlying list — the selection-sync effects below use this
+  // as a dep, and a fresh array every render would loop them indefinitely.
+  const displaySubjects = useMemo(
+    () => (showArchived ? archivedSubjects : activeSubjects),
+    [showArchived, archivedSubjects, activeSubjects]
+  )
 
   useEffect(() => {
     if (displaySubjects.length === 0) {
@@ -441,8 +443,10 @@ export function SubjectsDataTable({
     })
   }, [displaySubjects])
 
-  const selectedSubject =
-    displaySubjects.find((subject) => subject.id === selectedSubjectId) ?? null
+  const selectedSubject = useMemo(
+    () => displaySubjects.find((subject) => subject.id === selectedSubjectId) ?? null,
+    [displaySubjects, selectedSubjectId]
+  )
 
   useEffect(() => {
     const chapters = selectedSubject?.chapters ?? []
@@ -457,8 +461,11 @@ export function SubjectsDataTable({
     })
   }, [selectedSubject])
 
-  const selectedChapter =
-    selectedSubject?.chapters.find((chapter) => chapter.id === selectedChapterId) ?? null
+  const selectedChapter = useMemo(
+    () =>
+      selectedSubject?.chapters.find((chapter) => chapter.id === selectedChapterId) ?? null,
+    [selectedSubject, selectedChapterId]
+  )
 
   const resetManageModeState = useCallback(() => {
     setSelectedTaskIds(new Set())
@@ -478,9 +485,7 @@ export function SubjectsDataTable({
     setSelectedSubjectId(null)
     setSelectedChapterId(null)
     setManualOrderChapterIds(new Set())
-    setReorderingTaskIds([])
-    setReorderingSubjects(false)
-    setReorderingChapters(false)
+    setReorderBusy(null)
     setPendingTaskIds(new Set())
     setTaskDurationDrafts({})
     setTaskDurationSavingIds(new Set())
@@ -727,7 +732,7 @@ export function SubjectsDataTable({
       const reorderedChapterTasks = arrayMove(visibleTasks, fromIndex, toIndex)
       const orderedChapterTaskIds = reorderedChapterTasks.map((task) => task.id)
 
-      setReorderingTaskIds(orderedChapterTaskIds)
+      setReorderBusy({ type: "tasks", ids: orderedChapterTaskIds })
 
       const result = await reorderTasks({
         chapterId,
@@ -748,14 +753,14 @@ export function SubjectsDataTable({
     } catch (error) {
       showMutationError(error, "Could not reorder tasks right now.")
     } finally {
-      setReorderingTaskIds([])
+      setReorderBusy(null)
       endMutation()
     }
   }
 
   useEffect(() => {
     if (!selectedChapter || showArchived) return
-    if (reorderingTaskIds.length > 0) return
+    if ((reorderBusy?.type === "tasks" ? reorderBusy.ids.length : 0) > 0) return
     if (mutationLockRef.current) return
 
     const chapterId = selectedChapter.id
@@ -767,14 +772,14 @@ export function SubjectsDataTable({
     if (unchanged) return
 
     const orderedTaskIds = autoOrderedTasks.map((task) => task.id)
-    setReorderingTaskIds(orderedTaskIds)
+    setReorderBusy({ type: "tasks", ids: orderedTaskIds })
 
     let alive = true
 
     void (async () => {
       if (!beginMutation()) {
         if (alive) {
-          setReorderingTaskIds([])
+          setReorderBusy(null)
         }
         return
       }
@@ -798,7 +803,7 @@ export function SubjectsDataTable({
         showMutationError(error, "Could not auto-order tasks.")
       } finally {
         if (alive) {
-          setReorderingTaskIds([])
+          setReorderBusy(null)
         }
         endMutation()
       }
@@ -810,7 +815,7 @@ export function SubjectsDataTable({
   // Intentionally scoped to ordering state inputs so auto-order does not rerun
   // on helper closure churn from unrelated renders.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chapterTasks, manualOrderChapterIds, reorderingTaskIds.length, selectedChapter, showArchived, showMutationError])
+  }, [chapterTasks, manualOrderChapterIds, reorderBusy, selectedChapter, showArchived, showMutationError])
 
 
   async function handleSaveChapter(event: FormEvent<HTMLFormElement>) {
@@ -1517,11 +1522,11 @@ export function SubjectsDataTable({
   }
 
   async function handleReorderSubjects(orderedIds: string[]) {
-    if (showArchived || reorderingSubjects) return
+    if (showArchived || reorderBusy?.type === "subjects") return
     if (orderedIds.length <= 1) return
 
     if (!beginMutation()) return
-    setReorderingSubjects(true)
+    setReorderBusy({ type: "subjects" })
 
     try {
       const result = await reorderSubjectsAction(
@@ -1541,18 +1546,18 @@ export function SubjectsDataTable({
     } catch (error) {
       showMutationError(error, "Could not reorder subjects.")
     } finally {
-      setReorderingSubjects(false)
+      setReorderBusy(null)
       endMutation()
     }
   }
 
   async function handleReorderChapters(orderedIds: string[]) {
-    if (showArchived || reorderingChapters || !selectedSubject) return
+    if (showArchived || reorderBusy?.type === "chapters" || !selectedSubject) return
     if (orderedIds.length <= 1) return
 
     if (!beginMutation()) return
 
-    setReorderingChapters(true)
+    setReorderBusy({ type: "chapters" })
     try {
       const result = await reorderChaptersAction(
         selectedSubject.id,
@@ -1572,7 +1577,7 @@ export function SubjectsDataTable({
     } catch (error) {
       showMutationError(error, "Could not reorder chapters.")
     } finally {
-      setReorderingChapters(false)
+      setReorderBusy(null)
       endMutation()
     }
   }
@@ -1641,11 +1646,7 @@ export function SubjectsDataTable({
     const trackLoading = options?.trackLoading !== false
 
     if (trackLoading) {
-      if (mode === "undone") {
-        setImportingUndone(true)
-      } else {
-        setImportingAll(true)
-      }
+      setImportBusy(mode === "undone" ? "undone" : "all")
     }
 
     try {
@@ -1710,7 +1711,7 @@ export function SubjectsDataTable({
       setTaskDurationSavingIds(new Set())
       setPendingTaskIds(new Set())
       setManualOrderChapterIds(new Set())
-      setReorderingTaskIds([])
+      setReorderBusy(null)
       setIntakeImportMode(mode)
 
       if (nextSubjects.length > 0) {
@@ -1737,8 +1738,7 @@ export function SubjectsDataTable({
       return false
     } finally {
       if (trackLoading) {
-        setImportingAll(false)
-        setImportingUndone(false)
+        setImportBusy(null)
       }
     }
   }
@@ -1790,7 +1790,7 @@ export function SubjectsDataTable({
 
     if (!beginMutation()) return
 
-    setResettingIntake(true)
+    setImportBusy("reset")
     try {
       resetTransientIntakeState()
 
@@ -1802,12 +1802,12 @@ export function SubjectsDataTable({
     } catch (error) {
       showMutationError(error, "Could not reset intake view.")
     } finally {
-      setResettingIntake(false)
+      setImportBusy(null)
       endMutation()
     }
   }
 
-  async function openDependencyManager(scope: DependencyScope) {
+  function openDependencyManager(scope: DependencyScope) {
     if (showArchived) return
 
     if (scope === "chapter" && !selectedChapter) {
@@ -1832,18 +1832,45 @@ export function SubjectsDataTable({
     setDependencyScope(scope)
     setDependencyTargetChapterId(targetId)
     setDependencySearch("")
+    setDependencySelectedIds(new Set())
     setDependencyModalOpen(true)
-
-    setDependencyLoading(true)
-    try {
-      const map = await loadTopicParamsSnapshot(true)
-      setDependencySelectedIds(new Set(map.get(targetId)?.depends_on ?? []))
-    } catch (error) {
-      showMutationError(error, "Could not load dependencies.")
-    } finally {
-      setDependencyLoading(false)
-    }
   }
+
+  useEffect(() => {
+    if (!dependencyModalOpen || !dependencyTargetChapterId) return
+
+    let alive = true
+    setDependencyBusy("loading")
+    void (async () => {
+      try {
+        const map = await loadTopicParamsSnapshot(true)
+        if (!alive) return
+        const rawDependsOn = map.get(dependencyTargetChapterId)?.depends_on ?? []
+
+        if (dependencyScope === "subject") {
+          // Subject-scope deps are persisted as fan-out across chapters: the anchor
+          // chapter's depends_on contains chapter IDs from other subjects. Reduce
+          // those back to the unique set of source subject IDs for the picker.
+          const subjectIds = new Set<string>()
+          for (const chapterId of rawDependsOn) {
+            const chapter = chapterById.get(chapterId)
+            if (chapter) subjectIds.add(chapter.subjectId)
+          }
+          setDependencySelectedIds(subjectIds)
+        } else {
+          setDependencySelectedIds(new Set(rawDependsOn))
+        }
+      } catch (error) {
+        if (alive) showMutationError(error, "Could not load dependencies.")
+      } finally {
+        if (alive) setDependencyBusy(null)
+      }
+    })()
+
+    return () => {
+      alive = false
+    }
+  }, [chapterById, dependencyModalOpen, dependencyScope, dependencyTargetChapterId, loadTopicParamsSnapshot, showMutationError])
 
   function toggleDependencySelection(chapterId: string) {
     setDependencySelectedIds((previous) => {
@@ -1857,55 +1884,89 @@ export function SubjectsDataTable({
     })
   }
 
+  function buildTopicParamPayload(
+    targetChapter: SubjectNavChapter & { subjectId: string; subjectName: string },
+    dependsOn: string[],
+  ) {
+    const existing = topicParamsByTopic.get(targetChapter.id)
+    const chapterTasks = tasksByChapter[targetChapter.id] ?? []
+    const chapterTaskMinutes = chapterTasks.reduce(
+      (sum, task) => sum + Math.max(0, task.durationMinutes),
+      0,
+    )
+    const chapterTaskDurations = chapterTasks.map((task) => Math.max(0, task.durationMinutes))
+    const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10)
+    const estimatedHours = existing?.estimated_hours
+      ? existing.estimated_hours
+      : derivedHours > 0 ? derivedHours : 1
+
+    return {
+      topic_id: targetChapter.id,
+      estimated_hours: estimatedHours,
+      deadline: existing?.deadline ?? null,
+      earliest_start: existing?.earliest_start ?? targetChapter.earliestStart ?? null,
+      depends_on: dependsOn,
+      session_length_minutes: inferSessionLengthMinutes(
+        chapterTaskDurations,
+        existing?.session_length_minutes,
+      ),
+      rest_after_days: existing?.rest_after_days ?? Math.max(0, targetChapter.restAfterDays ?? 0),
+      max_sessions_per_day: existing?.max_sessions_per_day ?? 0,
+      study_frequency: existing?.study_frequency ?? "daily",
+    }
+  }
+
   async function handleSaveDependencies() {
     if (!dependencyTargetChapterId) {
       addToast("Select a chapter first.", "error")
       return
     }
 
-    const chapter = chapterById.get(dependencyTargetChapterId)
-    if (!chapter) {
-      addToast("Selected chapter could not be found.", "error")
-      return
-    }
-
-    const existing = topicParamsByTopic.get(dependencyTargetChapterId)
-    const chapterTaskMinutes = (tasksByChapter[dependencyTargetChapterId] ?? []).reduce(
-      (sum, task) => sum + Math.max(0, task.durationMinutes),
-      0
-    )
-    const chapterTaskDurations = (tasksByChapter[dependencyTargetChapterId] ?? []).map((task) =>
-      Math.max(0, task.durationMinutes)
-    )
-const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10)
-      const estimatedHours = existing?.estimated_hours
-        ? existing.estimated_hours
-        : derivedHours > 0 ? derivedHours : 1
-
-    const dependsOn = Array.from(dependencySelectedIds)
-      .filter((id) => id !== dependencyTargetChapterId)
-
     if (!beginMutation()) return
-
-    setDependencySaving(true)
+    setDependencyBusy("saving")
 
     try {
-      const result = await saveTopicParams([
-        {
-          topic_id: dependencyTargetChapterId,
-          estimated_hours: estimatedHours,
-          deadline: existing?.deadline ?? null,
-          earliest_start: existing?.earliest_start ?? chapter.earliestStart ?? null,
-          depends_on: dependsOn,
-          session_length_minutes: inferSessionLengthMinutes(
-            chapterTaskDurations,
-            existing?.session_length_minutes
-          ),
-          rest_after_days: existing?.rest_after_days ?? Math.max(0, chapter.restAfterDays ?? 0),
-          max_sessions_per_day: existing?.max_sessions_per_day ?? 0,
-          study_frequency: existing?.study_frequency ?? "daily",
-        },
-      ])
+      let payload: ReturnType<typeof buildTopicParamPayload>[]
+
+      if (dependencyScope === "subject") {
+        if (!selectedSubject || selectedSubject.chapters.length === 0) {
+          addToast("Select a subject with at least one chapter.", "error")
+          return
+        }
+
+        // Resolve each selected dep subject to its anchor chapter (the last chapter
+        // of that subject acts as the prerequisite — its completion implies the
+        // whole subject is done).
+        const anchorChapterIds: string[] = []
+        for (const subjectId of dependencySelectedIds) {
+          if (subjectId === selectedSubject.id) continue
+          const depSubject = activeSubjects.find((subject) => subject.id === subjectId)
+          if (!depSubject || depSubject.chapters.length === 0) continue
+          const anchor = depSubject.chapters[depSubject.chapters.length - 1]
+          if (anchor) anchorChapterIds.push(anchor.id)
+        }
+
+        // Fan-out: every chapter in the target subject takes the same set of
+        // anchor prerequisites so the dependency holds at the subject level.
+        payload = selectedSubject.chapters.map((chapter) => {
+          const enriched = { ...chapter, subjectId: selectedSubject.id, subjectName: selectedSubject.name }
+          const dependsOn = anchorChapterIds.filter((id) => id !== chapter.id)
+          return buildTopicParamPayload(enriched, dependsOn)
+        })
+      } else {
+        const chapter = chapterById.get(dependencyTargetChapterId)
+        if (!chapter) {
+          addToast("Selected chapter could not be found.", "error")
+          return
+        }
+
+        const dependsOn = Array.from(dependencySelectedIds).filter(
+          (id) => id !== dependencyTargetChapterId,
+        )
+        payload = [buildTopicParamPayload(chapter, dependsOn)]
+      }
+
+      const result = await saveTopicParams(payload)
 
       if (result.status === "SUCCESS") {
         addToast("Dependencies saved.", "success")
@@ -1917,7 +1978,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
     } catch (error) {
       showMutationError(error, "Could not save dependencies.")
     } finally {
-      setDependencySaving(false)
+      setDependencyBusy(null)
       endMutation()
     }
   }
@@ -1952,16 +2013,39 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
     }
 
     if (!selectedSubject) return []
-    return selectedSubject.chapters.map((chapter) => ({
-      id: chapter.id,
-      label: chapter.name,
-    }))
+    // Subject scope: surface the subject as a single read-only target. Per-chapter
+    // selection inside a subject is handled by fan-out at save time.
+    return [{
+      id: selectedSubject.id,
+      label: selectedSubject.name,
+    }]
   }, [dependencyScope, selectedChapter, selectedSubject])
 
   const dependencyCandidates = useMemo(() => {
     const query = dependencySearch.trim().toLowerCase()
+    const targetSubjectId = selectedSubject?.id ?? null
+
+    if (dependencyScope === "subject") {
+      return activeSubjects
+        .filter((subject) => subject.id !== targetSubjectId)
+        .filter((subject) => {
+          if (!query) return true
+          return subject.name.toLowerCase().includes(query)
+        })
+        .map((subject) => ({
+          id: subject.id,
+          name: subject.name,
+          subjectName: "",
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name))
+    }
+
     return allActiveChapters
       .filter((chapter) => chapter.id !== dependencyTargetChapterId)
+      .filter((chapter) => {
+        if (!targetSubjectId) return true
+        return chapter.subjectId === targetSubjectId
+      })
       .filter((chapter) => {
         if (!query) return true
         const haystack = `${chapter.subjectName} ${chapter.name}`.toLowerCase()
@@ -1972,7 +2056,68 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
         if (bySubject !== 0) return bySubject
         return left.name.localeCompare(right.name)
       })
-  }, [allActiveChapters, dependencySearch, dependencyTargetChapterId])
+  }, [activeSubjects, allActiveChapters, dependencyScope, dependencySearch, dependencyTargetChapterId, selectedSubject])
+
+  const onStudyStartDateChange = useCallback((value: string) => {
+    setConstraintsDraft((previous) => ({ ...previous, study_start_date: value }))
+  }, [])
+
+  const onExamDateChange = useCallback((value: string) => {
+    setConstraintsDraft((previous) => ({ ...previous, exam_date: value }))
+  }, [])
+
+  const onWeekdayCapacityChange = useCallback((value: string) => {
+    setConstraintsDraft((previous) => ({
+      ...previous,
+      weekday_capacity_minutes: Math.max(0, Number.parseInt(value || "0", 10) || 0),
+    }))
+  }, [])
+
+  const onWeekendCapacityChange = useCallback((value: string) => {
+    setConstraintsDraft((previous) => ({
+      ...previous,
+      weekend_capacity_minutes: Math.max(0, Number.parseInt(value || "0", 10) || 0),
+    }))
+  }, [])
+
+  const onFlexibilityMinutesChange = useCallback((value: string) => {
+    setConstraintsDraft((previous) => ({
+      ...previous,
+      flexibility_minutes: Math.max(0, Number.parseInt(value || "0", 10) || 0),
+    }))
+  }, [])
+
+  const onMaxActiveSubjectsChange = useCallback((value: string) => {
+    setConstraintsDraft((previous) => ({
+      ...previous,
+      max_active_subjects: Math.max(0, Number.parseInt(value || "0", 10) || 0),
+    }))
+  }, [])
+
+  const onPreviousCalendarMonth = useCallback(() => {
+    setCalendarMonthCursor((previous) => shiftMonthCursor(previous, -1))
+  }, [])
+
+  const onNextCalendarMonth = useCallback(() => {
+    setCalendarMonthCursor((previous) => shiftMonthCursor(previous, 1))
+  }, [])
+
+  const onToggleCustomDate = useCallback((isoDate: string) => {
+    setSelectedCustomDates((previous) => {
+      const next = new Set(previous)
+      if (next.has(isoDate)) next.delete(isoDate)
+      else next.add(isoDate)
+      return next
+    })
+  }, [])
+
+  const onCustomCapacityMinutesInputChange = useCallback((value: string) => {
+    setCustomCapacityMinutesInput(value)
+  }, [])
+
+  const onClearCustomDateSelection = useCallback(() => {
+    setSelectedCustomDates(new Set())
+  }, [])
 
   return (
     <div
@@ -2024,9 +2169,9 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                 onClick={() => {
                   void handleImportModeClick("all")
                 }}
-                disabled={isMutating || importingAll || importingUndone || resettingIntake}
+                disabled={isMutating || importBusy !== null}
               >
-                {importingAll ? "Importing..." : "Import All"}
+                {importBusy === "all" ? "Importing..." : "Import All"}
               </Button>
               <Button
                 variant="ghost"
@@ -2035,9 +2180,9 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                 onClick={() => {
                   void handleImportModeClick("undone")
                 }}
-                disabled={isMutating || importingAll || importingUndone || resettingIntake}
+                disabled={isMutating || importBusy !== null}
               >
-                {importingUndone ? "Importing..." : "Import Undone Only"}
+                {importBusy === "undone" ? "Importing..." : "Import Undone Only"}
               </Button>
               <Button
                 variant="ghost"
@@ -2046,9 +2191,9 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                 onClick={() => {
                   void handleResetIntakeView()
                 }}
-                disabled={isMutating || resettingIntake || importingAll || importingUndone}
+                disabled={isMutating || importBusy !== null}
               >
-                {resettingIntake ? "Resetting..." : "Reload Saved Intake Data"}
+                {importBusy === "reset" ? "Resetting..." : "Reload Saved Intake Data"}
               </Button>
             </div>
           </div>
@@ -2060,7 +2205,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
               activeId={selectedSubjectId}
               emptyMessage="No subjects available."
               onSelect={setSelectedSubjectId}
-              reorderEnabled={!showArchived && !reorderingSubjects && !importingAll && !importingUndone}
+              reorderEnabled={!showArchived && reorderBusy?.type !== "subjects" && importBusy === null}
               onReorder={(orderedIds) => {
                 void handleReorderSubjects(orderedIds)
               }}
@@ -2080,7 +2225,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     size="sm"
                     className="w-full justify-center"
                     onClick={() => {
-                      void openDependencyManager("subject")
+                      openDependencyManager("subject")
                     }}
                     disabled={isMutating || showArchived || !selectedSubject || selectedSubject.chapters.length === 0}
                   >
@@ -2107,7 +2252,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
               activeId={selectedChapterId}
               emptyMessage="No chapters in this subject."
               onSelect={setSelectedChapterId}
-              reorderEnabled={!showArchived && !!selectedSubject && !reorderingChapters}
+              reorderEnabled={!showArchived && !!selectedSubject && reorderBusy?.type !== "chapters"}
               onReorder={(orderedIds) => {
                 void handleReorderChapters(orderedIds)
               }}
@@ -2127,7 +2272,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                     size="sm"
                     className="w-full justify-center"
                     onClick={() => {
-                      void openDependencyManager("chapter")
+                      openDependencyManager("chapter")
                     }}
                     disabled={isMutating || showArchived || !selectedChapter}
                   >
@@ -2333,7 +2478,7 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
                                   task={task}
                                   isPending={pendingTaskIds.has(task.id)}
                                   isDurationSaving={taskDurationSavingIds.has(task.id)}
-                                  isReordering={reorderingTaskIds.includes(task.id)}
+                                  isReordering={reorderBusy?.type === "tasks" && reorderBusy.ids.includes(task.id)}
                                   canEdit={!showArchived && !isMutating}
                                   durationDraft={taskDurationDrafts[task.id] ?? String(task.durationMinutes)}
                                   onToggle={(nextCompleted) => handleToggleTask(task.id, nextCompleted)}
@@ -2490,348 +2635,33 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
             </section>
           </div>
 
-          <p
-            className="mt-4 mb-2 text-[11px] font-semibold uppercase tracking-[0.14em]"
-            style={{ color: "var(--sh-text-muted)" }}
-          >
-            Step-2
-          </p>
-
-          <div className="flex min-h-[520px] items-stretch gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
-            <section
-              className="min-w-[320px] flex-1 rounded-xl border px-4 py-4 sm:px-5 sm:py-5 snap-start flex flex-col"
-              style={{
-                borderColor: "var(--sh-border)",
-                background: "var(--sh-card)",
-              }}
-            >
-              {constraintsLoading ? (
-                <div
-                  className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-4 text-center text-sm"
-                  style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-                >
-                  Loading constraints...
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3 pr-1">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Input
-                      type="date"
-                      label="Start Date"
-                      value={constraintsDraft.study_start_date}
-                      onChange={(event) =>
-                        setConstraintsDraft((previous) => ({
-                          ...previous,
-                          study_start_date: event.target.value,
-                        }))
-                      }
-                    />
-                    <Input
-                      type="date"
-                      label="Final Deadline"
-                      value={constraintsDraft.exam_date}
-                      onChange={(event) =>
-                        setConstraintsDraft((previous) => ({
-                          ...previous,
-                          exam_date: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <Input
-                      type="number"
-                      min={0}
-                      label="Weekday Capacity (min)"
-                      value={String(constraintsDraft.weekday_capacity_minutes)}
-                      onChange={(event) =>
-                        setConstraintsDraft((previous) => ({
-                          ...previous,
-                          weekday_capacity_minutes: Math.max(0, Number.parseInt(event.target.value || "0", 10) || 0),
-                        }))
-                      }
-                    />
-                    <Input
-                      type="number"
-                      min={0}
-                      label="Weekend Capacity (min)"
-                      value={String(constraintsDraft.weekend_capacity_minutes)}
-                      onChange={(event) =>
-                        setConstraintsDraft((previous) => ({
-                          ...previous,
-                          weekend_capacity_minutes: Math.max(0, Number.parseInt(event.target.value || "0", 10) || 0),
-                        }))
-                      }
-                    />
-                  </div>
-
-                  {hasStep2DateError && (
-                    <p className="text-xs text-red-400/90">
-                      Final deadline must be after start date.
-                    </p>
-                  )}
-
-                  <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                      Set Particular Day Capacity
-                    </p>
-                    <p className="mt-1 text-[11px]" style={{ color: "var(--sh-text-secondary)" }}>
-                      Leave blank to use weekday/weekend defaults.
-                    </p>
-                    <div className="mt-2 grid grid-cols-7 gap-1.5">
-                      {WEEKDAY_LABELS.map((label, index) => (
-                        <div key={label} className="space-y-1">
-                          <p className="text-[10px] text-center" style={{ color: "var(--sh-text-muted)" }}>
-                            {label}
-                          </p>
-                          <input
-                            type="number"
-                            min={0}
-                            value={constraintsDraft.day_of_week_capacity[index] ?? ""}
-                            onChange={(event) => updateDayOfWeekCapacity(index, event.target.value)}
-                            className="ui-input h-8 px-1 text-center text-xs"
-                            placeholder="-"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}>
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                        Calendar (Custom Capacity)
-                      </p>
-                      <div className="flex items-center gap-1.5">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setCalendarMonthCursor((previous) => shiftMonthCursor(previous, -1))}
-                        >
-                          Prev
-                        </Button>
-                        <span className="text-[11px] font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                          {step2CalendarLabel}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setCalendarMonthCursor((previous) => shiftMonthCursor(previous, 1))}
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="mt-2 space-y-1.5">
-                      <p className="text-[11px]" style={{ color: "var(--sh-text-secondary)" }}>
-                        Click days to select date-specific capacity overrides.
-                      </p>
-
-                      <div className="grid grid-cols-7 gap-1">
-                        {WEEKDAY_LABELS.map((label) => (
-                          <div key={`custom-cal-head-${label}`} className="text-center text-[10px]" style={{ color: "var(--sh-text-muted)" }}>
-                            {label}
-                          </div>
-                        ))}
-                      </div>
-
-                      {step2CalendarWeeks.map((week, weekIndex) => (
-                        <div key={`custom-week-${weekIndex}`} className="grid grid-cols-7 gap-1">
-                          {week.map((isoDate, dayIndex) => {
-                            if (!isoDate) {
-                              return <div key={`custom-empty-${weekIndex}-${dayIndex}`} className="h-8 rounded-md" />
-                            }
-
-                            const selectedCustom = selectedCustomDates.has(isoDate)
-                            const selected = selectedCustom
-                            const hasCustom = isoDate in constraintsDraft.custom_day_capacity
-
-                            return (
-                              <button
-                                key={`custom-day-${isoDate}`}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedCustomDates((previous) => {
-                                    const next = new Set(previous)
-                                    if (next.has(isoDate)) next.delete(isoDate)
-                                    else next.add(isoDate)
-                                    return next
-                                  })
-                                }}
-                                className="h-8 rounded-md border text-[11px] font-medium transition-colors"
-                                style={{
-                                  borderColor: selected
-                                    ? "rgba(56, 189, 248, 0.6)"
-                                    : hasCustom
-                                      ? "rgba(56, 189, 248, 0.35)"
-                                      : "var(--sh-border)",
-                                  background: selected
-                                    ? "rgba(56, 189, 248, 0.18)"
-                                    : hasCustom
-                                      ? "rgba(56, 189, 248, 0.1)"
-                                      : "rgba(255,255,255,0.01)",
-                                  color: selected
-                                    ? "#bae6fd"
-                                    : "var(--sh-text-secondary)",
-                                }}
-                                title={[
-                                  hasCustom ? `${constraintsDraft.custom_day_capacity[isoDate]} min capacity` : "No custom capacity",
-                                ].join(" Gï¿½ï¿½ ")}
-                              >
-                                {isoDate.slice(-2)}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      ))}
-
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border px-2 py-1 text-[10px]" style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-secondary)" }}>
-                          Capacity selected: {selectedCustomDates.size}
-                        </span>
-                      </div>
-
-                      <div className="mt-2 space-y-2 rounded-md border p-2" style={{ borderColor: "rgba(56, 189, 248, 0.35)", background: "rgba(56, 189, 248, 0.06)" }}>
-                        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#bae6fd" }}>
-                          Custom Capacity Actions
-                        </p>
-
-                        <div className="grid gap-2 md:grid-cols-[1fr_auto_auto] items-end">
-                          <Input
-                            type="number"
-                            min={0}
-                            label="Minutes for selected dates"
-                            value={customCapacityMinutesInput}
-                            onChange={(event) => setCustomCapacityMinutesInput(event.target.value)}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleAddCustomCapacityDate}
-                          >
-                            Apply to Selected
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedCustomDates(new Set())}
-                            disabled={selectedCustomDates.size === 0}
-                          >
-                            Clear Selection
-                          </Button>
-                        </div>
-
-                        {customCapacityEntries.length === 0 ? (
-                          <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                            No custom date overrides yet.
-                          </p>
-                        ) : (
-                          customCapacityEntries.map(([date, minutes]) => (
-                            <div
-                              key={date}
-                              className="flex items-center justify-between gap-2 rounded border px-2 py-1"
-                              style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.01)" }}
-                            >
-                              <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                                {date} - {minutes} min
-                              </p>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleRemoveCustomCapacityDate(date)}
-                              >
-                                Remove
-                              </Button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </section>
-
-            <section
-              className="min-w-[320px] h-full flex-1 rounded-xl border px-4 py-4 sm:px-5 sm:py-5 snap-start flex flex-col"
-              style={{
-                borderColor: "var(--sh-border)",
-                background: "var(--sh-card)",
-              }}
-            >
-              {constraintsLoading ? (
-                <div
-                  className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-4 text-center text-sm"
-                  style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-                >
-                  Loading controls...
-                </div>
-              ) : (
-                <div className="flex min-h-0 flex-1 flex-col justify-between gap-3">
-                  <div className="space-y-3">
-                    <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                      Fine-tune scheduling flexibility and hard caps used in plan generation.
-                    </p>
-
-                    <Input
-                      type="number"
-                      min={0}
-                      max={120}
-                      label="Flexibility Minutes"
-                      value={String(constraintsDraft.flexibility_minutes)}
-                      onChange={(event) =>
-                        setConstraintsDraft((previous) => ({
-                          ...previous,
-                          flexibility_minutes: Math.max(0, Number.parseInt(event.target.value || "0", 10) || 0),
-                        }))
-                      }
-                    />
-
-                    <Input
-                      type="number"
-                      min={0}
-                      max={12}
-                      label="Max Active Subjects / Day"
-                      value={String(constraintsDraft.max_active_subjects)}
-                      onChange={(event) =>
-                        setConstraintsDraft((previous) => ({
-                          ...previous,
-                          max_active_subjects: Math.max(0, Number.parseInt(event.target.value || "0", 10) || 0),
-                        }))
-                      }
-                      hint="Use 0 for no hard cap."
-                    />
-                  </div>
-
-                  <div className="rounded-lg border p-3" style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}>
-                    <p className="text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
-                      Save Step-2 constraints before generating Phase-2 preview.
-                    </p>
-                    <div className="mt-2">
-                      <Button
-                        type="button"
-                        variant="primary"
-                        size="sm"
-                        onClick={() => {
-                          void handleSaveConstraints()
-                        }}
-                        disabled={isMutating || constraintsSaving || hasStep2DateError}
-                      >
-                        {constraintsSaving ? "Saving..." : "Save Step-2 Constraints"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </section>
-          </div>
+          <Step2ConstraintsSection
+            constraintsLoading={constraintsLoading}
+            constraintsDraft={constraintsDraft}
+            hasStep2DateError={hasStep2DateError}
+            step2CalendarLabel={step2CalendarLabel}
+            step2CalendarWeeks={step2CalendarWeeks}
+            selectedCustomDates={selectedCustomDates}
+            customCapacityMinutesInput={customCapacityMinutesInput}
+            customCapacityEntries={customCapacityEntries}
+            isMutating={isMutating}
+            constraintsSaving={constraintsSaving}
+            onStudyStartDateChange={onStudyStartDateChange}
+            onExamDateChange={onExamDateChange}
+            onWeekdayCapacityChange={onWeekdayCapacityChange}
+            onWeekendCapacityChange={onWeekendCapacityChange}
+            onDayOfWeekCapacityChange={updateDayOfWeekCapacity}
+            onPreviousCalendarMonth={onPreviousCalendarMonth}
+            onNextCalendarMonth={onNextCalendarMonth}
+            onToggleCustomDate={onToggleCustomDate}
+            onCustomCapacityMinutesInputChange={onCustomCapacityMinutesInputChange}
+            onApplyCustomCapacity={handleAddCustomCapacityDate}
+            onClearCustomDateSelection={onClearCustomDateSelection}
+            onRemoveCustomCapacityDate={handleRemoveCustomCapacityDate}
+            onFlexibilityMinutesChange={onFlexibilityMinutesChange}
+            onMaxActiveSubjectsChange={onMaxActiveSubjectsChange}
+            onSaveConstraints={() => { void handleSaveConstraints() }}
+          />
         </div>
 
       <SubjectDrawer
@@ -2849,226 +2679,38 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
         }}
       />
 
-      <Modal
+      <ChapterEditorModal
         open={chapterDialog.open}
-        onClose={() => {
-          if (isMutating || chapterDialogSaving || chapterArchiveSaving) return
-          setChapterDialog(CLOSED_DIALOG_STATE)
-        }}
-        title={chapterDialog.mode === "create" ? "Add Chapter" : "Edit Chapter"}
-        size="md"
-      >
-        <form id="chapter-form" className="flex max-h-[calc(100vh-13rem)] flex-col" onSubmit={handleSaveChapter}>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-            <Input
-              autoFocus
-              required
-              label="Chapter Name"
-              value={chapterDialog.value}
-              onChange={(event) =>
-                setChapterDialog((previous) => ({
-                  ...previous,
-                  value: event.target.value,
-                }))
-              }
-              placeholder="e.g. Limits and Continuity"
-            />
+        isMutating={isMutating}
+        chapterDialogSaving={chapterDialogSaving}
+        chapterArchiveSaving={chapterArchiveSaving}
+        mode={chapterDialog.mode}
+        targetId={chapterDialog.targetId}
+        value={chapterDialog.value}
+        earliestStart={chapterDialog.earliestStart ?? ""}
+        deadline={chapterDialog.deadline ?? ""}
+        restAfterDays={chapterDialog.restAfterDays ?? "0"}
+        onClose={() => setChapterDialog(CLOSED_DIALOG_STATE)}
+        onValueChange={(value) => setChapterDialog((previous) => ({ ...previous, value }))}
+        onEarliestStartChange={(value) => setChapterDialog((previous) => ({ ...previous, earliestStart: value }))}
+        onDeadlineChange={(value) => setChapterDialog((previous) => ({ ...previous, deadline: value }))}
+        onRestAfterDaysChange={(value) => setChapterDialog((previous) => ({ ...previous, restAfterDays: value }))}
+        onSubmit={(event) => handleSaveChapter(event)}
+        onArchive={() => { void handleArchiveChapterFromDialog() }}
+        onDelete={(targetId, targetName) => { void handleDeleteChapter(targetId, targetName) }}
+      />
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Input
-                type="date"
-                label="Start Date"
-                value={chapterDialog.earliestStart ?? ""}
-                onChange={(event) =>
-                  setChapterDialog((previous) => ({
-                    ...previous,
-                    earliestStart: event.target.value,
-                  }))
-                }
-              />
-              <Input
-                type="date"
-                label="Deadline"
-                value={chapterDialog.deadline ?? ""}
-                onChange={(event) =>
-                  setChapterDialog((previous) => ({
-                    ...previous,
-                    deadline: event.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <Input
-              type="number"
-              min={0}
-              label="Rest After Days"
-              value={chapterDialog.restAfterDays ?? "0"}
-              onChange={(event) =>
-                setChapterDialog((previous) => ({
-                  ...previous,
-                  restAfterDays: event.target.value,
-                }))
-              }
-            />
-
-            {chapterDialog.mode === "edit" && chapterDialog.targetId && (
-              <div
-                className="rounded-lg border p-3"
-                style={{ borderColor: "rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.08)" }}
-              >
-                <p className="text-xs font-semibold uppercase tracking-wide text-red-300">Danger Zone</p>
-                <p className="mt-1 text-xs text-red-200/80">
-                  Delete chapter and detach related tasks from this chapter.
-                </p>
-                <Button
-                  type="button"
-                  variant="danger"
-                  size="sm"
-                  className="mt-2"
-                  onClick={() => {
-                    const targetId = chapterDialog.targetId
-                    if (!targetId) return
-                    const targetName = chapterDialog.value.trim() || "Untitled chapter"
-                    setChapterDialog(CLOSED_DIALOG_STATE)
-                    void handleDeleteChapter(targetId, targetName)
-                  }}
-                  disabled={isMutating || chapterDialogSaving}
-                >
-                  Delete Chapter
-                </Button>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4 flex items-center justify-end gap-2 border-t pt-3" style={{ borderColor: "var(--sh-border)" }}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setChapterDialog(CLOSED_DIALOG_STATE)}
-              disabled={isMutating || chapterDialogSaving || chapterArchiveSaving}
-            >
-              Cancel
-            </Button>
-            {chapterDialog.mode === "edit" && chapterDialog.targetId && (
-              <Button
-                type="button"
-                variant="danger"
-                size="sm"
-                onClick={() => {
-                  void handleArchiveChapterFromDialog()
-                }}
-                disabled={isMutating || chapterDialogSaving || chapterArchiveSaving}
-              >
-                {chapterArchiveSaving ? "Archiving..." : "Archive Chapter"}
-              </Button>
-            )}
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              disabled={isMutating || chapterDialogSaving || chapterArchiveSaving}
-            >
-              {chapterDialogSaving
-                ? "Saving..."
-                : chapterDialog.mode === "create"
-                  ? "Add Chapter"
-                  : "Save Changes"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
+      <ArchivedChaptersModal
         open={archivedChapterModalOpen}
-        onClose={() => {
-          if (isMutating || archivedChapterLoading || archivedChapterPendingId) return
-          setArchivedChapterModalOpen(false)
-        }}
-        title={selectedSubject
-          ? `Archived Chapters (${archivedChapterRows.length})`
-          : "Archived Chapters"}
-        size="md"
-      >
-        <div className="space-y-3">
-          {archivedChapterLoading ? (
-            <div
-              className="rounded-lg border border-dashed px-3 py-4 text-sm"
-              style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-            >
-              Loading archived chapters...
-            </div>
-          ) : archivedChapterRows.length === 0 ? (
-            <div
-              className="rounded-lg border border-dashed px-3 py-4 text-sm"
-              style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-            >
-              No archived chapters for this subject.
-            </div>
-          ) : (
-            <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
-              {archivedChapterRows.map((chapter) => {
-                const isPending = archivedChapterPendingId === chapter.id
-
-                return (
-                  <div
-                    key={chapter.id}
-                    className="rounded-lg border p-2"
-                    style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <p
-                        className="min-w-0 flex-1 truncate text-sm font-medium"
-                        style={{ color: "var(--sh-text-primary)" }}
-                        title={chapter.name}
-                      >
-                        {chapter.name}
-                      </p>
-
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={isMutating || isPending || archivedChapterLoading}
-                        onClick={() => {
-                          void handleRestoreArchivedChapter(chapter.id)
-                        }}
-                      >
-                        Restore
-                      </Button>
-
-                      <Button
-                        type="button"
-                        variant="danger"
-                        size="sm"
-                        disabled={isMutating || isPending || archivedChapterLoading}
-                        onClick={() => {
-                          void handleDeleteArchivedChapter(chapter.id, chapter.name)
-                        }}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setArchivedChapterModalOpen(false)}
-              disabled={isMutating || !!archivedChapterPendingId}
-            >
-              Close
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        isMutating={isMutating}
+        loading={archivedChapterLoading}
+        pendingId={archivedChapterPendingId}
+        subjectTitle={selectedSubject?.name ?? null}
+        rows={archivedChapterRows}
+        onClose={() => setArchivedChapterModalOpen(false)}
+        onRestore={(chapterId) => { void handleRestoreArchivedChapter(chapterId) }}
+        onDelete={(chapterId, chapterName) => { void handleDeleteArchivedChapter(chapterId, chapterName) }}
+      />
 
       <NameModal
         open={taskDialog.open}
@@ -3086,727 +2728,43 @@ const derivedHours = Math.max(0, Math.round((chapterTaskMinutes / 60) * 10) / 10
         onSubmit={handleSaveTaskTitle}
       />
 
-      <Modal
-        open={dependencyModalOpen}
-        onClose={() => {
-          if (isMutating || dependencySaving) return
-          setDependencyModalOpen(false)
-        }}
-        title={dependencyScope === "subject" ? "Set Dependencies (Subject)" : "Set Dependencies (Chapter)"}
-        size="md"
-      >
-        <div className="space-y-4">
-          {dependencyScope === "subject" ? (
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                Target Chapter
-              </label>
-              <select
-                value={dependencyTargetChapterId}
-                onChange={(event) => setDependencyTargetChapterId(event.target.value)}
-                className="ui-input"
-                disabled={isMutating || dependencyLoading || dependencySaving}
-              >
-                {dependencyTargetOptions.map((option) => (
-                  <option key={`dependency-target-${option.id}`} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : dependencyTargetOptions[0] ? (
-            <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-              Target: {dependencyTargetOptions[0].label}
-            </p>
-          ) : null}
+      <DependencyManagerModal
+        dependencyModalOpen={dependencyModalOpen}
+        dependencyScope={dependencyScope}
+        dependencyTargetOptions={dependencyTargetOptions}
+        dependencySearch={dependencySearch}
+        dependencyCandidates={dependencyCandidates}
+        dependencySelectedIds={dependencySelectedIds}
+        dependencyBusy={dependencyBusy}
+        isMutating={isMutating}
+        dependencyTargetChapterId={dependencyTargetChapterId}
+        setDependencyModalOpen={setDependencyModalOpen}
+        setDependencySearch={setDependencySearch}
+        toggleDependencySelection={toggleDependencySelection}
+        setDependencySelectedIds={setDependencySelectedIds}
+        handleSaveDependencies={() => { void handleSaveDependencies() }}
+      />
 
-          <Input
-            label="Search Chapters"
-            value={dependencySearch}
-            onChange={(event) => setDependencySearch(event.target.value)}
-            placeholder="Filter by subject or chapter"
-          />
-
-          <div
-            className="max-h-[280px] space-y-1.5 overflow-y-auto rounded-lg border p-2"
-            style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
-          >
-            {dependencyLoading ? (
-              <p className="px-1 py-2 text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                Loading chapter parameters...
-              </p>
-            ) : dependencyCandidates.length === 0 ? (
-              <p className="px-1 py-2 text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                No candidate chapters found.
-              </p>
-            ) : (
-              dependencyCandidates.map((candidate) => {
-                const selected = dependencySelectedIds.has(candidate.id)
-
-                return (
-                  <button
-                    key={`dependency-candidate-${candidate.id}`}
-                    type="button"
-                    onClick={() => toggleDependencySelection(candidate.id)}
-                    className="w-full rounded-md border px-2 py-1.5 text-left transition-colors"
-                    style={{
-                      borderColor: selected ? "var(--sh-primary-glow)" : "var(--sh-border)",
-                      background: selected ? "var(--sh-primary-muted)" : "transparent",
-                    }}
-                    disabled={isMutating || dependencySaving}
-                  >
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: selected ? "var(--sh-primary-light)" : "var(--sh-text-primary)" }}
-                    >
-                      {candidate.name}
-                    </p>
-                    <p className="text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
-                      {candidate.subjectName}
-                    </p>
-                  </button>
-                )
-              })
-            )}
-          </div>
-
-          <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
-            Selected prerequisites: {dependencySelectedIds.size}
-          </p>
-
-          <div className="flex items-center justify-between gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setDependencySelectedIds(new Set())}
-              disabled={isMutating || dependencySaving || dependencySelectedIds.size === 0}
-            >
-              Clear
-            </Button>
-
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setDependencyModalOpen(false)}
-                disabled={isMutating || dependencySaving}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  void handleSaveDependencies()
-                }}
-                disabled={isMutating || dependencySaving || dependencyLoading || !dependencyTargetChapterId}
-              >
-                {dependencySaving ? "Saving..." : "Save Dependencies"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
+      <TaskComposerModal
         open={taskComposerOpen}
+        isMutating={isMutating}
+        saving={taskComposerSaving}
+        taskCreateMode={taskCreateMode}
+        singleTaskTitle={singleTaskTitle}
+        bulkBaseName={bulkBaseName}
+        bulkCount={bulkCount}
+        bulkPreview={bulkPreview}
         onClose={() => {
-          if (taskComposerSaving || isMutating) return
           setTaskComposerOpen(false)
           resetTaskComposerFields()
         }}
-        title="Add Tasks"
-        size="md"
-      >
-        <form className="flex max-h-[calc(100vh-13rem)] flex-col" onSubmit={handleCreateTasks}>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setTaskCreateMode("single")}
-                className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-                style={{
-                  borderColor:
-                    taskCreateMode === "single" ? "var(--sh-primary-glow)" : "var(--sh-border)",
-                  color:
-                    taskCreateMode === "single" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-                  background:
-                    taskCreateMode === "single" ? "var(--sh-primary-muted)" : "transparent",
-                }}
-                disabled={isMutating || taskComposerSaving}
-              >
-                Single Task
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTaskCreateMode("bulk")}
-                className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-                style={{
-                  borderColor:
-                    taskCreateMode === "bulk" ? "var(--sh-primary-glow)" : "var(--sh-border)",
-                  color:
-                    taskCreateMode === "bulk" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-                  background:
-                    taskCreateMode === "bulk" ? "var(--sh-primary-muted)" : "transparent",
-                }}
-                disabled={isMutating || taskComposerSaving}
-              >
-                Bulk Series
-              </button>
-            </div>
-
-            {taskCreateMode === "single" ? (
-              <Input
-                required
-                label="Task Title"
-                value={singleTaskTitle}
-                onChange={(event) => setSingleTaskTitle(event.target.value)}
-                placeholder="e.g. Lecture review"
-              />
-            ) : (
-              <div className="space-y-3">
-                <Input
-                  required
-                  label="Base Name"
-                  value={bulkBaseName}
-                  onChange={(event) => setBulkBaseName(event.target.value)}
-                  placeholder="e.g. Lecture"
-                />
-
-                <Input
-                  required
-                  label="Count"
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={bulkCount}
-                  onChange={(event) => setBulkCount(event.target.value)}
-                />
-
-                {bulkPreview.length > 0 && (
-                  <div
-                    className="rounded-md border p-2.5"
-                    style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.015)" }}
-                  >
-                    <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                      Preview
-                    </p>
-                    <p className="mt-1 text-xs" style={{ color: "var(--sh-text-secondary)" }}>
-                      {bulkPreview.join("  |  ")}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4 flex items-center justify-end gap-2 border-t pt-3" style={{ borderColor: "var(--sh-border)" }}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setTaskComposerOpen(false)
-                resetTaskComposerFields()
-              }}
-              disabled={isMutating || taskComposerSaving}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm" disabled={isMutating || taskComposerSaving}>
-              {taskComposerSaving
-                ? "Saving..."
-                : taskCreateMode === "single"
-                  ? "Add Task"
-                  : "Create Series"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-    </div>
-  )
-}
-
-interface DraggableTaskRowProps {
-  task: TopicTaskItem
-  isPending: boolean
-  isDurationSaving: boolean
-  isReordering: boolean
-  canEdit: boolean
-  durationDraft: string
-  onToggle: (completed: boolean) => void
-  onDurationDraftChange: (value: string) => void
-  onDurationSave: () => void
-  onEdit: () => void
-  onDelete: () => void
-}
-
-function DraggableTaskRow({
-  task,
-  isPending,
-  isDurationSaving,
-  isReordering,
-  canEdit,
-  durationDraft,
-  onToggle,
-  onDurationDraftChange,
-  onDurationSave,
-  onEdit,
-  onDelete,
-}: DraggableTaskRowProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: task.id,
-  })
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging || isReordering ? 0.7 : 1,
-        borderColor: isDragging ? "var(--sh-primary-glow)" : "var(--sh-border)",
-        background: task.completed
-          ? "rgba(52, 211, 153, 0.08)"
-          : isDragging
-            ? "rgba(124, 108, 255, 0.1)"
-            : "rgba(255, 255, 255, 0.02)",
-        cursor: isDragging ? "grabbing" : "default",
-      }}
-      className="group rounded-lg border px-2 py-1.5 transition-colors"
-    >
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          disabled={!canEdit}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-xs transition-colors hover:bg-white/5 disabled:opacity-50"
-          style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)", touchAction: "none" }}
-          aria-label="Drag to reorder"
-          title="Drag to reorder"
-        >
-          <svg
-            className="h-3.5 w-3.5"
-            fill="currentColor"
-            viewBox="0 0 16 16"
-          >
-            <path d="M2 5h7v1H2V5zm0 3h7v1H2V8zm0 3h7v1H2v-1z" />
-            <path d="M10 5h4v1h-4V5zm0 3h4v1h-4V8zm0 3h4v1h-4v-1z" />
-          </svg>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onToggle(!task.completed)}
-          disabled={isPending || !canEdit}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors disabled:opacity-50"
-          style={{
-            borderColor: task.completed
-              ? "var(--sh-success)"
-              : "var(--sh-border)",
-            background: task.completed ? "var(--sh-success)" : "transparent",
-          }}
-          aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
-        >
-          {task.completed && (
-            <svg
-              className="h-3 w-3 text-white"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              viewBox="0 0 24 24"
-            >
-              <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
-
-        <div className="min-w-0 flex-1 flex items-center gap-2">
-          <p
-            className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through opacity-60" : ""} truncate`}
-            style={{ color: "var(--sh-text-primary)" }}
-            title={task.title}
-          >
-            {task.title}
-          </p>
-
-          <input
-            type="number"
-            min={MIN_SESSION_LENGTH_MINUTES}
-            max={MAX_SESSION_LENGTH_MINUTES}
-            value={durationDraft}
-            onChange={(event) => onDurationDraftChange(event.target.value)}
-            onBlur={onDurationSave}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault()
-                onDurationSave()
-              }
-            }}
-            disabled={isDurationSaving || !canEdit}
-            className="ui-input h-7 text-xs text-center"
-            style={{ width: "4.2rem" }}
-            title="Task duration (minutes)"
-          />
-
-          {isDurationSaving && (
-            <span className="text-[10px] shrink-0" style={{ color: "var(--sh-text-muted)" }}>
-              Saving...
-            </span>
-          )}
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1">
-          <RowActionButton
-            label="Edit task title"
-            onClick={onEdit}
-            disabled={isPending || isDurationSaving || !canEdit}
-          />
-          <RowActionButton
-            label="Delete task"
-            onClick={onDelete}
-            danger
-            disabled={isPending || isDurationSaving || !canEdit}
-          />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-interface NavigationColumnProps {
-  title: string
-  items: ColumnItem[]
-  activeId: string | null
-  emptyMessage: string
-  onSelect: (id: string) => void
-  reorderEnabled?: boolean
-  onReorder?: (orderedIds: string[]) => void
-  footer?: ReactNode
-}
-
-function NavigationColumn({
-  title,
-  items,
-  activeId,
-  emptyMessage,
-  onSelect,
-  reorderEnabled = false,
-  onReorder,
-  footer,
-}: NavigationColumnProps) {
-  const canReorder = reorderEnabled && Boolean(onReorder) && items.length > 1
-  const itemIds = useMemo(() => items.map((item) => item.id), [items])
-
-  const localSensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
-
-  function handleColumnDragEnd(event: DragEndEvent) {
-    if (!canReorder || !onReorder) return
-
-    const { active, over } = event
-    if (!over) return
-
-    const activeId = String(active.id)
-    const overId = String(over.id)
-    if (activeId === overId) return
-
-    const oldIndex = itemIds.indexOf(activeId)
-    const newIndex = itemIds.indexOf(overId)
-    if (oldIndex === -1 || newIndex === -1) return
-
-    onReorder(arrayMove(itemIds, oldIndex, newIndex))
-  }
-
-  return (
-    <section
-      className="w-[208px] min-w-[196px] h-full shrink-0 rounded-xl border px-2 py-2 snap-start flex flex-col overflow-hidden"
-      style={{
-        borderColor: "var(--sh-border)",
-        background: "color-mix(in srgb, var(--sh-card) 94%, var(--foreground) 6%)",
-      }}
-    >
-      <div className="px-1.5 pb-2 shrink-0">
-        <p
-          className="text-[11px] font-semibold uppercase tracking-[0.14em]"
-          style={{ color: "var(--sh-text-muted)" }}
-        >
-          {title}
-        </p>
-      </div>
-
-      <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto pr-1">
-        {items.length === 0 && (
-          <p className="px-2 py-4 text-sm" style={{ color: "var(--sh-text-muted)" }}>
-            {emptyMessage}
-          </p>
-        )}
-
-        {canReorder ? (
-          <DndContext
-            sensors={localSensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleColumnDragEnd}
-          >
-            <SortableContext items={itemIds} strategy={rectSortingStrategy}>
-              <div className="space-y-1.5">
-                {items.map((item) => (
-                  <DraggableNavigationItem
-                    key={item.id}
-                    item={item}
-                    isActive={item.id === activeId}
-                    onSelect={onSelect}
-                    reorderEnabled={canReorder}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        ) : (
-          items.map((item) => (
-            <NavigationItemCard
-              key={item.id}
-              item={item}
-              isActive={item.id === activeId}
-              onSelect={onSelect}
-            />
-          ))
-        )}
-      </div>
-
-      {footer && (
-        <div
-          className="mt-2 space-y-1.5 border-t px-1 pt-2 shrink-0"
-          style={{ borderColor: "var(--sh-border)" }}
-        >
-          {footer}
-        </div>
-      )}
-    </section>
-  )
-}
-
-interface NavigationItemCardProps {
-  item: ColumnItem
-  isActive: boolean
-  onSelect: (id: string) => void
-  dragAttributes?: DraggableAttributes
-  dragListeners?: DraggableSyntheticListeners
-  dragEnabled?: boolean
-  isDragging?: boolean
-}
-
-function NavigationItemCard({
-  item,
-  isActive,
-  onSelect,
-  dragAttributes,
-  dragListeners,
-  dragEnabled = false,
-  isDragging = false,
-}: NavigationItemCardProps) {
-  return (
-    <div
-      className="rounded-lg border p-1.5 transition-colors"
-      style={{
-        borderColor: isDragging
-          ? "var(--sh-primary-glow)"
-          : isActive
-            ? "var(--sh-primary-glow)"
-            : "transparent",
-        background: isDragging
-          ? "rgba(124,108,255,0.16)"
-          : isActive
-            ? "var(--sh-primary-muted)"
-            : "transparent",
-        opacity: isDragging ? 0.88 : 1,
-      }}
-    >
-      <div className="flex items-start gap-1.5">
-        <button
-          type="button"
-          onClick={() => onSelect(item.id)}
-          {...(dragEnabled ? (dragAttributes as object) : {})}
-          {...(dragEnabled ? (dragListeners as object) : {})}
-          className="min-w-0 flex-1 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-[rgba(124,108,255,0.08)]"
-          style={dragEnabled ? { touchAction: "none", cursor: isDragging ? "grabbing" : "grab" } : undefined}
-          title={dragEnabled ? `Drag to reorder ${item.label}` : undefined}
-        >
-          <p
-            className="truncate text-sm font-semibold"
-            style={{
-              color: isActive ? "var(--sh-primary-light)" : "var(--sh-text-primary)",
-            }}
-          >
-            {item.label}
-          </p>
-          {item.hint && (
-            <p className="mt-0.5 text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
-              {item.hint}
-            </p>
-          )}
-        </button>
-
-        <div className="flex shrink-0 items-center gap-1 pt-1">
-          {item.onEdit && (
-            <RowActionButton
-              label={`Edit ${item.label}`}
-              onClick={item.onEdit}
-            />
-          )}
-          {item.onDelete && (
-            <RowActionButton
-              label={`Delete ${item.label}`}
-              onClick={item.onDelete}
-              danger
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-interface DraggableNavigationItemProps {
-  item: ColumnItem
-  isActive: boolean
-  onSelect: (id: string) => void
-  reorderEnabled: boolean
-}
-
-function DraggableNavigationItem({
-  item,
-  isActive,
-  onSelect,
-  reorderEnabled,
-}: DraggableNavigationItemProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: item.id,
-    disabled: !reorderEnabled,
-  })
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-      }}
-    >
-      <NavigationItemCard
-        item={item}
-        isActive={isActive}
-        onSelect={onSelect}
-        isDragging={isDragging}
-        dragEnabled={reorderEnabled}
-        dragAttributes={attributes}
-        dragListeners={listeners}
+        onSubmit={(event) => handleCreateTasks(event)}
+        onTaskCreateModeChange={setTaskCreateMode}
+        onSingleTaskTitleChange={setSingleTaskTitle}
+        onBulkBaseNameChange={setBulkBaseName}
+        onBulkCountChange={setBulkCount}
       />
     </div>
   )
 }
 
-interface NameModalProps {
-  open: boolean
-  title: string
-  fieldLabel: string
-  value: string
-  placeholder: string
-  submitLabel: string
-  loading: boolean
-  onChange: (value: string) => void
-  onClose: () => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
-}
-
-function NameModal({
-  open,
-  title,
-  fieldLabel,
-  value,
-  placeholder,
-  submitLabel,
-  loading,
-  onChange,
-  onClose,
-  onSubmit,
-}: NameModalProps) {
-  return (
-    <Modal open={open} onClose={onClose} title={title} size="sm">
-      <form className="space-y-4" onSubmit={onSubmit}>
-        <Input
-          autoFocus
-          required
-          label={fieldLabel}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-        />
-
-        <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" size="sm" disabled={loading}>
-            {loading ? "Saving..." : submitLabel}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-interface RowActionButtonProps {
-  label: string
-  onClick: () => void
-  danger?: boolean
-  disabled?: boolean
-}
-
-function RowActionButton({ label, onClick, danger = false, disabled = false }: RowActionButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="rounded-md border p-1 transition-colors hover:bg-white/5 disabled:opacity-50"
-      style={{ borderColor: "var(--sh-border)", color: danger ? "#f87171" : "var(--sh-text-muted)" }}
-      aria-label={label}
-      title={label}
-    >
-      {danger ? (
-        <svg
-          className="h-3.5 w-3.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-        >
-          <path d="M3 6h18" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M8 6V4h8v2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M19 6l-1 14H6L5 6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      ) : (
-        <svg
-          className="h-3.5 w-3.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-        >
-          <path d="M12 20h9" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M16.5 3.5a2.1 2.1 0 113 3L7 19l-4 1 1-4 12.5-12.5z" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
-    </button>
-  )
-}

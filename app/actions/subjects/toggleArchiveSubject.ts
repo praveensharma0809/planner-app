@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { logger } from "@/lib/ops/logger"
 
 export type ToggleArchiveResponse =
   | { status: "SUCCESS"; archived: boolean }
@@ -49,7 +50,8 @@ export async function toggleArchiveSubject(subjectId: string): Promise<ToggleArc
     revalidatePath("/dashboard")
     revalidatePath("/planner")
     return { status: "SUCCESS", archived: newArchived }
-  } catch {
+  } catch (error) {
+    logger.error("toggleArchiveSubject", error)
     return { status: "ERROR", message: "Failed to toggle archive status." }
   }
 }

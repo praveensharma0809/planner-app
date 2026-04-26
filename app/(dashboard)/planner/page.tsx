@@ -31,8 +31,6 @@ export default async function PlannerPage() {
     .select("id, name, archived, sort_order")
     .eq("user_id", user.id)
     .eq("archived", false)
-    .not("name", "ilike", "others")
-    .not("name", "ilike", "__deprecated_others__")
     .order("sort_order", { ascending: true })
 
   const subjects = (subjectRows ?? []) as SubjectRow[]

@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { logger } from "@/lib/ops/logger"
 
 interface UpdateProfileInput {
   full_name: string
@@ -9,16 +10,35 @@ interface UpdateProfileInput {
   phone_number?: string
 }
 
+interface SavedProfileValues {
+  fullName: string
+  email: string
+  phoneNumber: string
+}
+
 type UpdateProfileResponse =
   | { status: "UNAUTHORIZED" }
   | { status: "ERROR"; message: string }
-  | { status: "SUCCESS" }
+  | { status: "PARTIAL_SUCCESS"; message: string; saved: SavedProfileValues }
+  | { status: "SUCCESS"; saved: SavedProfileValues }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const PHONE_PATTERN = /^[+]?[-()\s0-9]{7,20}$/
+// Indian mobile: 10 digits starting 6-9, optional +91 / 91 / 0 prefix and a single space or dash separator.
+const PHONE_PATTERN = /^(?:\+?91[\s-]?|0)?[6-9]\d{9}$/
 
 function normalizeOptional(value: string | undefined): string {
   return (value ?? "").trim()
+}
+
+function normalizeIndianPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "")
+  // Strip leading country code or trunk prefix to get the 10-digit subscriber number.
+  const subscriber = digits.startsWith("91") && digits.length === 12
+    ? digits.slice(2)
+    : digits.startsWith("0") && digits.length === 11
+      ? digits.slice(1)
+      : digits
+  return `+91${subscriber}`
 }
 
 export async function updateProfile(input: UpdateProfileInput): Promise<UpdateProfileResponse> {
@@ -35,7 +55,7 @@ export async function updateProfile(input: UpdateProfileInput): Promise<UpdatePr
     // Validate
     const fullName = input.full_name.trim()
     const normalizedEmail = normalizeOptional(input.email).toLowerCase()
-    const phoneNumber = normalizeOptional(input.phone_number)
+    const rawPhone = normalizeOptional(input.phone_number)
 
     if (!fullName) {
       return { status: "ERROR", message: "Full name is required." }
@@ -45,42 +65,60 @@ export async function updateProfile(input: UpdateProfileInput): Promise<UpdatePr
       return { status: "ERROR", message: "Please enter a valid email address." }
     }
 
-    if (phoneNumber && !PHONE_PATTERN.test(phoneNumber)) {
-      return { status: "ERROR", message: "Please enter a valid phone number." }
+    if (rawPhone && !PHONE_PATTERN.test(rawPhone)) {
+      return {
+        status: "ERROR",
+        message: "Enter a valid Indian mobile number (10 digits starting 6-9, optional +91 prefix).",
+      }
     }
 
-    const phoneDigits = phoneNumber.replace(/\D/g, "")
-    if (phoneNumber && (phoneDigits.length < 7 || phoneDigits.length > 15)) {
-      return { status: "ERROR", message: "Please enter a valid phone number." }
+    const storedPhone = rawPhone ? normalizeIndianPhone(rawPhone) : null
+
+    // Persist name + phone first so an email-change failure doesn't block unrelated edits.
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        full_name: fullName,
+        phone: storedPhone,
+      })
+      .eq("id", user.id)
+
+    if (profileError) {
+      return { status: "ERROR", message: profileError.message }
     }
+
+    revalidatePath("/dashboard")
+    revalidatePath("/dashboard/settings")
 
     const currentEmail = (user.email ?? "").trim().toLowerCase()
+    const savedNamePhone: SavedProfileValues = {
+      fullName,
+      email: currentEmail,
+      phoneNumber: storedPhone ?? "",
+    }
+
     if (normalizedEmail && normalizedEmail !== currentEmail) {
       const { error: emailError } = await supabase.auth.updateUser({
         email: normalizedEmail,
       })
 
       if (emailError) {
-        return { status: "ERROR", message: emailError.message }
+        return {
+          status: "PARTIAL_SUCCESS",
+          message: `Name and phone saved, but email change failed: ${emailError.message}`,
+          saved: savedNamePhone,
+        }
+      }
+
+      return {
+        status: "SUCCESS",
+        saved: { ...savedNamePhone, email: normalizedEmail },
       }
     }
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        full_name: fullName,
-        phone: phoneNumber || null,
-      })
-      .eq("id", user.id)
-
-    if (error) {
-      return { status: "ERROR", message: error.message }
-    }
-
-    revalidatePath("/dashboard")
-    revalidatePath("/dashboard/settings")
-    return { status: "SUCCESS" }
+    return { status: "SUCCESS", saved: savedNamePhone }
   } catch (error) {
+    logger.error("updateProfile", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

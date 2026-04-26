@@ -42,8 +42,19 @@ export function SettingsForm({ profile }: Props) {
       })
 
       if (result.status === "SUCCESS") {
-        setSavedValues({ fullName, email, phoneNumber })
+        setSavedValues(result.saved)
+        setFullName(result.saved.fullName)
+        setEmail(result.saved.email)
+        setPhoneNumber(result.saved.phoneNumber)
         setMessage({ type: "success", text: "Profile updated." })
+      } else if (result.status === "PARTIAL_SUCCESS") {
+        // Name + phone persisted; email change failed. Resync inputs to what the server
+        // actually saved so the form does not stay locked on the failed email value.
+        setSavedValues(result.saved)
+        setFullName(result.saved.fullName)
+        setEmail(result.saved.email)
+        setPhoneNumber(result.saved.phoneNumber)
+        setMessage({ type: "error", text: result.message })
       } else if (result.status === "ERROR") {
         setMessage({ type: "error", text: result.message })
       } else {
@@ -103,12 +114,14 @@ export function SettingsForm({ profile }: Props) {
         <input
           id="settings-phone"
           type="tel"
+          inputMode="tel"
+          autoComplete="tel-national"
           value={phoneNumber}
           onChange={(e) => setPhoneNumber(e.target.value)}
-          placeholder="+1 555 123 4567"
+          placeholder="+91 98765 43210"
           className="h-11 w-full rounded-xl border border-white/[0.1] bg-white/[0.04] px-3.5 text-sm text-white/90 placeholder:text-white/35 transition-[border-color,box-shadow,background-color] focus:border-indigo-300/45 focus:bg-white/[0.06] focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
         />
-        <p className="text-xs text-white/40">Optional. Must be valid if provided.</p>
+        <p className="text-xs text-white/40">Optional. Indian mobile (10 digits starting 6-9, optional +91 prefix).</p>
       </div>
 
       {message && (

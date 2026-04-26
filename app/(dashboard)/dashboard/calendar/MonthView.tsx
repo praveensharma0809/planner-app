@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { Task } from "@/lib/types/db"
@@ -89,6 +89,13 @@ export function MonthView({
   const [uncompletingId, setUncompletingId] = useState<string | null>(null)
   const [movingId, setMovingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [, startBackgroundRefresh] = useTransition()
+
+  const refreshInBackground = useCallback(() => {
+    startBackgroundRefresh(() => {
+      router.refresh()
+    })
+  }, [router])
 
   useEffect(() => {
     setTaskRows(tasks)
@@ -135,23 +142,33 @@ export function MonthView({
     }
   }, [selectedDay, handleKeyDown])
 
+  const setTaskCompletedLocally = (taskId: string, completed: boolean) => {
+    setTaskRows((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, completed } : t))
+    )
+  }
+
   const handleComplete = async (taskId: string) => {
     setCompletingId(taskId)
+    setTaskCompletedLocally(taskId, true) // optimistic
     try {
       const result = await setTaskCompletion(taskId, true)
-      if (result.status !== "SUCCESS") {
-        if (result.status === "UNAUTHORIZED") {
-          addToast("Please sign in again.", "error")
-        } else if (result.status === "NOT_FOUND") {
-          addToast("Task not found.", "error")
-        } else {
-          addToast(result.message || "Could not mark task complete.", "error")
-        }
+      if (result.status === "SUCCESS") {
+        refreshInBackground()
         return
       }
 
-      router.refresh()
+      // Rollback on failure
+      setTaskCompletedLocally(taskId, false)
+      if (result.status === "UNAUTHORIZED") {
+        addToast("Please sign in again.", "error")
+      } else if (result.status === "NOT_FOUND") {
+        addToast("Task not found.", "error")
+      } else {
+        addToast(result.message || "Could not mark task complete.", "error")
+      }
     } catch {
+      setTaskCompletedLocally(taskId, false)
       addToast("Could not mark task complete. Please try again.", "error")
     } finally {
       setCompletingId(null)
@@ -160,21 +177,24 @@ export function MonthView({
 
   const handleUncomplete = async (taskId: string) => {
     setUncompletingId(taskId)
+    setTaskCompletedLocally(taskId, false) // optimistic
     try {
       const result = await setTaskCompletion(taskId, false)
-      if (result.status !== "SUCCESS") {
-        if (result.status === "UNAUTHORIZED") {
-          addToast("Please sign in again.", "error")
-        } else if (result.status === "NOT_FOUND") {
-          addToast("Task not found.", "error")
-        } else {
-          addToast(result.message || "Could not undo completion.", "error")
-        }
+      if (result.status === "SUCCESS") {
+        refreshInBackground()
         return
       }
 
-      router.refresh()
+      setTaskCompletedLocally(taskId, true)
+      if (result.status === "UNAUTHORIZED") {
+        addToast("Please sign in again.", "error")
+      } else if (result.status === "NOT_FOUND") {
+        addToast("Task not found.", "error")
+      } else {
+        addToast(result.message || "Could not undo completion.", "error")
+      }
     } catch {
+      setTaskCompletedLocally(taskId, true)
       addToast("Could not undo completion. Please try again.", "error")
     } finally {
       setUncompletingId(null)
@@ -186,13 +206,26 @@ export function MonthView({
       addToast("Cannot move tasks to a past date.", "error")
       return
     }
+    const previousDate = taskRows.find((t) => t.id === taskId)?.scheduled_date
     setMovingId(taskId)
+    setTaskRows((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, scheduled_date: newDate } : t))
+    )
     try {
       const result = await rescheduleTask(taskId, newDate)
       if (result.status === "SUCCESS") {
-        router.refresh()
+        refreshInBackground()
         addToast("Task rescheduled.", "success")
-      } else if (result.status === "UNAUTHORIZED") {
+        return
+      }
+
+      // Rollback
+      if (previousDate) {
+        setTaskRows((prev) =>
+          prev.map((t) => (t.id === taskId ? { ...t, scheduled_date: previousDate } : t))
+        )
+      }
+      if (result.status === "UNAUTHORIZED") {
         addToast("Please sign in again to reschedule tasks.", "error")
       } else if (result.status === "INVALID_DATE") {
         addToast("Selected date is invalid.", "error")
@@ -202,6 +235,11 @@ export function MonthView({
         addToast(result.message || "Could not reschedule task.", "error")
       }
     } catch {
+      if (previousDate) {
+        setTaskRows((prev) =>
+          prev.map((t) => (t.id === taskId ? { ...t, scheduled_date: previousDate } : t))
+        )
+      }
       addToast("Could not reschedule task. Please try again.", "error")
     } finally {
       setMovingId(null)
@@ -217,6 +255,7 @@ export function MonthView({
       if (result.status === "SUCCESS" || result.status === "NOT_FOUND") {
         setTaskRows((previous) => previous.filter((task) => task.id !== taskId))
         addToast(result.status === "SUCCESS" ? "Task deleted." : "Task no longer exists.", "success")
+        refreshInBackground()
         return
       }
 

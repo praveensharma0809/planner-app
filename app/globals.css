@@ -357,7 +357,6 @@ body {
 
   /* ── Sidebar footer / user area ── */
   --user-email-color:    rgba(255, 255, 255, 0.62);
-  --user-plan-color:     rgba(255, 255, 255, 0.30);
   --user-avatar-bg:      rgba(124, 108, 255, 0.18);
   --user-avatar-color:   #A89EFF;
   --signout-hover-color: #EF4444;
@@ -397,7 +396,6 @@ body {
 
   /* ── Sidebar footer / user area (light) ── */
   --user-email-color:    rgba(0, 0, 0, 0.68);
-  --user-plan-color:     rgba(0, 0, 0, 0.40);
   --user-avatar-bg:      rgba(108, 92, 231, 0.12);
   --user-avatar-color:   #6C5CE7;
   --signout-hover-color: #DC2626;
@@ -587,11 +585,8 @@ body {
   flex-shrink: 0;
   user-select: none;
 }
-.sidebar-user-email {
+.sidebar-user-name {
   color: var(--user-email-color);
-}
-.sidebar-user-plan {
-  color: var(--user-plan-color);
 }
 .sidebar-signout-btn {
   color: var(--nav-item-color);
@@ -2226,6 +2221,23 @@ html {
   justify-content: center;
   flex-shrink: 0;
   color: #34D399;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+button.dashboard-task-complete-check:hover {
+  background: rgba(52, 211, 153, 0.28);
+}
+
+button.dashboard-task-complete-check:active {
+  transform: scale(0.94);
+}
+
+button.dashboard-task-complete-check:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .dashboard-task-completed-title {

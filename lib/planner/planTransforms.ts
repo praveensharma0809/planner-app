@@ -2,6 +2,19 @@
 import { inferSessionLengthMinutes } from "@/lib/planner/draft"
 import type { Topic } from "@/lib/types/db"
 
+/**
+ * Parameters used to configure planner behavior for a topic.
+ *
+ * @param topic_id - Unique identifier for the topic.
+ * @param estimated_hours - Estimated total study hours for this topic.
+ * @param deadline - ISO date string by which the topic must be completed, or null.
+ * @param earliest_start - ISO date string before which planning should not schedule this topic, or null.
+ * @param depends_on - Array of topic IDs that must be scheduled before this topic.
+ * @param session_length_minutes - Target length of each study session in minutes.
+ * @param rest_after_days - Minimum rest days required between sessions for spaced study.
+ * @param max_sessions_per_day - Maximum number of sessions allowed per day for this topic.
+ * @param study_frequency - Study frequency mode (e.g. "daily" or "spaced").
+ */
 export interface TopicParams {
   topic_id: string
   estimated_hours: number
@@ -14,6 +27,16 @@ export interface TopicParams {
   study_frequency: string
 }
 
+/**
+ * Raw database row shape for a planner task source (from topic_tasks table).
+ *
+ * @param id - Unique identifier for the task.
+ * @param topic_id - ID of the parent topic, or null if ad-hoc.
+ * @param title - Display title of the task.
+ * @param duration_minutes - Estimated duration of the task in minutes.
+ * @param sort_order - Optional ordering priority.
+ * @param created_at - ISO timestamp of task creation.
+ */
 export interface PlannerTaskSourceRow {
   id: string
   topic_id: string | null
@@ -23,6 +46,15 @@ export interface PlannerTaskSourceRow {
   created_at?: string
 }
 
+/**
+ * Normalized task source item used internally after mapping from database rows.
+ *
+ * @param id - Unique identifier for the task.
+ * @param title - Display title of the task.
+ * @param durationMinutes - Estimated duration of the task in minutes.
+ * @param sortOrder - Ordering priority.
+ * @param createdAt - ISO timestamp of task creation.
+ */
 export interface PlannerTaskSourceItem {
   id: string
   title: string
@@ -31,6 +63,15 @@ export interface PlannerTaskSourceItem {
   createdAt: string
 }
 
+/**
+ * Raw database row shape for a subject.
+ *
+ * @param id - Unique identifier for the subject.
+ * @param name - Display name of the subject.
+ * @param sort_order - Ordering priority within the user's subject list.
+ * @param deadline - Optional ISO date deadline for the subject.
+ * @param archived - Whether the subject is archived.
+ */
 export interface SubjectRow {
   id: string
   name: string
@@ -39,6 +80,20 @@ export interface SubjectRow {
   archived?: boolean | null
 }
 
+/**
+ * Represents a pending scheduled task that needs to be repositioned during reoptimization.
+ *
+ * @param id - Unique task identifier, or undefined for new tasks.
+ * @param subject_id - ID of the subject this task belongs to.
+ * @param topic_id - ID of the parent topic, or null if ad-hoc.
+ * @param title - Display title of the task.
+ * @param duration_minutes - Duration of the task in minutes.
+ * @param session_type - Type of session: "core", "revision", or "practice".
+ * @param session_number - 1-based index of this session within the topic's total sessions.
+ * @param total_sessions - Total scheduled sessions for the topic.
+ * @param scheduled_date - ISO date string the task is currently scheduled on.
+ * @param source_topic_task_id - ID of the source topic_task that generated this session, or null.
+ */
 export interface TaskToMove {
   id?: string
   subject_id: string
@@ -52,6 +107,25 @@ export interface TaskToMove {
   source_topic_task_id?: string | null
 }
 
+/**
+ * Metadata for a pending unit during reoptimization, tracking session details and source ordering.
+ *
+ * @param unitId - Unique identifier for the pending unit.
+ * @param topicId - ID of the parent topic, or null if ad-hoc.
+ * @param subjectId - ID of the subject this unit belongs to.
+ * @param subjectName - Display name of the subject.
+ * @param topicName - Display name of the topic.
+ * @param titleFallback - Fallback title to use if no session-specific title is available.
+ * @param sessionType - Default session type for this unit.
+ * @param remainingSessionTitles - Ordered list of session titles remaining to be scheduled.
+ * @param remainingSessionTypes - Ordered list of session types corresponding to remaining sessions.
+ * @param expectedSessions - Number of pending sessions for this unit.
+ * @param originalTotalSessions - Total sessions originally planned for the topic.
+ * @param remainingSessionNumbers - Ordered session numbers for remaining sessions.
+ * @param sourceTaskIds - Ordered list of source topic_task IDs for each remaining session.
+ * @param sessionLengthMinutes - Target session length in minutes.
+ * @param dependsOn - Array of topic IDs this unit depends on.
+ */
 export interface PendingUnitMeta {
   unitId: string
   topicId: string | null
@@ -70,6 +144,19 @@ export interface PendingUnitMeta {
   dependsOn: string[]
 }
 
+/**
+ * A flattened task snapshot used when writing scheduled sessions back to the database.
+ *
+ * @param subject_id - ID of the subject.
+ * @param topic_id - ID of the parent topic, or null if ad-hoc.
+ * @param title - Display title of the scheduled task.
+ * @param scheduled_date - ISO date string the task is scheduled on.
+ * @param duration_minutes - Duration of the task in minutes.
+ * @param session_type - Type of session: "core", "revision", or "practice".
+ * @param session_number - 1-based session index.
+ * @param total_sessions - Total sessions for the topic.
+ * @param source_topic_task_id - ID of the source topic_task, or null.
+ */
 export interface SnapshotTask {
   subject_id: string
   topic_id: string | null
@@ -82,6 +169,14 @@ export interface SnapshotTask {
   source_topic_task_id: string | null
 }
 
+/**
+ * Explanation of why one or more sessions for a topic could not be scheduled.
+ *
+ * @param topicId - ID of the affected topic, or null.
+ * @param title - Display name of the topic.
+ * @param droppedSessions - Number of sessions that could not be placed.
+ * @param reason - Human-readable reason for the drop.
+ */
 export interface DroppedReason {
   topicId: string | null
   title: string
@@ -89,6 +184,12 @@ export interface DroppedReason {
   reason: string
 }
 
+/**
+ * Maps a raw study frequency string to the PlannableUnit study_frequency type.
+ *
+ * @param value - Raw study frequency value ("spaced", null, or other string); null/undefined maps to undefined.
+ * @returns "spaced", "daily", or undefined.
+ */
 export function mapStudyFrequency(
   value: string | null | undefined
 ): PlannableUnit["study_frequency"] {
@@ -96,6 +197,12 @@ export function mapStudyFrequency(
   return value === "spaced" ? "spaced" : "daily"
 }
 
+/**
+ * Builds lookup maps from a list of subjects: name, sort order, and deadline keyed by subject ID.
+ *
+ * @param subjects - Array of SubjectRow records from the database.
+ * @returns Object with subjectNameMap (id → name), subjectOrderMap (id → sort_order), and subjectDeadlineMap (id → deadline).
+ */
 export function buildSubjectMaps(subjects: SubjectRow[]) {
   const subjectNameMap = new Map<string, string>()
   const subjectOrderMap = new Map<string, number>()
@@ -114,6 +221,13 @@ export function buildSubjectMaps(subjects: SubjectRow[]) {
   }
 }
 
+/**
+ * Sorts topics first by their parent subject's sort order, then by topic sort_order, created_at, and id.
+ *
+ * @param topics - Array of Topic objects to sort.
+ * @param subjectOrderMap - Map from subject ID to sort order.
+ * @returns A new sorted array of topics (does not mutate the input).
+ */
 export function sortTopicsBySubjectOrder(
   topics: Topic[],
   subjectOrderMap: Map<string, number>
@@ -130,6 +244,12 @@ export function sortTopicsBySubjectOrder(
   })
 }
 
+/**
+ * Converts raw database rows into a Map of TopicParams keyed by topic ID.
+ *
+ * @param rows - Array of raw rows from the topics table containing planner parameter columns.
+ * @returns Map from topic ID to normalized TopicParams.
+ */
 export function buildTopicParamMap(rows: Array<Record<string, unknown>>): Map<string, TopicParams> {
   const paramMap = new Map<string, TopicParams>()
 
@@ -151,6 +271,12 @@ export function buildTopicParamMap(rows: Array<Record<string, unknown>>): Map<st
   return paramMap
 }
 
+/**
+ * Groups and sorts planner task source rows by topic ID, filtering out invalid entries.
+ *
+ * @param tasks - Array of PlannerTaskSourceRow from the database.
+ * @returns Map from topic ID to a sorted array of PlannerTaskSourceItem.
+ */
 export function buildTaskSourceByTopic(
   tasks: PlannerTaskSourceRow[]
 ): Map<string, PlannerTaskSourceItem[]> {
@@ -197,6 +323,15 @@ function formatPlannedSessionTitle(topicName: string, taskTitle: string): string
   return `${cleanTopic} - ${cleanTask}`
 }
 
+/**
+ * Selects which source task a given session number maps to, using proportional allocation
+ * based on task durations.
+ *
+ * @param sourceTasks - Sorted array of source task items for the topic.
+ * @param sessionNumber - 1-based index of the session to resolve.
+ * @param totalSessions - Total number of sessions planned for the topic.
+ * @returns The matching PlannerTaskSourceItem, or null if no source tasks exist.
+ */
 export function resolveSessionSourceTask(
   sourceTasks: PlannerTaskSourceItem[],
   sessionNumber: number,
@@ -224,6 +359,15 @@ export function resolveSessionSourceTask(
   return sourceTasks[sourceTasks.length - 1] ?? null
 }
 
+/**
+ * Resolves the display title for a given session by combining the topic name with the matching source task title.
+ *
+ * @param topicName - Display name of the topic.
+ * @param sourceTasks - Sorted array of source task items for the topic.
+ * @param sessionNumber - 1-based session index.
+ * @param totalSessions - Total number of sessions planned.
+ * @returns Formatted session title string.
+ */
 export function resolveSessionTaskTitle(
   topicName: string,
   sourceTasks: PlannerTaskSourceItem[],
@@ -235,6 +379,21 @@ export function resolveSessionTaskTitle(
   return formatPlannedSessionTitle(topicName, sourceTask.title)
 }
 
+/**
+ * Builds PlannableUnit objects from active topics for fresh plan generation.
+ *
+ * Transforms each active topic into a planning unit with aggregated estimated minutes,
+ * inferred session length, and merged deadline/dependency/study-frequency parameters.
+ * Topics with zero estimated minutes are excluded.
+ *
+ * @param activeTopics - Array of active (non-archived) Topic records.
+ * @param paramMap - Map from topic ID to TopicParams.
+ * @param topicTaskSourceMap - Map from topic ID to sorted source task items.
+ * @param subjectNameMap - Map from subject ID to display name.
+ * @param subjectDeadlineMap - Map from subject ID to deadline date string.
+ * @param examDate - ISO date string representing the overall exam date (fallback deadline).
+ * @returns Array of PlannableUnit objects ready for the scheduling engine.
+ */
 export function buildUnitsFromActiveTopics(args: {
   activeTopics: Topic[]
   paramMap: Map<string, TopicParams>
@@ -276,6 +435,23 @@ export function buildUnitsFromActiveTopics(args: {
   })
 }
 
+/**
+ * Builds PlannableUnit objects for reoptimization, excluding minutes already covered by
+ * existing generated sessions.
+ *
+ * For each active topic, computes total minutes from source tasks, subtracts the reserved
+ * generated minutes, and creates a unit for the remaining minutes. Tracks total sessions
+ * per topic for later session-number continuation.
+ *
+ * @param activeTopics - Array of active Topic records.
+ * @param paramMap - Map from topic ID to TopicParams.
+ * @param topicTaskSourceMap - Map from topic ID to sorted source task items.
+ * @param subjectNameMap - Map from subject ID to display name.
+ * @param subjectDeadlineMap - Map from subject ID to deadline date string.
+ * @param examDate - ISO date string for the overall exam date.
+ * @param reservedGeneratedMinutesByTopic - Map from topic ID to minutes already covered by existing generated sessions.
+ * @returns Object with `units` (PlannableUnit[]) and `totalSessionsByTopic` (Map<string, number>).
+ */
 export function buildReoptimizeUnits(args: {
   activeTopics: Topic[]
   paramMap: Map<string, TopicParams>
@@ -337,6 +513,22 @@ export function buildReoptimizeUnits(args: {
   return { units, totalSessionsByTopic }
 }
 
+/**
+ * Builds PlannableUnit objects and rich metadata for existing scheduled tasks that are
+ * pending reoptimization.
+ *
+ * Groups pending tasks by topic (or treats them as ad-hoc units), calculates remaining
+ * minutes, and captures session ordering metadata for later task-to-snapshot mapping.
+ *
+ * @param pendingTasks - Array of TaskToMove records representing currently scheduled tasks.
+ * @param topicMap - Map from topic ID to Topic record.
+ * @param topicParamMap - Map from topic ID to TopicParams.
+ * @param subjectNameMap - Map from subject ID to display name.
+ * @param subjectDeadlineMap - Map from subject ID to deadline date string.
+ * @param examDate - ISO date string for the overall exam date.
+ * @param today - ISO date string for "today" (used as earliest_start for pending units).
+ * @returns Object with `pendingUnits` (PlannableUnit[]) and `pendingUnitMeta` (Map<string, PendingUnitMeta>).
+ */
 export function buildPendingUnitsAndMeta(args: {
   pendingTasks: TaskToMove[]
   topicMap: Map<string, Topic>
@@ -475,6 +667,18 @@ export function buildPendingUnitsAndMeta(args: {
   return { pendingUnits, pendingUnitMeta }
 }
 
+/**
+ * Converts the engine's scheduled session output into SnapshotTask records for database persistence,
+ * enriching each session with metadata from pending unit information.
+ *
+ * Uses pendingUnitMeta to resolve correct session numbers, titles, types, and source-task IDs
+ * in the original ordering. Tracks how many sessions were scheduled per unit for later
+ * dropped-session analysis.
+ *
+ * @param scheduledSessions - Array of ScheduledSession objects produced by the planner engine.
+ * @param pendingUnitMeta - Map from unit ID to PendingUnitMeta for all pending units.
+ * @returns Object with `scheduled` (SnapshotTask[]) and `scheduledCountByUnit` (Map<string, number>).
+ */
 export function mapScheduledToSnapshotTasks(
   scheduledSessions: ScheduledSession[],
   pendingUnitMeta: Map<string, PendingUnitMeta>
@@ -533,6 +737,18 @@ export function mapScheduledToSnapshotTasks(
   return { scheduled, scheduledCountByUnit }
 }
 
+/**
+ * Analyzes which pending units had sessions dropped and generates human-readable reasons.
+ *
+ * Compares expected sessions per unit against actually scheduled sessions, and
+ * categorizes drop reasons (no slot before deadline, dependency ordering constraints,
+ * or session length exceeding available capacity).
+ *
+ * @param pendingUnitMeta - Map from unit ID to PendingUnitMeta.
+ * @param scheduledCountByUnit - Map from unit ID to number of sessions actually scheduled.
+ * @param maxAvailableSlot - Maximum available minutes in any remaining day slot.
+ * @returns Array of DroppedReason objects.
+ */
 export function buildDroppedReasons(args: {
   pendingUnitMeta: Map<string, PendingUnitMeta>
   scheduledCountByUnit: Map<string, number>

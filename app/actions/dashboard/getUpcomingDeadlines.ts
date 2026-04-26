@@ -1,6 +1,8 @@
 ﻿"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { subjectBareRowArraySchema } from "@/lib/contracts/schemas"
+import { logger } from "@/lib/ops/logger"
 
 export interface UpcomingDeadline {
   topic_id: string
@@ -54,15 +56,13 @@ export async function getUpcomingDeadlines(): Promise<GetUpcomingDeadlinesRespon
         .from("subjects")
         .select("id, name")
         .eq("archived", false)
-        .not("name", "ilike", "others")
-        .not("name", "ilike", "__deprecated_others__")
         .in("id", subjectIds)
 
       if (subjectsError) {
         return { status: "ERROR", message: subjectsError.message }
       }
 
-      subjects = (subjectRows ?? []) as Array<{ id: string; name: string }>
+      subjects = subjectBareRowArraySchema.parse(subjectRows ?? [])
     }
 
     const subjectNameMap = new Map<string, string>()
@@ -88,6 +88,7 @@ export async function getUpcomingDeadlines(): Promise<GetUpcomingDeadlinesRespon
 
     return { status: "SUCCESS", deadlines }
   } catch (error) {
+    logger.error("getUpcomingDeadlines", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

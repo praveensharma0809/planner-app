@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/app/components/Toast"
 import { Modal } from "@/app/components/ui"
@@ -31,6 +31,7 @@ export function AddTaskButton({
 }: AddTaskButtonProps) {
   const router = useRouter()
   const { addToast } = useToast()
+  const [, startRefresh] = useTransition()
 
   const subjectOptions = useMemo(
     () => [...subjects, { id: STANDALONE_SUBJECT_ID, name: STANDALONE_SUBJECT_LABEL }],
@@ -79,7 +80,10 @@ export function AddTaskButton({
         addToast("Task created.", "success")
         setOpen(false)
         resetForm()
-        router.refresh()
+        // Refresh in a transition so it does not block this component (no spinner takeover).
+        startRefresh(() => {
+          router.refresh()
+        })
         onCreated?.()
         return
       }

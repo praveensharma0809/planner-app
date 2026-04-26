@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { logger } from "@/lib/ops/logger"
 
 export type ReorderChaptersActionResponse =
   | { status: "UNAUTHORIZED" }
@@ -44,6 +45,7 @@ export async function reorderChapters(
     revalidatePath("/planner")
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("reorderChapters", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

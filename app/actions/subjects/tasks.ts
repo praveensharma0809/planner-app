@@ -6,6 +6,7 @@ import {
   MAX_SESSION_LENGTH_MINUTES,
   MIN_SESSION_LENGTH_MINUTES,
 } from "@/lib/planner/draft"
+import { logger } from "@/lib/ops/logger"
 
 type TaskNamingPlacement = "suffix" | "prefix"
 
@@ -218,6 +219,7 @@ export async function createSubjectTask(
     revalidateTaskViews()
     return { status: "SUCCESS", taskId: inserted.id }
   } catch (error) {
+    logger.error("createSubjectTask", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -284,6 +286,7 @@ export async function bulkCreateSubjectTasks(
     revalidateTaskViews()
     return { status: "SUCCESS", createdCount: inserted?.length ?? count }
   } catch (error) {
+    logger.error("bulkCreateSubjectTasks", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -336,6 +339,7 @@ export async function updateSubjectTaskTitle(taskId: string, title: string): Pro
 
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("updateSubjectTaskTitle", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -390,6 +394,7 @@ export async function updateSubjectTaskDuration(
     revalidateTaskViews()
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("updateSubjectTaskDuration", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -452,6 +457,7 @@ export async function bulkUpdateSubjectTaskDuration(
     revalidateTaskViews()
     return { status: "SUCCESS", updatedCount: updatedRows?.length ?? uniqueTaskIds.length }
   } catch (error) {
+    logger.error("bulkUpdateSubjectTaskDuration", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -499,6 +505,7 @@ export async function deleteSubjectTask(taskId: string): Promise<TaskActionRespo
 
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("deleteSubjectTask", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -545,6 +552,7 @@ export async function deleteSubjectTasks(
 
     return { status: "SUCCESS", deletedCount: deletedRows?.length ?? 0 }
   } catch (error) {
+    logger.error("deleteSubjectTasks", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -609,6 +617,7 @@ export async function reorderTasks(input: ReorderTasksInput): Promise<TaskAction
     revalidateTaskViews()
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("reorderTasks", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -651,6 +660,7 @@ export async function completeSubjectTask(taskId: string): Promise<CompleteSubje
     revalidateTaskViews()
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("completeSubjectTask", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
@@ -693,6 +703,7 @@ export async function uncompleteSubjectTask(taskId: string): Promise<UncompleteS
     revalidateTaskViews()
     return { status: "SUCCESS" }
   } catch (error) {
+    logger.error("uncompleteSubjectTask", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",

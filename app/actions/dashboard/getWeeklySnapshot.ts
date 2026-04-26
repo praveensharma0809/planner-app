@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isCanonicalIntakeManualTask } from "@/lib/planner/contracts"
 import { getTodayLocalDate, normalizeLocalDate } from "@/lib/tasks/getTasksForDate"
+import { logger } from "@/lib/ops/logger"
 import type { Task } from "@/lib/types/db"
 
 export type GetWeeklySnapshotResponse =
@@ -66,6 +67,7 @@ export async function getWeeklySnapshot(weekOf?: string): Promise<GetWeeklySnaps
       tasks
     }
   } catch (error) {
+    logger.error("getWeeklySnapshot", error)
     return {
       status: "ERROR",
       message: error instanceof Error ? error.message : "Unexpected error",
