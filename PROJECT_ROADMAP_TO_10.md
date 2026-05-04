@@ -1143,8 +1143,8 @@ This is the **single source of truth for what gets done next**. Each row is a se
 | 18 | A | A.12 — Codemod sweep (dead imports, console.logs, stale refs, 53 error.message leaks) | `app/actions/**/*.ts` (27 files), `lib/ops/telemetry.ts` | Kimi K2.6 | P.2 | ✅ DONE | S2 |
 | 19 | P | P.7 — Codemod sweep (overlaps A.12 — executed once, counted both) | see A.12 | Kimi K2.6 | P.2 | ✅ DONE | S2 |
 | 20 | P | P.8 — Audit + permanent fix: `PlanIssueModal` migrated to shared `<Modal>`; both `SubjectDrawer`s consolidated into `app/components/subjects/SubjectDrawer.tsx` using shared `<Modal>` + `initialFocusRef`; old files deleted. `Tabs` not vulnerable; `Dropdown` deferred to Cluster F (a11y polish only) | `app/(dashboard)/planner/components/PlanIssueModal.tsx`, `app/components/subjects/SubjectDrawer.tsx` (new), `app/(dashboard)/planner/subjects-data-table.tsx`, `app/(dashboard)/dashboard/subjects/subjects-data-table.tsx`; deleted `app/(dashboard)/planner/SubjectDrawer.tsx` + `app/(dashboard)/dashboard/subjects/SubjectDrawer.tsx` | Opus 4.7 | P.6 | ✅ DONE | S2 |
-| 21 | P | P.9 — E2E test: 10-keystroke focus retention on Add-Task title (Overview + Calendar) | new `e2e/add-task-focus.spec.ts` | Sonnet 4.6 | P.6 | ⬜ TODO | — |
-| 22 | P | P.10 — Component test for Modal focus stability under re-render | new `tests/components/ui/Modal.focus.test.tsx` | Sonnet 4.6 | P.6 | ⬜ TODO | — |
+| 21 | P | P.9 — E2E test: 10-keystroke focus retention on Add-Task title (Overview + Calendar) | new `e2e/add-task-focus.spec.ts` | Sonnet 4.6 | P.6 | ✅ DONE | S2 |
+| 22 | P | P.10 — Component test for Modal focus stability under re-render (6 tests, all green) | new `tests/components/ui/Modal.focus.test.tsx` | Sonnet 4.6 | P.6 | ✅ DONE | S2 |
 | 23 | P | P.11 — ESLint rule enforcing `initialFocusRef` on `<Modal>` | `eslint-rules/require-modal-initial-focus-ref.js`, `eslint.config.mjs` | DeepSeek V4 Pro | P.2 | ✅ DONE | S2 |
 | 24 | P | P.12 — Storybook: "Modal — focus stability under re-render" | `.storybook/` | Sonnet 4.6 | E.9 (storybook scaffold) | 🟧 BLOCKED on E.9 | — |
 
@@ -1160,20 +1160,20 @@ This is the **single source of truth for what gets done next**. Each row is a se
 
 | Seq | Task | Model | Depends | Status |
 |---|---|---|---|---|
-| B.1 | Migration `0005_profiles_timezone.sql` | Sonnet 4.6 | — | 🟧 will block-on-apply |
-| B.2 | Migration `0006_planner_drafts.sql` | Sonnet 4.6 | — | 🟧 will block-on-apply |
-| B.3 | Migration `0007_audit_log.sql` | Opus 4.7 | — | 🟧 will block-on-apply |
-| B.4 | Migration `0008_soft_delete.sql` | Opus 4.7 | — | 🟧 will block-on-apply |
+| B.1 | Migration `0005_profiles_timezone.sql` | DeepSeek V4 Pro | — | 🟧 will block-on-apply |
+| B.2 | Migration `0006_planner_drafts.sql` | DeepSeek V4 Pro | — | 🟧 will block-on-apply |
+| B.3 | Migration `0007_audit_log.sql` | DeepSeek V4 Pro | — | 🟧 will block-on-apply |
+| B.4 | Migration `0008_soft_delete.sql` | DeepSeek V4 Pro | — | 🟧 will block-on-apply |
 | B.5 | Migration `0009_subject_color.sql` | DeepSeek V4 Pro | — | 🟧 will block-on-apply |
-| B.6 | Rewrite `commit_plan_atomic_v2_wrapper` canonical hash | Opus 4.7 | — | ⬜ TODO |
+| B.6 | Rewrite `commit_plan_atomic_v2_wrapper` canonical hash | Opus 4.7 ⭐ | — | ⬜ TODO |
 | B.7 | Drop redundant `keep_mode='future'` branch | DeepSeek V4 Pro | B.6 | ⬜ TODO |
 | B.8 | RPC `bulk_reorder` | DeepSeek V4 Pro | — | ⬜ TODO |
 | B.9 | RPC `unarchive_subject` | DeepSeek V4 Pro | B.4 applied | ⬜ TODO |
 | B.10 | RPC `duplicate_subject` | DeepSeek V4 Pro | — | ⬜ TODO |
-| B.11 | Refactor `commit_plan_atomic_v2` (single CTE validation) | Opus 4.7 | B.6 | ⬜ TODO |
-| B.12 | Tighten `ops_events_owner_insert` RLS policy | Sonnet 4.6 | — | ⬜ TODO |
+| B.11 | Refactor `commit_plan_atomic_v2` (single CTE validation) | Opus 4.7 ⭐ | B.6 | ⬜ TODO |
+| B.12 | Tighten `ops_events_owner_insert` RLS policy | DeepSeek V4 Pro | — | ⬜ TODO |
 | B.13 | Cron: archive `plan_snapshots` >90 d | DeepSeek V4 Pro | — | ⬜ TODO |
-| B.14 | Sync `lib/contracts/schemas.ts:plannerSettingsSchema` with SQL | Sonnet 4.6 | — | ⬜ TODO |
+| B.14 | Sync `lib/contracts/schemas.ts:plannerSettingsSchema` with SQL | Qwen3.6 Plus | — | ⬜ TODO |
 | B.15 | Generate Supabase types; replace 207 `as` casts | Kimi K2.6 | — | ⬜ TODO |
 
 ### Cluster C — Server Actions & Auth
@@ -1523,4 +1523,4 @@ Any one of:
 
 ---
 
-*End of roadmap. Companion to `PROJECT_AUDIT.md`. Generated 2026-05-04. Last updated: Session 2 — 2026-05-04 (Cluster A + codemod sweep + P.8 permanent fix landed; Phase 0 ~95% done; next: P.9 + P.10 tests on Sonnet 4.6).*
+*End of roadmap. Companion to `PROJECT_AUDIT.md`. Generated 2026-05-04. Last updated: Session 2 — 2026-05-04 (Cluster A + codemod sweep + P.8 permanent fix + P.9 E2E + P.10 component tests landed; Phase 0 closed; score 5.7 → 6.0; next: Phase 1).*
