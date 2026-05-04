@@ -11,13 +11,14 @@ import {
 import dynamic from "next/dynamic"
 import { Sidebar } from "@/app/components/layout/Sidebar"
 import { ScheduleTopbarProvider } from "@/app/components/layout/ScheduleTopbarContext"
-const GlobalFounderMessage = dynamic(
-  () => import("@/app/components/FounderMessageModal").then((m) => ({ default: m.GlobalFounderMessage })),
-  { ssr: false }
-)
 
 const Topbar = dynamic(
   () => import("@/app/components/layout/Topbar").then((m) => m.Topbar),
+  { ssr: false }
+)
+
+const GlobalFounderMessage = dynamic(
+  () => import("@/app/components/FounderMessageModal").then((m) => ({ default: m.GlobalFounderMessage })),
   { ssr: false }
 )
 
@@ -63,7 +64,7 @@ export function useSidebar() {
  *     {children}
  *   </AppShell>
  */
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, showFounderMessage = false }: { children: ReactNode; showFounderMessage?: boolean }) {
   // Persist collapsed state across route-change remounts
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -139,7 +140,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Topbar />
             <main className="shell-main flex h-full min-h-0 w-full min-w-0 flex-col items-stretch overflow-hidden">{children}</main>
           </div>
-          <GlobalFounderMessage />
+          <GlobalFounderMessage showOnMount={showFounderMessage} />
         </div>
       </ScheduleTopbarProvider>
     </SidebarContext.Provider>

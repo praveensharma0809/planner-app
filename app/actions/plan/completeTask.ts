@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
@@ -177,7 +177,7 @@ export async function completeTask(taskId: string) {
     logger.error("completeTask", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     } satisfies CompleteTaskResponse
   }
 }

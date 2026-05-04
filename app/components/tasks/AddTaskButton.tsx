@@ -1,6 +1,6 @@
-﻿"use client"
+"use client"
 
-import { useEffect, useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/app/components/Toast"
 import { Modal } from "@/app/components/ui"
@@ -44,6 +44,11 @@ export function AddTaskButton({
   const [scheduledDate, setScheduledDate] = useState(initialDate)
   const [durationMinutes, setDurationMinutes] = useState(60)
   const [saving, setSaving] = useState(false)
+
+  // Layer 3b: ref passed to Modal so the title input receives initial focus
+  // instead of the first focusable element (which would be the close button
+  // before this fix).
+  const titleInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setScheduledDate(initialDate)
@@ -127,6 +132,7 @@ export function AddTaskButton({
         }}
         title="Add Task"
         size="md"
+        initialFocusRef={titleInputRef}
       >
         <div className="space-y-3">
           <label className="block">
@@ -134,6 +140,7 @@ export function AddTaskButton({
               Title
             </span>
             <input
+              ref={titleInputRef}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Enter task title"
@@ -144,7 +151,6 @@ export function AddTaskButton({
                 color: "var(--sh-text-primary)",
               }}
               disabled={saving}
-              autoFocus
             />
           </label>
 

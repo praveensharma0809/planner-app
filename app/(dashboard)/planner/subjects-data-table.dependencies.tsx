@@ -1,3 +1,4 @@
+import { useRef } from "react"
 import { Button, Input, Modal } from "@/app/components/ui"
 
 type DependencyScope = "subject" | "chapter"
@@ -35,6 +36,7 @@ export function DependencyManagerModal({
   setDependencySelectedIds,
   handleSaveDependencies,
 }: DependencyManagerModalProps) {
+  const searchInputRef = useRef<HTMLInputElement>(null)
   return (
     <Modal
       open={dependencyModalOpen}
@@ -44,6 +46,7 @@ export function DependencyManagerModal({
       }}
       title={dependencyScope === "subject" ? "Set Dependencies (Subject)" : "Set Dependencies (Chapter)"}
       size="md"
+      initialFocusRef={searchInputRef}
     >
       <div className="space-y-4">
         {dependencyTargetOptions[0] ? (
@@ -54,6 +57,7 @@ export function DependencyManagerModal({
         ) : null}
 
         <Input
+          ref={searchInputRef}
           label={dependencyScope === "subject" ? "Search Subjects" : "Search Chapters"}
           value={dependencySearch}
           onChange={(event) => setDependencySearch(event.target.value)}

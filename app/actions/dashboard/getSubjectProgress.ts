@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/ops/logger"
@@ -10,7 +10,7 @@ export interface SubjectProgress {
   total_tasks: number
   completed_tasks: number
   earliest_deadline: string | null
-  /** 0–100 */
+  /** 0�100 */
   percent: number
   /** days until earliest deadline (negative = overdue), null if no deadline */
   daysLeft: number | null
@@ -142,7 +142,7 @@ export async function getSubjectProgress(): Promise<GetSubjectProgressResponse> 
     logger.error("getSubjectProgress", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

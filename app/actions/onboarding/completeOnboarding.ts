@@ -26,7 +26,6 @@ export async function completeOnboarding(): Promise<CompleteOnboardingResponse> 
         {
           id: user.id,
           full_name: user.email?.split("@")[0] ?? "User",
-          onboarding_completed: true,
         },
         { onConflict: "id" }
       )
@@ -47,7 +46,7 @@ export async function completeOnboarding(): Promise<CompleteOnboardingResponse> 
     logger.error("completeOnboarding", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

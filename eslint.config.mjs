@@ -1,10 +1,23 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import requireModalInitialFocusRef from "./eslint-rules/require-modal-initial-focus-ref.js";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    plugins: {
+      local: {
+        rules: {
+          "require-modal-initial-focus-ref": requireModalInitialFocusRef,
+        },
+      },
+    },
+    rules: {
+      "local/require-modal-initial-focus-ref": "warn",
+    },
+  },
   {
     files: ["**/*.{js,mjs,cjs,ts,tsx}"],
     rules: {

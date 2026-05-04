@@ -1,4 +1,6 @@
-﻿type OpsEventStatus = "started" | "success" | "error" | "warning"
+﻿import { logger } from "./logger"
+
+type OpsEventStatus = "started" | "success" | "error" | "warning"
 
 type Primitive = string | number | boolean | null
 
@@ -101,9 +103,9 @@ export async function trackServerEvent(input: TrackServerEventInput): Promise<vo
   }
 
   try {
-    console.info("[ops-event]", JSON.stringify(eventRow))
+    logger.info("[ops-event]", JSON.stringify(eventRow))
   } catch {
-    console.info("[ops-event]", input.eventName, input.status)
+    logger.info("[ops-event]", `${input.eventName} ${input.status}`)
   }
 
   if (!dbTelemetryEnabled() || !input.supabase) {
@@ -128,11 +130,10 @@ export async function trackServerEvent(input: TrackServerEventInput): Promise<vo
         : null
 
     if (error) {
-      console.error("[ops-event] db insert failed:", error.message ?? "Unknown error")
+      logger.error("[ops-event] db insert failed", error, error.message ?? "Unknown error")
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown telemetry error"
-    console.error("[ops-event] db insert exception:", message)
+    logger.error("[ops-event] db insert exception", error)
   }
 }
 

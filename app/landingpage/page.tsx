@@ -40,26 +40,26 @@ const howCards = [
 const testimonials = [
   {
     initials: "RK",
-    name: "Rohan K.",
-    role: "JEE Main Aspirant",
+    name: "JEE Main Aspirant",
+    role: "JEE Main",
     quote:
-      "I used to make a plan on Day 1 and abandon it by Day 3. PrepVeda showed me my Calculus deadline was impossible before I even started. First time I have finished a syllabus on time.",
+      "JEE aspirant with 6 subjects — used feasibility preview to spot an impossible Calculus deadline before committing the plan, then adjusted weekday capacity to make it work.",
     tone: "#4F46E5",
   },
   {
     initials: "PS",
-    name: "Priya S.",
-    role: "UPSC CSE 2026",
+    name: "UPSC CSE 2026",
+    role: "UPSC CSE",
     quote:
-      "The feasibility bars are game-changing. I had six subjects and no idea which were safe. PrepVeda color-coded everything and told me exactly where to add time.",
+      "UPSC aspirant balancing six subjects — used color-coded feasibility bars to see which were safe and which needed more study time, then re-ran the planner with updated constraints.",
     tone: "#F43F5E",
   },
   {
     initials: "AM",
-    name: "Aryan M.",
-    role: "GATE ECE 2026",
+    name: "GATE ECE 2026",
+    role: "GATE ECE",
     quote:
-      "I travel on weekdays. PrepVeda lets me set different capacities per day, so I am not lying to myself. The calendar view helps me spot crunch weeks in advance.",
+      "GATE aspirant who travels on weekdays — set different per-day capacities so the schedule reflects real availability, then used the calendar view to spot crunch weeks in advance.",
     tone: "#7C3AED",
   },
 ];
@@ -235,9 +235,9 @@ export default function LandingPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-5 text-sm font-semibold text-[#9294B4]">
-                <span>Free plan forever</span>
+                <span>Free plan included</span>
                 <span>No credit card</span>
-                <span>&lt; 2s to generate plan</span>
+                <span>Fast plan generation</span>
               </div>
             </div>
 
@@ -510,7 +510,7 @@ export default function LandingPage() {
                   <ul className="feature-list">
                     <li>One-tap task completion</li>
                     <li>Drag-and-drop rescheduling</li>
-                    <li>Streak and focus tracking</li>
+                    <li>Progress tracking</li>
                   </ul>
                 </div>
               </div>
@@ -524,22 +524,21 @@ export default function LandingPage() {
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-14">
               <div className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.08em] text-emerald-600 mb-5">
-                From the community
-              </div>
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-[#0B0C1A]">Students who made the switch.</h2>
+How students use it
+               </div>
+               <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-[#0B0C1A]">Scenarios PrepVeda is built for.</h2>
             </div>
 
             <div className="grid md:grid-cols-3 gap-6">
               {testimonials.map((item) => (
                 <article key={item.name} className="rounded-3xl bg-white border border-black/[0.07] p-7 soft-shadow card-hover">
-                  <div className="mb-4 text-[#0B0C1A]">★★★★★</div>
-                  <p className="text-[#454772] font-medium leading-relaxed mb-6">{item.quote}</p>
-                  <div className="pt-5 border-t border-black/[0.06] flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-extrabold" style={{ backgroundColor: `${item.tone}20`, color: item.tone }}>
-                      {item.initials}
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-[#0B0C1A]">{item.name}</div>
+<p className="text-[#454772] font-medium leading-relaxed mb-6">{item.quote}</p>
+                   <div className="pt-5 border-t border-black/[0.06] flex items-center gap-3">
+                     <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-extrabold" style={{ backgroundColor: `${item.tone}20`, color: item.tone }}>
+                       {item.initials}
+                     </div>
+                     <div>
+                       <div className="text-sm font-bold text-[#0B0C1A]">{item.name}</div>
                       <div className="text-xs font-medium text-[#9294B4]">{item.role}</div>
                     </div>
                   </div>
@@ -636,14 +635,14 @@ export default function LandingPage() {
               <br />
               <span className="accent-gradient-text">Start scheduling.</span>
             </h2>
-            <p className="text-xl text-white/60 font-medium mb-10 max-w-xl mx-auto">Build your first feasibility-checked plan in under 5 minutes.</p>
+            <p className="text-xl text-white/60 font-medium mb-10 max-w-xl mx-auto">Build your first feasibility-checked plan in minutes.</p>
             <Link
               href="/auth/login"
               className="inline-flex px-10 py-5 rounded-2xl bg-[#F43F5E] hover:bg-[#E11D48] text-white text-lg font-bold shadow-[0_12px_48px_rgba(244,63,94,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0C1A] transition-all"
             >
               Create your plan
             </Link>
-            <div className="mt-5 text-sm font-semibold text-white/30">No credit card · Free plan forever</div>
+            <div className="mt-5 text-sm font-semibold text-white/30">No credit card · Free plan included</div>
           </div>
         </section>
 

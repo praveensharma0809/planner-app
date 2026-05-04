@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { revalidatePath } from "next/cache"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
@@ -48,7 +48,7 @@ export async function reorderChapters(
     logger.error("reorderChapters", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
@@ -222,7 +222,7 @@ export async function createSubjectTask(
     logger.error("createSubjectTask", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -289,7 +289,7 @@ export async function bulkCreateSubjectTasks(
     logger.error("bulkCreateSubjectTasks", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -342,7 +342,7 @@ export async function updateSubjectTaskTitle(taskId: string, title: string): Pro
     logger.error("updateSubjectTaskTitle", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -397,7 +397,7 @@ export async function updateSubjectTaskDuration(
     logger.error("updateSubjectTaskDuration", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -460,7 +460,7 @@ export async function bulkUpdateSubjectTaskDuration(
     logger.error("bulkUpdateSubjectTaskDuration", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -508,7 +508,7 @@ export async function deleteSubjectTask(taskId: string): Promise<TaskActionRespo
     logger.error("deleteSubjectTask", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -555,7 +555,7 @@ export async function deleteSubjectTasks(
     logger.error("deleteSubjectTasks", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -620,7 +620,7 @@ export async function reorderTasks(input: ReorderTasksInput): Promise<TaskAction
     logger.error("reorderTasks", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -663,7 +663,7 @@ export async function completeSubjectTask(taskId: string): Promise<CompleteSubje
     logger.error("completeSubjectTask", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -706,7 +706,7 @@ export async function uncompleteSubjectTask(taskId: string): Promise<UncompleteS
     logger.error("uncompleteSubjectTask", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
@@ -112,7 +112,7 @@ export async function rescheduleTask(taskId: string, newDate: string): Promise<R
     logger.error("rescheduleTask", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

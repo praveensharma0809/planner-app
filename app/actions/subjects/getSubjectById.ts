@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { subjectSchema } from "@/lib/contracts/schemas"
@@ -35,7 +35,7 @@ export async function getSubjectById(subjectId: string): Promise<GetSubjectByIdR
     logger.error("getSubjectById", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

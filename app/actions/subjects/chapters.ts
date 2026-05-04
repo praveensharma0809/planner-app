@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
@@ -78,7 +78,7 @@ export async function getArchivedChapters(subjectId?: string): Promise<GetArchiv
     logger.error("getArchivedChapters", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -150,7 +150,7 @@ export async function addChapter(subjectId: string, name: string): Promise<AddCh
     logger.error("addChapter", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -256,7 +256,7 @@ export async function updateChapter(
     logger.error("updateChapter", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -313,7 +313,7 @@ export async function deleteChapter(chapterId: string): Promise<ChapterActionRes
     logger.error("deleteChapter", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -360,7 +360,7 @@ export async function archiveChapter(chapterId: string): Promise<ChapterActionRe
     logger.error("archiveChapter", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -407,7 +407,7 @@ export async function unarchiveChapter(chapterId: string): Promise<ChapterAction
     logger.error("unarchiveChapter", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

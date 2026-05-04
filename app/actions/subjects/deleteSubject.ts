@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
@@ -84,7 +84,7 @@ export async function deleteSubject(subjectId: string) {
     logger.error("deleteSubject", error)
     return {
       status: "ERROR" as const,
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

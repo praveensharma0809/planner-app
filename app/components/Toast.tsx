@@ -26,9 +26,26 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const nextId = useRef(0)
   const timeoutIdsRef = useRef<Map<number, number>>(new Map())
 
+  const MAX_TOASTS = 3
+
   const addToast = useCallback((message: string, type: Toast["type"] = "info") => {
     const id = nextId.current++
-    setToasts(prev => [...prev, { id, message, type }])
+    setToasts(prev => {
+      // Evict oldest toasts if we're at the cap, clearing their timers too.
+      const overflow = prev.length - (MAX_TOASTS - 1)
+      if (overflow > 0) {
+        const evicted = prev.slice(0, overflow)
+        for (const t of evicted) {
+          const tid = timeoutIdsRef.current.get(t.id)
+          if (tid !== undefined) {
+            window.clearTimeout(tid)
+            timeoutIdsRef.current.delete(t.id)
+          }
+        }
+        return [...prev.slice(overflow), { id, message, type }]
+      }
+      return [...prev, { id, message, type }]
+    })
     const timeoutId = window.setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id))
       timeoutIdsRef.current.delete(id)

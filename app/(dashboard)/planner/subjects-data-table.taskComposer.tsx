@@ -1,4 +1,4 @@
-import type { FormEvent } from "react"
+import { useRef, type FormEvent } from "react"
 import { Button, Input, Modal } from "@/app/components/ui"
 
 type TaskCreateMode = "single" | "bulk"
@@ -36,6 +36,7 @@ export function TaskComposerModal({
   onBulkBaseNameChange,
   onBulkCountChange,
 }: TaskComposerModalProps) {
+  const taskTitleRef = useRef<HTMLInputElement>(null)
   return (
     <Modal
       open={open}
@@ -45,6 +46,7 @@ export function TaskComposerModal({
       }}
       title="Add Tasks"
       size="md"
+      initialFocusRef={taskTitleRef}
     >
       <form className="flex max-h-[calc(100vh-13rem)] flex-col" onSubmit={onSubmit}>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
@@ -87,6 +89,7 @@ export function TaskComposerModal({
           {taskCreateMode === "single" ? (
             <Input
               required
+              ref={taskTitleRef}
               label="Task Title"
               value={singleTaskTitle}
               onChange={(event) => onSingleTaskTitleChange(event.target.value)}
@@ -96,6 +99,7 @@ export function TaskComposerModal({
             <div className="space-y-3">
               <Input
                 required
+                ref={taskTitleRef}
                 label="Base Name"
                 value={bulkBaseName}
                 onChange={(event) => onBulkBaseNameChange(event.target.value)}

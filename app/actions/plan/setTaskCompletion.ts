@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { completeTask } from "@/app/actions/plan/completeTask"
 import { uncompleteTask } from "@/app/actions/plan/uncompleteTask"
@@ -21,7 +21,7 @@ export async function setTaskCompletion(taskId: string, nextCompleted: boolean):
     logger.error("setTaskCompletion", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

@@ -31,10 +31,16 @@ export default function SignupPage() {
       });
 
       if (error) {
-        addToast(error.message, "error");
+        const msg = error.message.toLowerCase();
+        if (msg.includes("already registered") || msg.includes("already exists")) {
+          addToast("An account with this email already exists.", "error");
+        } else if (msg.includes("password")) {
+          addToast("Password must be at least 6 characters.", "error");
+        } else {
+          addToast("Could not create account. Please try again.", "error");
+        }
         setLoading(false);
       } else {
-        localStorage.setItem("showFounderMessage", "true");
         addToast("Account created - check your email to confirm.", "success");
         router.push("/auth/login");
       }

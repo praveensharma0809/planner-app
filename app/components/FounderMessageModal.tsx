@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
+import { markWelcomed } from "@/app/actions/user/markWelcomed";
 
 interface FounderMessageModalProps {
   isOpen: boolean;
@@ -15,7 +16,7 @@ export function FounderMessageModal({ isOpen, onClose }: FounderMessageModalProp
   return createPortal(
     <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8 overflow-y-auto animate-in fade-in duration-200">
       <div className="relative w-full max-w-[500px] max-h-[90vh] flex flex-col bg-[#EEF0FF] rounded-3xl overflow-hidden shadow-[0_24px_50px_rgba(0,0,0,0.5)] transform scale-100 transition-transform duration-300">
-        
+
         {/* Header */}
         <div className="flex-none flex flex-col items-center pt-6 pb-4 px-6 border-b border-black/[0.06] bg-white">
           <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 mb-4 p-[2px] shadow-md">
@@ -56,7 +57,7 @@ export function FounderMessageModal({ isOpen, onClose }: FounderMessageModalProp
 
         {/* Footer */}
         <div className="flex-none p-5 sm:p-6 bg-slate-50 border-t border-black/[0.04]">
-          <button 
+          <button
             onClick={onClose}
             className="w-full py-4 rounded-xl bg-[#4F46E5] hover:bg-[#4338CA] text-white font-bold text-[15px] shadow-lg shadow-[#4F46E5]/20 transition-all active:scale-[0.98]"
           >
@@ -69,12 +70,18 @@ export function FounderMessageModal({ isOpen, onClose }: FounderMessageModalProp
   );
 }
 
-export function GlobalFounderMessage() {
-  const [isOpen, setIsOpen] = useState(() => {
-    const shouldShow = localStorage.getItem("showFounderMessage") === "true";
-    if (shouldShow) localStorage.removeItem("showFounderMessage");
-    return shouldShow;
-  });
+interface GlobalFounderMessageProps {
+  showOnMount: boolean;
+}
 
-  return <FounderMessageModal isOpen={isOpen} onClose={() => setIsOpen(false)} />;
+export function GlobalFounderMessage({ showOnMount }: GlobalFounderMessageProps) {
+  const [isOpen, setIsOpen] = useState(showOnMount);
+
+  const handleClose = () => {
+    setIsOpen(false);
+    // Fire-and-forget — no need to await; the user can proceed immediately.
+    void markWelcomed();
+  };
+
+  return <FounderMessageModal isOpen={isOpen} onClose={handleClose} />;
 }

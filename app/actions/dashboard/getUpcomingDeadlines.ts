@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { subjectBareRowArraySchema } from "@/lib/contracts/schemas"
@@ -91,7 +91,7 @@ export async function getUpcomingDeadlines(): Promise<GetUpcomingDeadlinesRespon
     logger.error("getUpcomingDeadlines", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { createHash } from "crypto"
 import { revalidatePath } from "next/cache"
@@ -700,7 +700,7 @@ export async function generatePlanAction(
     logger.error("generatePlanAction", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -940,7 +940,7 @@ export async function commitPlan(
     logger.error("commitPlan", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -1143,7 +1143,7 @@ export async function reoptimizePreviewPlan(
     logger.error("reoptimizePreviewPlan", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -1473,7 +1473,7 @@ export async function rescheduleMissedPlan(): Promise<RescheduleMissedPlanRespon
     logger.error("rescheduleMissedPlan", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

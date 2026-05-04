@@ -1,4 +1,4 @@
-import type { FormEvent } from "react"
+import { useRef, type FormEvent } from "react"
 import type { ArchivedChapterListItem } from "@/app/actions/subjects/chapters"
 import { Button, Input, Modal } from "@/app/components/ui"
 
@@ -47,6 +47,7 @@ export function ChapterEditorModal({
   onArchive,
   onDelete,
 }: ChapterEditorModalProps) {
+  const chapterNameRef = useRef<HTMLInputElement>(null)
   return (
     <Modal
       open={open}
@@ -56,11 +57,12 @@ export function ChapterEditorModal({
       }}
       title={mode === "create" ? "Add Chapter" : "Edit Chapter"}
       size="md"
+      initialFocusRef={chapterNameRef}
     >
       <form id="chapter-form" className="space-y-4" onSubmit={onSubmit}>
         <Input
-          autoFocus
           required
+          ref={chapterNameRef}
           label="Chapter Name"
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
@@ -316,6 +318,7 @@ export function TaskComposerModal({
   onBulkPlacementChange,
   onBulkSeparatorChange,
 }: TaskComposerModalProps) {
+  const firstInputRef = useRef<HTMLInputElement>(null)
   return (
     <Modal
       open={open}
@@ -325,6 +328,7 @@ export function TaskComposerModal({
       }}
       title="Add Tasks"
       size="md"
+      initialFocusRef={firstInputRef}
     >
       <form className="space-y-4" onSubmit={onSubmit}>
         <div className="flex flex-wrap gap-2">
@@ -366,6 +370,7 @@ export function TaskComposerModal({
         {taskCreateMode === "single" ? (
           <Input
             required
+            ref={firstInputRef}
             label="Task Title"
             value={singleTaskTitle}
             onChange={(event) => onSingleTaskTitleChange(event.target.value)}
@@ -375,6 +380,7 @@ export function TaskComposerModal({
           <div className="space-y-3">
             <Input
               required
+              ref={firstInputRef}
               label="Base Name"
               value={bulkBaseName}
               onChange={(event) => onBulkBaseNameChange(event.target.value)}

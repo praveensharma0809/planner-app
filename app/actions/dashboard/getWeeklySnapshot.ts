@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isCanonicalIntakeManualTask } from "@/lib/planner/contracts"
@@ -70,7 +70,7 @@ export async function getWeeklySnapshot(weekOf?: string): Promise<GetWeeklySnaps
     logger.error("getWeeklySnapshot", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

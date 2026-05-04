@@ -1,6 +1,6 @@
-﻿"use client"
+"use client"
 
-import { useCallback, useEffect, useRef, type ReactNode } from "react"
+import { useCallback, useEffect, useRef, type ReactNode, type RefObject } from "react"
 import { createPortal } from "react-dom"
 
 interface ModalProps {
@@ -11,10 +11,19 @@ interface ModalProps {
   size?: "sm" | "md" | "lg" | "xl"
   /** Whether clicking the backdrop closes the modal (default: true) */
   backdropClose?: boolean
+  /**
+   * Ref to the element that should receive focus when the modal first opens.
+   * If omitted, the first focusable non-close element receives focus.
+   */
+  initialFocusRef?: RefObject<HTMLElement | null>
 }
 
+// Close-button elements are tagged with this attribute so the selector below
+// intentionally skips them when looking for the "first focusable" element.
+const DATA_MODAL_CLOSE = "data-modal-close"
+
 const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  `a[href], button:not([disabled]):not([${DATA_MODAL_CLOSE}]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])`
 
 const sizeClass = {
   sm: "max-w-sm",
@@ -34,9 +43,37 @@ export function Modal({
   children,
   size = "md",
   backdropClose = true,
+  initialFocusRef,
 }: ModalProps) {
   const previousActiveEl = useRef<HTMLElement | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+
+  // ── Layer 2: stable close ref ──────────────────────────────────────────────
+  // Keep a ref to the latest onClose so handleKey never needs to list it as a
+  // dep. Without this, every inline arrow passed by the parent (e.g. the
+  // AddTaskButton's `() => { if (saving) return; setOpen(false) }`) would
+  // produce a new function reference on every render, making handleKey
+  // unstable, which in turn re-runs the main useEffect and steals focus.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  })
+
+  // ── Layer 1: one-shot initial focus guard ──────────────────────────────────
+  // Reset to false whenever the modal transitions from closed → open, so the
+  // focus block inside the main effect fires exactly once per open.
+  const hasInitiallyFocusedRef = useRef(false)
+  const prevOpenRef = useRef(open)
+  if (prevOpenRef.current !== open) {
+    prevOpenRef.current = open
+    if (open) hasInitiallyFocusedRef.current = false
+  }
+
+  // Stable keyboard handler — empty dep array is safe because it reads
+  // onCloseRef.current at call time instead of closing over onClose directly.
+  const handleKey = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") onCloseRef.current()
+  }, [])
 
   const trapFocus = useCallback((e: KeyboardEvent) => {
     if (e.key !== "Tab" || !panelRef.current) return
@@ -57,13 +94,6 @@ export function Modal({
     }
   }, [])
 
-  const handleKey = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
-    },
-    [onClose]
-  )
-
   useEffect(() => {
     if (!open) {
       if (previousActiveEl.current && typeof previousActiveEl.current.focus === "function") {
@@ -78,19 +108,27 @@ export function Modal({
     document.addEventListener("keydown", trapFocus)
     document.body.style.overflow = "hidden"
 
-    requestAnimationFrame(() => {
-      if (panelRef.current) {
-        const focusable = getFocusableElements(panelRef.current)
-        if (focusable.length > 0) focusable[0].focus()
-      }
-    })
+    // One-shot initial focus: fires exactly once per open transition because
+    // hasInitiallyFocusedRef guards re-entry on subsequent renders.
+    if (!hasInitiallyFocusedRef.current) {
+      hasInitiallyFocusedRef.current = true
+      requestAnimationFrame(() => {
+        // Prefer the caller-supplied ref; fall back to first focusable element.
+        if (initialFocusRef?.current) {
+          initialFocusRef.current.focus()
+        } else if (panelRef.current) {
+          const focusable = getFocusableElements(panelRef.current)
+          if (focusable.length > 0) focusable[0].focus()
+        }
+      })
+    }
 
     return () => {
       document.removeEventListener("keydown", handleKey)
       document.removeEventListener("keydown", trapFocus)
       document.body.style.overflow = ""
     }
-  }, [open, handleKey, trapFocus])
+  }, [open, handleKey, trapFocus, initialFocusRef])
 
   if (!open || typeof document === "undefined") return null
 
@@ -130,9 +168,11 @@ export function Modal({
             >
               {title}
             </h2>
+            {/* Layer 3a: tagged so FOCUSABLE_SELECTOR skips it as "first focusable" */}
             <button
               onClick={onClose}
               aria-label="Close modal"
+              data-modal-close="true"
               className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5"
               style={{ color: "var(--sh-text-muted)" }}
             >

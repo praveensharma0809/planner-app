@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { revalidatePath } from "next/cache"
 import {
@@ -419,7 +419,7 @@ export async function getStructure(options: GetStructureOptions = {}): Promise<G
     logger.error("getStructure", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -562,7 +562,7 @@ export async function saveStructure(
     logger.error("saveStructure", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -823,7 +823,7 @@ export async function saveTopicParams(
     logger.error("saveTopicParams", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -936,7 +936,7 @@ export async function getPlanConfig(): Promise<GetPlanConfigResponse> {
     logger.error("getPlanConfig", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -968,7 +968,7 @@ export async function getIntakeImportMode(): Promise<GetIntakeImportModeResponse
     logger.error("getIntakeImportMode", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -1038,7 +1038,7 @@ export async function saveIntakeImportMode(
     logger.error("saveIntakeImportMode", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -1127,7 +1127,7 @@ export async function savePlanConfig(
     logger.error("savePlanConfig", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -1252,7 +1252,7 @@ export async function reorderSubjects(
     logger.error("reorderSubjects", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -1283,7 +1283,7 @@ export async function reorderTopics(
     logger.error("reorderTopics", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }
@@ -1314,7 +1314,7 @@ export async function saveSubjectDeadlines(
     logger.error("saveSubjectDeadlines", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

@@ -31,7 +31,12 @@ export default function LoginPage() {
       });
 
       if (error) {
-        addToast(error.message, "error");
+        const msg = error.message.toLowerCase();
+        if (msg.includes("invalid login") || msg.includes("invalid")) {
+          addToast("Incorrect email or password.", "error");
+        } else {
+          addToast("Could not sign in. Please try again.", "error");
+        }
         setLoading(false);
       } else {
         router.push("/dashboard");

@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/ops/logger"
@@ -49,7 +49,7 @@ export async function getStreak(): Promise<GetStreakResponse> {
     logger.error("getStreak", error)
     return {
       status: "ERROR",
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: "Something went wrong. Please try again.",
     }
   }
 }

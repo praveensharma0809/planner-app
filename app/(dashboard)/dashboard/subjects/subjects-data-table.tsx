@@ -41,7 +41,7 @@ import {
   composeSeriesName,
   shouldAutoOrderTasks,
 } from "@/app/components/subjects-data-table/helpers"
-import { SubjectDrawer } from "./SubjectDrawer"
+import { SubjectDrawer } from "@/app/components/subjects/SubjectDrawer"
 import { DraggableTaskRow } from "./subjects-data-table.taskRows"
 import { NavigationColumn } from "./subjects-data-table.navigation"
 import { TaskComposerModal } from "./subjects-data-table.taskComposer"
@@ -1361,6 +1361,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         open={drawerOpen}
         mode={drawerMode}
         subjectId={selectedSubjectIdForDrawer}
+        archiveBehavior="toggle"
         onClose={() => setDrawerOpen(false)}
         onSaved={() => {
           setDrawerOpen(false)

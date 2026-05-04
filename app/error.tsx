@@ -25,21 +25,30 @@ export default function GlobalError({ error, reset }: {
           <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.75rem" }}>
             Something went wrong
           </h1>
-          <pre
+          <p
             style={{
-              maxWidth: "640px",
-              padding: "1rem",
-              borderRadius: "12px",
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              fontSize: "0.8125rem",
+              maxWidth: "480px",
+              marginBottom: "0.25rem",
+              fontSize: "0.9375rem",
               color: "rgba(255,255,255,0.55)",
-              overflow: "auto",
-              whiteSpace: "pre-wrap",
+              lineHeight: 1.6,
             }}
           >
-            {error.message}
-          </pre>
+            An unexpected error occurred. Please try again, or contact support if
+            the problem persists.
+          </p>
+          {error.digest && (
+            <p
+              style={{
+                marginTop: "0.5rem",
+                fontSize: "0.75rem",
+                color: "rgba(255,255,255,0.25)",
+                fontFamily: "monospace",
+              }}
+            >
+              Error ID: {error.digest}
+            </p>
+          )}
           <button
             onClick={reset}
             style={{

@@ -90,6 +90,12 @@ export async function proxy(request: NextRequest) {
       .maybeSingle()
     profile = data as { id: string } | null
   } catch {
+    // Profile fetch failed (e.g. transient DB error). Treat the same as
+    // "no profile" so the user lands on onboarding rather than crashing
+    // into a protected page that will 500 without profile data.
+    if (!path.startsWith("/onboarding")) {
+      return NextResponse.redirect(new URL("/onboarding", request.url))
+    }
     return response
   }
 

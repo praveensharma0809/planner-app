@@ -48,7 +48,7 @@ import { useSidebar } from "@/app/components/layout/AppShell"
 import { PageHeader } from "@/app/components/layout/PageHeader"
 import { useToast } from "@/app/components/Toast"
 import { Button } from "@/app/components/ui"
-import { SubjectDrawer } from "./SubjectDrawer"
+import { SubjectDrawer } from "@/app/components/subjects/SubjectDrawer"
 import {
   MAX_SESSION_LENGTH_MINUTES,
   MIN_SESSION_LENGTH_MINUTES,
@@ -2669,6 +2669,10 @@ export function SubjectsDataTable({
         mode={drawerMode}
         subjectId={selectedSubjectIdForDrawer}
         initialSubject={subjectSnapshotForDrawer}
+        showDeadlineField
+        showDeleteAction
+        archiveBehavior="one-way"
+        isMutating={isMutating}
         onClose={() => {
           if (isMutating) return
           setDrawerOpen(false)

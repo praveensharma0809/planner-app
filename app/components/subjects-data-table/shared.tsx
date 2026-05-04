@@ -1,7 +1,7 @@
 // Cross-page primitives shared by both the planner and dashboard
 // `subjects-data-table.tsx` files.
 
-import { memo, type FormEvent } from "react"
+import { memo, useRef, type FormEvent } from "react"
 import { Button, Input, Modal } from "@/app/components/ui"
 
 interface RowActionButtonProps {
@@ -94,12 +94,13 @@ export function NameModal({
   onDestructiveAction,
   destructiveDisabled = false,
 }: NameModalProps) {
+  const inputRef = useRef<HTMLInputElement>(null)
   return (
-    <Modal open={open} onClose={onClose} title={title} size="sm">
+    <Modal open={open} onClose={onClose} title={title} size="sm" initialFocusRef={inputRef}>
       <form className="space-y-4" onSubmit={onSubmit}>
         <Input
-          autoFocus
           required
+          ref={inputRef}
           label={fieldLabel}
           value={value}
           onChange={(event) => onChange(event.target.value)}
