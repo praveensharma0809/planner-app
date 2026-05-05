@@ -475,6 +475,9 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - 2026-05-06 · F7.2 · DSP · PASS — Subjects 3-column layout fills viewport, each column independently scrolls, overflow-y-auto per pane
 - 2026-05-06 · F7.3 · DSP · PASS — Calendar >=lg grid fills viewport (no changes needed, verified), mobile agenda fills viewport
 - 2026-05-06 · F7.5 · DSP · PASS — Schedule day columns fill viewport, empty days show full-height dashed border + centered + icon, QuickAdd stays at column bottom
+- 2026-05-06 · F7.7 · DSP · PASS — Planner phase stepper: numbered circles (1/2/3) replace tabs, active uses --accent-selected-bg, locked shows lock icon, topbar shows step numbers
+- 2026-05-06 · F7.8 · DSP · PASS — Planner intake workspace fills viewport: Subjects/Chapters/Tasks 3-column flex layout with overflow-y-auto per pane (same pattern as F7.2)
+- 2026-05-06 · F7.9 · DSP · PASS — Settings viewport-fill: tab panels use min-h-0 flex-1, Profile/Preferences/Billing fill available space, Save Changes button sticky bottom on <lg
 
 ---
 

@@ -2133,7 +2133,7 @@ export function SubjectsDataTable({
 
   return (
     <div
-      className={`${embedded ? "" : "page-root "}fade-in max-w-none`}
+      className={`${embedded ? "flex min-h-0 flex-1 flex-col" : "page-root "}fade-in max-w-none`}
       style={embedded ? undefined : { paddingTop: 12, paddingBottom: 16 }}
     >
       {showPageHeader && (
@@ -2220,9 +2220,9 @@ export function SubjectsDataTable({
             </div>
           </div>
 
-          <div className="grid h-[520px] min-h-[520px] gap-[var(--gap-card)] md:gap-[var(--gap-card-md)] overflow-hidden grid-cols-1 md:grid-cols-[45%_1fr] md:grid-rows-[1fr_1fr] lg:grid-cols-[208px_208px_1fr] lg:grid-rows-[1fr]">
+          <div className="flex h-full min-h-0 flex-1 flex-col gap-[var(--gap-card)] md:gap-[var(--gap-card-md)] md:flex-row overflow-hidden">
             {/* Subjects pane */}
-            <div className={`${mobilePane === "subjects" ? "flex" : "hidden"} md:flex flex-col min-h-0`}>
+            <div className={`${mobilePane === "subjects" ? "flex" : "hidden"} md:flex md:w-[45%] lg:w-[220px] flex-col min-h-0 overflow-y-auto`}>
               <NavigationColumn
                 title="Subjects"
                 items={subjectColumnItems}
@@ -2272,7 +2272,7 @@ export function SubjectsDataTable({
             </div>
 
             {/* Chapters pane */}
-            <div className={`${mobilePane === "chapters" ? "flex" : "hidden"} md:flex flex-col min-h-0`}>
+            <div className={`${mobilePane === "chapters" ? "flex" : "hidden"} md:flex md:w-[45%] lg:w-[220px] flex-col min-h-0 overflow-y-auto`}>
               <NavigationColumn
                 title="Chapters"
                 items={chapterColumnItems}
@@ -2324,7 +2324,7 @@ export function SubjectsDataTable({
             </div>
 
             {/* Tasks pane */}
-            <div className={`${mobilePane === "tasks" ? "flex" : "hidden"} md:flex flex-col min-h-0 md:row-span-2 lg:row-span-1`}>
+            <div className={`${mobilePane === "tasks" ? "flex" : "hidden"} md:flex flex-col min-h-0 flex-1`}>
               <section
                 className="h-full flex-1 surface-card px-4 py-4 sm:px-5 sm:py-5 overflow-hidden flex flex-col"
               >

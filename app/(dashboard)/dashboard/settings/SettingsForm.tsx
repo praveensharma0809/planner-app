@@ -68,7 +68,7 @@ export function SettingsForm({ profile }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-[var(--gap-card)] sm:gap-[var(--gap-card-md)]">
+    <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1 gap-[var(--gap-card)] sm:gap-[var(--gap-card-md)]">
       <Input
         id="settings-fullname"
         label="Full name"
@@ -112,7 +112,7 @@ export function SettingsForm({ profile }: Props) {
         </div>
       )}
 
-      <div className="pt-1">
+      <div className="pt-1 mt-auto lg:static sticky bottom-0 bg-surface-card pb-2">
         <Button
           type="submit"
           variant="primary"

@@ -35,7 +35,7 @@ export function SettingsContent({ profile }: Props) {
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="page-root flex flex-col gap-[var(--gap-card-lg)] pb-8 pt-6 sm:pt-8">
+        <div className="page-root flex flex-col min-h-0 flex-1 gap-[var(--gap-card-lg)] pb-8 pt-6 sm:pt-8">
           <header className="space-y-1">
             <h1 className="text-2xl md:text-3xl xl:text-4xl font-medium tracking-tight text-[var(--text-primary)]">
               Settings
@@ -54,7 +54,7 @@ export function SettingsContent({ profile }: Props) {
 
 function ProfileTab({ profile }: Props) {
   return (
-    <section className="panel p-5 sm:p-6">
+    <section className="panel p-5 sm:p-6 min-h-0 flex-1 flex flex-col">
       <header className="mb-5 space-y-1">
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">Profile</h2>
         <p className="text-sm text-[var(--text-secondary)]">Manage your basic identity details.</p>
@@ -72,7 +72,7 @@ function ProfileTab({ profile }: Props) {
 
 function PreferencesTab() {
   return (
-    <section className="panel p-5 sm:p-6 space-y-[var(--gap-card-md)]">
+    <section className="panel p-5 sm:p-6 space-y-[var(--gap-card-md)] min-h-0 flex-1">
       <header className="space-y-1">
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">Preferences</h2>
         <p className="text-sm text-[var(--text-secondary)]">Customize your experience.</p>
@@ -112,7 +112,7 @@ function PreferencesTab() {
 
 function BillingTab() {
   return (
-    <div className="flex flex-col gap-[var(--gap-card)]">
+    <div className="flex flex-col gap-[var(--gap-card)] min-h-0 flex-1">
       <section className="panel p-5 sm:p-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>

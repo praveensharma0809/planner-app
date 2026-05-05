@@ -233,6 +233,7 @@ export function Topbar() {
                   aria-current={isActive ? "step" : undefined}
                   title={phase.title}
                 >
+                  <span className="font-bold mr-1">{phase.id}</span>
                   {phase.shortLabel}
                 </button>
               )

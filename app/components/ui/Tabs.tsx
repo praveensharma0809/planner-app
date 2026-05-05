@@ -61,7 +61,7 @@ export function Tabs({ tabs, defaultTab, className = "", onTabChange }: TabsProp
           </button>
         ))}
       </div>
-      <div role="tabpanel">{current?.content}</div>
+      <div role="tabpanel" className="min-h-0 flex-1 flex flex-col">{current?.content}</div>
     </div>
   )
 }

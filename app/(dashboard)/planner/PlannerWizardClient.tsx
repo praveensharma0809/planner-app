@@ -743,58 +743,50 @@ export default function PlannerWizardClient({
 
   return (
     <div className="page-root fade-in flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto pb-24 md:pb-0">
-      <div className="panel mt-3 p-4 sm:p-5">
+      <div className="panel mt-3 p-4 sm:p-5 flex min-h-0 flex-1 flex-col">
         {/* Step indicator */}
         <div className="mb-4 flex flex-col gap-[var(--gap-card)]">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            {/* Desktop step indicator */}
-            <div className="hidden md:flex ui-tabs-list">
-              {PLANNER_PHASES.map((p) => {
+            {/* Numbered stepper — desktop & mobile */}
+            <div className="flex items-center gap-1" role="tablist" aria-label="Planner phases">
+              {PLANNER_PHASES.map((p, i) => {
                 const isActive = p.id === phase
-                const isDisabled = p.id > maxPhase
+                const isReachable = p.id <= maxPhase
+                const isLocked = !isReachable
+
                 return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => { if (!isDisabled) goToPhase(p.id) }}
-                    disabled={isDisabled}
-                    className={`ui-tabs-trigger ${isActive ? "ui-tabs-trigger-active" : ""}`}
-                    aria-selected={isActive}
-                    role="tab"
-                  >
-                    {p.shortLabel}
-                  </button>
+                  <div key={p.id} className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => { if (isReachable) goToPhase(p.id) }}
+                      disabled={isLocked}
+                      role="tab"
+                      aria-selected={isActive}
+                      aria-label={`Phase ${p.id}: ${p.shortLabel}`}
+                      className={`flex items-center justify-center rounded-full text-xs font-bold transition-colors
+                        min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:h-7 md:w-7
+                        ${isActive
+                          ? "bg-[var(--accent-selected-bg)] text-text-primary"
+                          : isReachable
+                            ? "bg-surface-panel-muted text-text-secondary border border-border-hairline hover:bg-surface-hover"
+                            : "bg-surface-page text-text-muted opacity-40"
+                        }`}
+                    >
+                      {isLocked ? (
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <rect x="5" y="11" width="14" height="10" rx="2" />
+                          <path d="M8 11V7a4 4 0 018 0v4" />
+                        </svg>
+                      ) : (
+                        p.id
+                      )}
+                    </button>
+                    {i < PLANNER_PHASES.length - 1 && (
+                      <div className={`h-px w-4 md:w-6 ${isReachable && (p.id >= maxPhase) ? "bg-border-hairline" : isReachable ? "bg-text-secondary/30" : "bg-border-hairline"}`} />
+                    )}
+                  </div>
                 )
               })}
-            </div>
-
-            {/* Mobile compact step indicator */}
-            <div className="flex md:hidden items-center gap-2">
-              <span className="text-xs font-medium bg-surface-page rounded-full px-3 py-1.5 text-text-primary">
-                {activePhase.shortLabel}
-              </span>
-              <div className="flex gap-1.5">
-                {PLANNER_PHASES.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => { if (p.id <= maxPhase) goToPhase(p.id) }}
-                    disabled={p.id > maxPhase}
-                    className="h-[44px] w-[44px] flex items-center justify-center"
-                    aria-label={`Go to ${p.shortLabel}`}
-                  >
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        p.id === phase
-                          ? "bg-text-primary"
-                          : p.id <= maxPhase
-                            ? "bg-text-secondary"
-                            : "bg-border-hairline"
-                      }`}
-                    />
-                  </button>
-                ))}
-              </div>
             </div>
 
             <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5">
@@ -824,7 +816,7 @@ export default function PlannerWizardClient({
         </div>
 
         {phase === 1 ? (
-          <div className="mt-4 space-y-[var(--gap-card)]">
+          <div className="mt-4 flex min-h-0 flex-1 flex-col space-y-[var(--gap-card)]">
             <SubjectsDataTable
               initialSubjects={initialSubjects}
               initialTasksByChapter={initialTasksByChapter}
