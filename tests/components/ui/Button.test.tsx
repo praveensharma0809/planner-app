@@ -11,27 +11,27 @@ describe("Button", () => {
 
   it("renders with default variant ghost", () => {
     render(<Button>Click</Button>, { wrapper: TestProviders })
-    expect(screen.getByRole("button")).toHaveClass("ui-btn-ghost")
+    expect(screen.getByRole("button")).toHaveClass("bg-transparent")
   })
 
   it("renders each variant with correct class", () => {
     const { rerender } = render(<Button variant="primary">P</Button>, { wrapper: TestProviders })
-    expect(screen.getByRole("button")).toHaveClass("ui-btn-primary")
+    expect(screen.getByRole("button")).toHaveClass("bg-action-primary-bg")
     rerender(<Button variant="ghost">G</Button>)
-    expect(screen.getByRole("button")).toHaveClass("ui-btn-ghost")
+    expect(screen.getByRole("button")).toHaveClass("bg-transparent")
     rerender(<Button variant="danger">D</Button>)
-    expect(screen.getByRole("button")).toHaveClass("ui-btn-danger")
+    expect(screen.getByRole("button")).toHaveClass("bg-pastel-rose")
     rerender(<Button variant="success">S</Button>)
-    expect(screen.getByRole("button")).toHaveClass("ui-btn-success")
+    expect(screen.getByRole("button")).toHaveClass("bg-pastel-mint")
   })
 
   it("renders each size with correct class", () => {
     const { rerender } = render(<Button size="sm">S</Button>, { wrapper: TestProviders })
-    expect(screen.getByRole("button")).toHaveClass("ui-btn-sm")
+    expect(screen.getByRole("button")).toHaveClass("h-8")
     rerender(<Button size="md">M</Button>)
-    expect(screen.getByRole("button")).toHaveClass("ui-btn-md")
+    expect(screen.getByRole("button")).toHaveClass("h-10")
     rerender(<Button size="lg">L</Button>)
-    expect(screen.getByRole("button")).toHaveClass("ui-btn-lg")
+    expect(screen.getByRole("button")).toHaveClass("h-11")
   })
 
   it("fires onClick handler when clicked", async () => {

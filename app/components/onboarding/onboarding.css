@@ -51,15 +51,11 @@
   height: 5px;
   flex: 1;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.06);
   border: none;
   cursor: pointer;
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0;
-}
-
-[data-theme="light"] .onb-dot {
-  background: rgba(0, 0, 0, 0.06);
 }
 
 .onb-dot-active {
@@ -161,15 +157,10 @@
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.07);
   color: var(--sh-text-secondary);
   transition: border-color 0.2s ease;
-}
-
-[data-theme="light"] .onb-chip {
-  background: rgba(0, 0, 0, 0.03);
-  border-color: rgba(0, 0, 0, 0.07);
 }
 
 .onb-chip:hover {
@@ -186,12 +177,8 @@
   align-items: center;
   justify-content: space-between;
   padding-top: 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
   max-width: 440px;
-}
-
-[data-theme="light"] .onb-nav {
-  border-top-color: rgba(0, 0, 0, 0.07);
 }
 
 .onb-skip-btn {
@@ -228,25 +215,16 @@
   border-radius: 10px;
   font-size: 13px;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   color: var(--sh-text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-[data-theme="light"] .onb-back-btn {
-  background: rgba(0, 0, 0, 0.03);
-  border-color: rgba(0, 0, 0, 0.08);
-}
-
 .onb-back-btn:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--sh-text-primary);
-}
-
-[data-theme="light"] .onb-back-btn:hover {
   background: rgba(0, 0, 0, 0.06);
+  color: var(--sh-text-primary);
 }
 
 .onb-btn-hidden {
@@ -377,21 +355,8 @@
   max-width: 900px;
   border-radius: 14px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: #0D0F16;
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.50),
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 0 80px -20px var(--sh-primary-glow);
-}
-
-.onb-screenshot-frame-hero {
-  max-width: 1080px;
-}
-
-[data-theme="light"] .onb-screenshot-frame {
+  border: 1px solid rgba(0, 0, 0, 0.10);
   background: #FFFFFF;
-  border-color: rgba(0, 0, 0, 0.10);
   box-shadow:
     0 20px 60px rgba(0, 0, 0, 0.12),
     0 0 0 1px rgba(0, 0, 0, 0.04);
@@ -402,13 +367,8 @@
   align-items: center;
   gap: 7px;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-[data-theme="light"] .onb-screenshot-topbar {
   background: rgba(0, 0, 0, 0.02);
-  border-bottom-color: rgba(0, 0, 0, 0.06);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .onb-dot-red,
@@ -499,14 +459,9 @@
   gap: 8px;
   padding: 5px 8px;
   border-radius: 9px;
-  background: rgba(8, 10, 18, 0.76);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(8px);
-}
-
-[data-theme="light"] .onb-sequence-progress {
   background: rgba(255, 255, 255, 0.86);
-  border-color: rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(8px);
 }
 
 .onb-sequence-nav-btn {
@@ -516,18 +471,13 @@
   height: 30px;
   padding: 0 10px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.04);
   color: var(--sh-text-secondary);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
-}
-
-[data-theme="light"] .onb-sequence-nav-btn {
-  border-color: rgba(0, 0, 0, 0.12);
-  background: rgba(0, 0, 0, 0.04);
 }
 
 .onb-sequence-nav-btn:hover {
@@ -562,12 +512,8 @@
   height: 3px;
   border-radius: 999px;
   flex: 1;
-  background: rgba(255, 255, 255, 0.2);
-  transition: background-color 0.2s ease;
-}
-
-[data-theme="light"] .onb-sequence-bar {
   background: rgba(0, 0, 0, 0.18);
+  transition: background-color 0.2s ease;
 }
 
 .onb-sequence-bar-active {
@@ -642,17 +588,12 @@
   gap: 12px;
   padding: 16px 20px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   font-size: 13.5px;
   font-weight: 500;
   color: var(--sh-text-secondary);
   transition: border-color 0.25s ease, background 0.25s ease;
-}
-
-[data-theme="light"] .onb-welcome-feature {
-  background: rgba(0, 0, 0, 0.02);
-  border-color: rgba(0, 0, 0, 0.06);
 }
 
 .onb-welcome-feature:hover {

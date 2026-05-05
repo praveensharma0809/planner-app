@@ -10,6 +10,12 @@ PrepVeda is a planning app for deadline-driven preparation built on Next.js + Su
 - Supabase Auth + Postgres + RLS
 - Vitest
 
+## Design
+
+- **Light-mode only.** Dark theme has been removed (Phase 12). The design uses a custom light-mode semantic token system (`--surface-*`, `--text-*`, `--pastel-*`) with a three-layer surface model (page → app shell → inset panels).
+- Pill-shaped interactive elements, pastel accent chips, diffused shadows.
+- See `DESIGN_V2_PLAN.md` for the full design specification.
+
 ## Key areas
 
 - `app/actions` - server-side reads/mutations

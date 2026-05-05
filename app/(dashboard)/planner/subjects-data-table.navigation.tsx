@@ -36,20 +36,7 @@ export function NavigationItemCard({
 }: NavigationItemCardProps) {
   return (
     <div
-      className="rounded-lg border p-1.5 transition-colors"
-      style={{
-        borderColor: isDragging
-          ? "var(--sh-primary-glow)"
-          : isActive
-            ? "var(--sh-primary-glow)"
-            : "transparent",
-        background: isDragging
-          ? "rgba(124,108,255,0.16)"
-          : isActive
-            ? "var(--sh-primary-muted)"
-            : "transparent",
-        opacity: isDragging ? 0.88 : 1,
-      }}
+      className={`rounded-xl p-1.5 transition-colors ${isDragging ? "bg-surface-hover opacity-90" : isActive ? "bg-pastel-lilac/60" : "hover:bg-surface-hover"}`}
     >
       <div className="flex items-start gap-1.5">
         <button
@@ -57,26 +44,23 @@ export function NavigationItemCard({
           onClick={() => onSelect(item.id)}
           {...(dragEnabled ? (dragAttributes as object) : {})}
           {...(dragEnabled ? (dragListeners as object) : {})}
-          className="min-w-0 flex-1 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-[rgba(124,108,255,0.08)]"
+          className="min-w-0 flex-1 rounded-lg px-1.5 py-1 text-left transition-colors min-h-[44px] md:min-h-0 flex flex-col justify-center"
           style={dragEnabled ? { touchAction: "none", cursor: isDragging ? "grabbing" : "grab" } : undefined}
           title={dragEnabled ? `Drag to reorder ${item.label}` : undefined}
         >
           <p
-            className="truncate text-sm font-semibold"
-            style={{
-              color: isActive ? "var(--sh-primary-light)" : "var(--sh-text-primary)",
-            }}
+            className={`truncate text-sm font-medium ${isActive ? "text-pastel-lilac-text" : "text-text-primary"}`}
           >
             {item.label}
           </p>
           {item.hint && (
-            <p className="mt-0.5 text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
+            <p className="mt-0.5 text-[11px] text-text-muted">
               {item.hint}
             </p>
           )}
         </button>
 
-        <div className="flex shrink-0 items-center gap-1 pt-1">
+        <div className="flex shrink-0 items-center gap-1 pt-0.5 md:pt-1">
           {item.onEdit && (
             <RowActionButton
               label={`Edit ${item.label}`}
@@ -185,24 +169,17 @@ export function NavigationColumn({
 
   return (
     <section
-      className="w-[208px] min-w-[196px] h-full shrink-0 rounded-xl border px-2 py-2 snap-start flex flex-col overflow-hidden"
-      style={{
-        borderColor: "var(--sh-border)",
-        background: "color-mix(in srgb, var(--sh-card) 94%, var(--foreground) 6%)",
-      }}
+      className="w-full lg:w-[208px] lg:min-w-[196px] h-full shrink-0 rounded-2xl border border-border-hairline bg-surface-panel px-2 py-2 snap-start flex flex-col overflow-hidden shadow-card"
     >
       <div className="px-1.5 pb-2 shrink-0">
-        <p
-          className="text-[11px] font-semibold uppercase tracking-[0.14em]"
-          style={{ color: "var(--sh-text-muted)" }}
-        >
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
           {title}
         </p>
       </div>
 
-      <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto pr-1">
+      <div className="flex-1 min-h-0 space-y-1 overflow-y-auto pr-1">
         {items.length === 0 && (
-          <p className="px-2 py-4 text-sm" style={{ color: "var(--sh-text-muted)" }}>
+          <p className="px-2 py-4 text-sm text-text-muted">
             {emptyMessage}
           </p>
         )}
@@ -214,7 +191,7 @@ export function NavigationColumn({
             onDragEnd={handleColumnDragEnd}
           >
             <SortableContext items={itemIds} strategy={rectSortingStrategy}>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 {items.map((item) => (
                   <DraggableNavigationItem
                     key={item.id}
@@ -240,10 +217,7 @@ export function NavigationColumn({
       </div>
 
       {footer && (
-        <div
-          className="mt-2 space-y-1.5 border-t px-1 pt-2 shrink-0"
-          style={{ borderColor: "var(--sh-border)" }}
-        >
+        <div className="mt-2 space-y-1.5 border-t border-border-hairline px-1 pt-2 shrink-0">
           {footer}
         </div>
       )}

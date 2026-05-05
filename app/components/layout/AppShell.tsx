@@ -11,6 +11,7 @@ import {
 } from "react"
 import dynamic from "next/dynamic"
 import { Sidebar } from "@/app/components/layout/Sidebar"
+import { MobileTabBar } from "@/app/components/layout/MobileTabBar"
 import { ScheduleTopbarProvider } from "@/app/components/layout/ScheduleTopbarContext"
 const GlobalFounderMessage = dynamic(
   () => import("@/app/components/FounderMessageModal").then((m) => ({ default: m.GlobalFounderMessage })),
@@ -210,9 +211,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           {/* ── Main content area ── */}
           <div className="flex flex-col flex-1 min-w-0 min-h-0">
             <Topbar />
-            <main className="flex-1 overflow-y-auto px-4 md:px-6 lg:px-8 py-4 md:py-6">
+            <main className="flex-1 overflow-y-auto px-4 md:px-6 lg:px-8 py-4 md:py-6 pb-[calc(64px+env(safe-area-inset-bottom,0px))] md:pb-6">
               {children}
             </main>
+            <MobileTabBar />
           </div>
 
           <GlobalFounderMessage />

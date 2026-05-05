@@ -1,4 +1,5 @@
 ﻿import { AppShell } from "@/app/components/layout/AppShell"
+import { PageTransition } from "@/app/components/layout/PageTransition"
 
 export default function DashboardGroupLayout({
   children,
@@ -7,7 +8,7 @@ export default function DashboardGroupLayout({
 }) {
   return (
     <AppShell>
-      <div className="flex h-full min-h-0 w-full min-w-0 flex-col items-stretch overflow-hidden">{children}</div>
+      <PageTransition>{children}</PageTransition>
     </AppShell>
   )
 }

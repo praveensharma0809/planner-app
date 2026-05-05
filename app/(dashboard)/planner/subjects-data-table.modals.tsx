@@ -91,12 +91,9 @@ export function ChapterEditorModal({
         />
 
         {mode === "edit" && targetId && (
-          <div
-            className="rounded-lg border p-3"
-            style={{ borderColor: "rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.08)" }}
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-red-300">Danger Zone</p>
-            <p className="mt-1 text-xs text-red-200/80">
+          <div className="rounded-xl border border-pastel-rose/40 p-3 bg-pastel-rose/30">
+            <p className="text-xs font-semibold uppercase tracking-wide text-pastel-rose-text">Danger Zone</p>
+            <p className="mt-1 text-xs text-pastel-rose-text/80">
               Delete chapter and detach related tasks from this chapter.
             </p>
             <Button
@@ -192,17 +189,11 @@ export function ArchivedChaptersModal({
     >
       <div className="space-y-3">
         {loading ? (
-          <div
-            className="rounded-lg border border-dashed px-3 py-4 text-sm"
-            style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-          >
+          <div className="rounded-xl border border-dashed border-border-hairline px-3 py-4 text-sm text-text-muted">
             Loading archived chapters...
           </div>
         ) : rows.length === 0 ? (
-          <div
-            className="rounded-lg border border-dashed px-3 py-4 text-sm"
-            style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-          >
+          <div className="rounded-xl border border-dashed border-border-hairline px-3 py-4 text-sm text-text-muted">
             No archived chapters for this subject.
           </div>
         ) : (
@@ -213,13 +204,11 @@ export function ArchivedChaptersModal({
               return (
                 <div
                   key={chapter.id}
-                  className="rounded-lg border p-2"
-                  style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
+                  className="rounded-xl border border-border-hairline bg-surface-panel-muted p-2"
                 >
                   <div className="flex items-center gap-2">
                     <p
-                      className="min-w-0 flex-1 truncate text-sm font-medium"
-                      style={{ color: "var(--sh-text-primary)" }}
+                      className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary"
                       title={chapter.name}
                     >
                       {chapter.name}
@@ -331,16 +320,8 @@ export function TaskComposerModal({
           <button
             type="button"
             onClick={() => onTaskCreateModeChange("single")}
-            className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-            style={{
-              borderColor:
-                taskCreateMode === "single" ? "var(--sh-primary-glow)" : "var(--sh-border)",
-              color:
-                taskCreateMode === "single" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-              background:
-                taskCreateMode === "single" ? "var(--sh-primary-muted)" : "transparent",
-            }}
             disabled={isMutating || saving}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${taskCreateMode === "single" ? "bg-black text-white" : "bg-transparent text-text-secondary border border-border-subtle hover:bg-surface-hover"}`}
           >
             Single Task
           </button>
@@ -348,16 +329,8 @@ export function TaskComposerModal({
           <button
             type="button"
             onClick={() => onTaskCreateModeChange("bulk")}
-            className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-            style={{
-              borderColor:
-                taskCreateMode === "bulk" ? "var(--sh-primary-glow)" : "var(--sh-border)",
-              color:
-                taskCreateMode === "bulk" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-              background:
-                taskCreateMode === "bulk" ? "var(--sh-primary-muted)" : "transparent",
-            }}
             disabled={isMutating || saving}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${taskCreateMode === "bulk" ? "bg-black text-white" : "bg-transparent text-text-secondary border border-border-subtle hover:bg-surface-hover"}`}
           >
             Bulk Series
           </button>
@@ -412,7 +385,7 @@ export function TaskComposerModal({
               />
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
+                <label className="text-xs font-semibold text-text-secondary">
                   Number Placement
                 </label>
                 <select
@@ -428,7 +401,7 @@ export function TaskComposerModal({
               </div>
 
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
+                <label className="text-xs font-semibold text-text-secondary">
                   Separator (what goes between name and number)
                 </label>
                 <select
@@ -446,14 +419,11 @@ export function TaskComposerModal({
             </div>
 
             {bulkPreview.length > 0 && (
-              <div
-                className="rounded-md border p-2.5"
-                style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.015)" }}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
+              <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-2.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                   Preview
                 </p>
-                <p className="mt-1 text-xs" style={{ color: "var(--sh-text-secondary)" }}>
+                <p className="mt-1 text-xs text-text-secondary">
                   {bulkPreview.join("  |  ")}
                 </p>
               </div>

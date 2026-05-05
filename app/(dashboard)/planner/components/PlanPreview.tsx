@@ -1,6 +1,7 @@
 ﻿"use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { Button } from "@/app/components/ui"
 import {
   getSessionCoverage,
   type PlannerConstraintValues as ConstraintValues,
@@ -102,7 +103,7 @@ function getFitStatus(feasibility: FeasibilityResult, droppedSessions: number, f
     return {
       badge: "Relaxed",
       detail: `${minToHuman(Math.max(0, feasibility.totalSlotsAvailable - feasibility.totalSessionsNeeded))} spare`,
-      className: "bg-emerald-500/10 border-emerald-500/30 text-emerald-300",
+      className: "chip-mint",
     }
   }
 
@@ -110,7 +111,7 @@ function getFitStatus(feasibility: FeasibilityResult, droppedSessions: number, f
     return {
       badge: "Snug",
       detail: `${flexDays} flex day${flexDays === 1 ? "" : "s"}`,
-      className: "bg-amber-500/10 border-amber-500/30 text-amber-300",
+      className: "chip-peach",
     }
   }
 
@@ -119,7 +120,7 @@ function getFitStatus(feasibility: FeasibilityResult, droppedSessions: number, f
     detail: droppedSessions > 0
       ? `${droppedSessions} session${droppedSessions === 1 ? "" : "s"} missing`
       : `${Math.ceil(feasibility.globalGap / 60)}h short`,
-    className: "bg-red-500/10 border-red-500/30 text-red-300",
+    className: "chip-rose",
   }
 }
 
@@ -498,13 +499,13 @@ export default function PlanPreview({
 
   const sessionTypeColor = (session: ScheduledSession) => {
     const base = session.session_type === "revision"
-      ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+      ? "bg-pastel-butter/60 text-pastel-butter-text border-pastel-butter-text/20"
       : session.session_type === "practice"
-        ? "bg-purple-500/20 text-purple-400 border-purple-500/30"
-        : "bg-white/[0.04] text-white/80 border-white/[0.06]"
+        ? "bg-pastel-lilac/60 text-pastel-lilac-text border-pastel-lilac-text/20"
+        : "bg-surface-panel-muted text-text-primary border-border-hairline"
 
-    if (session.is_manual) return `${base} ring-1 ring-fuchsia-400/40`
-    if (session.is_pinned) return `${base} ring-1 ring-sky-400/40`
+    if (session.is_manual) return `${base} ring-1 ring-pastel-butter-text/30`
+    if (session.is_pinned) return `${base} ring-1 ring-pastel-sky-text/30`
     return base
   }
 
@@ -523,29 +524,29 @@ export default function PlanPreview({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
-        <p className="text-xs uppercase tracking-widest text-white/35 font-medium">
+      <div className="rounded-2xl border border-border-hairline bg-surface-panel-muted p-3 shadow-card">
+        <p className="text-xs uppercase tracking-widest text-text-muted font-medium">
           Preview Summary
         </p>
-        <p className="mt-1 text-sm text-white/60 break-words leading-relaxed">
+        <p className="mt-1 text-sm text-text-secondary break-words leading-relaxed">
           {`${totalSessions} sessions | ${minToHuman(totalMinutes)} total | ${totalDays} days | ${minToHuman(avgPerDay)} avg/day | Ends ${lastDay}`}
         </p>
-        <p className="mt-1 text-[11px] text-white/35">
+        <p className="mt-1 text-[11px] text-text-muted">
           Fit indicators are based on the last generated plan.
         </p>
       </div>
 
-      <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-4 space-y-3">
+      <div className="rounded-2xl border border-border-hairline bg-surface-panel p-4 space-y-3 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/45">
-            <span className="px-2 py-0.5 rounded-md border border-white/[0.08] bg-white/[0.03]">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-text-secondary">
+            <span className="chip-neutral">
               {pinnedCount} pinned
             </span>
-            <span className="px-2 py-0.5 rounded-md border border-white/[0.08] bg-white/[0.03]">
+            <span className="chip-neutral">
               {manualCount} manual
             </span>
             {swapSourceIndex != null && (
-              <span className="px-2 py-0.5 rounded-md border border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200">
+              <span className="chip-lilac">
                 Swap mode active
               </span>
             )}
@@ -555,7 +556,7 @@ export default function PlanPreview({
               <button
                 type="button"
                 onClick={() => setSwapSourceIndex(null)}
-                className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-white/[0.08] text-white/55 hover:border-white/20 hover:text-white/75"
+                className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0"
               >
                 Cancel Swap
               </button>
@@ -564,13 +565,13 @@ export default function PlanPreview({
               type="button"
               onClick={() => onReoptimize(reservedSessions)}
               disabled={isReoptimizing || reservedSessions.length === 0}
-              className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/15 disabled:border-white/[0.08] disabled:bg-white/[0.03] disabled:text-white/30 disabled:cursor-not-allowed"
+              className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-pastel-sky-text/30 bg-pastel-sky/20 text-pastel-sky-text hover:bg-pastel-sky/30 disabled:border-border-hairline disabled:bg-surface-panel-muted disabled:text-text-muted disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0"
             >
               {isReoptimizing ? "Rebuilding..." : "Rebuild Around Locked Sessions"}
             </button>
           </div>
         </div>
-        <p className="text-xs text-white/35 leading-relaxed break-words">
+        <p className="text-xs text-text-muted leading-relaxed break-words">
           Drag any session to a different day to lock it in place. Locked sessions (pinned + custom) are preserved, and rebuild updates only the remaining generated sessions.
         </p>
       </div>
@@ -578,8 +579,8 @@ export default function PlanPreview({
       {feasibility.units.some(
         (unit) => unit.status === "at_risk" || unit.status === "impossible"
       ) && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/[0.04] p-3">
-          <div className="text-xs font-semibold text-red-300">
+        <div className="rounded-2xl border border-pastel-rose-text/20 bg-pastel-rose/20 p-3">
+          <div className="text-xs font-semibold text-pastel-rose-text">
             {feasibility.units.some((unit) => unit.status === "impossible")
               ? "Some topics cannot fit in their time window"
               : "Some topics are tight on time"}
@@ -589,8 +590,8 @@ export default function PlanPreview({
               .filter((unit) => unit.status === "at_risk" || unit.status === "impossible")
               .map((unit) => (
                 <div key={unit.unitId} className="flex items-center gap-2 text-xs">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${unit.status === "impossible" ? "bg-red-400" : "bg-amber-400"}`} />
-                  <span className={`${unit.status === "impossible" ? "text-red-200/80" : "text-amber-200/70"} break-words`}>
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${unit.status === "impossible" ? "bg-pastel-rose-text" : "bg-pastel-peach-text"}`} />
+                  <span className={`${unit.status === "impossible" ? "text-pastel-rose-text" : "text-pastel-peach-text"} break-words`}>
                     {unit.name}: {unit.totalSessions} sessions needed, {unit.availableMinutes} min available
                   </span>
                 </div>
@@ -599,29 +600,29 @@ export default function PlanPreview({
         </div>
       )}
 
-      <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-4 space-y-3">
+      <div className="rounded-2xl border border-border-hairline bg-surface-panel p-4 space-y-3 shadow-card">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <p className="text-xs uppercase tracking-widest text-sky-300/70 font-semibold">
+            <p className="text-xs uppercase tracking-widest text-text-secondary font-semibold">
               Plan Review
             </p>
             {criticalCount > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-red-300 font-semibold">
+              <span className="chip-rose">
                 {criticalCount} critical
               </span>
             )}
             {warningCount > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold">
+              <span className="chip-peach">
                 {warningCount} warning{warningCount > 1 ? "s" : ""}
               </span>
             )}
             {criticalCount === 0 && warningCount === 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold">
+              <span className="chip-mint">
                 healthy
               </span>
             )}
           </div>
-          <div className="text-right text-[11px] text-white/40 shrink-0 flex items-center gap-3">
+          <div className="text-right text-[11px] text-text-muted shrink-0 flex items-center gap-3">
             <span>{planReview.subjectCount} subj</span>
             <span>{planReview.topicCount} topics</span>
             <span>{minToHuman(planReview.totalMinutes)}</span>
@@ -629,45 +630,45 @@ export default function PlanPreview({
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-            <p className="text-[11px] uppercase tracking-wider text-white/40 font-semibold mb-2">
+          <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-3">
+            <p className="text-[11px] uppercase tracking-wider text-text-muted font-semibold mb-2">
               How Built
             </p>
             <div className="space-y-1">
               {planReview.generationNotes.map((note) => (
-                <p key={note} className="text-xs text-white/65 leading-relaxed break-words">
+                <p key={note} className="text-xs text-text-secondary leading-relaxed break-words">
                   {note}
                 </p>
               ))}
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-            <p className="text-[11px] uppercase tracking-wider text-white/40 font-semibold mb-2">
+          <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-3">
+            <p className="text-[11px] uppercase tracking-wider text-text-muted font-semibold mb-2">
               Warnings
             </p>
             <div className="space-y-1.5">
               {planReview.issues.length === 0 && (
-                <p className="text-xs text-emerald-300/80">All clear - looks good to commit.</p>
+                <p className="text-xs text-pastel-mint-text">All clear - looks good to commit.</p>
               )}
               {planReview.issues.slice(0, 5).map((issue, idx) => (
                 <div key={`${issue.message}-${idx}`} className="flex items-start gap-1.5">
                   <span
                     className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${
                       issue.level === "critical"
-                        ? "bg-red-400"
+                        ? "bg-pastel-rose-text"
                         : issue.level === "warning"
-                          ? "bg-amber-400"
-                          : "bg-white/30"
+                          ? "bg-pastel-peach-text"
+                          : "bg-text-muted"
                     }`}
                   />
                   <span
                     className={`text-xs leading-relaxed break-words ${
                       issue.level === "critical"
-                        ? "text-red-300/90"
+                        ? "text-pastel-rose-text"
                         : issue.level === "warning"
-                          ? "text-amber-300/90"
-                          : "text-white/60"
+                          ? "text-pastel-peach-text"
+                          : "text-text-secondary"
                     }`}
                   >
                     {issue.message}
@@ -677,24 +678,24 @@ export default function PlanPreview({
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-            <p className="text-[11px] uppercase tracking-wider text-white/40 font-semibold mb-2">
+          <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-3">
+            <p className="text-[11px] uppercase tracking-wider text-text-muted font-semibold mb-2">
               Suggested Fixes
             </p>
             <div className="space-y-2">
               {planReview.fixes.length === 0 && (
-                <p className="text-xs text-white/55">No fixes needed.</p>
+                <p className="text-xs text-text-muted">No fixes needed.</p>
               )}
               {planReview.fixes.slice(0, 4).map((fix) => (
                 <div key={fix.text} className="flex items-start gap-2">
-                  <span className="text-xs text-sky-200/80 leading-relaxed break-words flex-1">
+                  <span className="text-xs text-text-secondary leading-relaxed break-words flex-1">
                     {fix.text}
                   </span>
                   {onGoToPhase && (
                     <button
                       type="button"
                       onClick={() => onGoToPhase(fix.targetPhase)}
-                      className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 text-sky-300 hover:bg-sky-500/25 hover:border-sky-500/50 transition-all"
+                      className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-pastel-sky/30 border border-pastel-sky-text/30 text-pastel-sky-text hover:bg-pastel-sky/40 transition-colors"
                     >
                       Fix in Phase {fix.targetPhase} {">"}
                     </button>
@@ -704,18 +705,18 @@ export default function PlanPreview({
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-            <p className="text-[11px] uppercase tracking-wider text-white/40 font-semibold mb-2">
+          <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-3">
+            <p className="text-[11px] uppercase tracking-wider text-text-muted font-semibold mb-2">
               Unplaced Sessions
             </p>
             <div className="space-y-1.5">
               {planReview.droppedTopics.length === 0 && (
-                <p className="text-xs text-white/55">All generated sessions are still represented in the preview.</p>
+                <p className="text-xs text-text-muted">All generated sessions are still represented in the preview.</p>
               )}
               {planReview.droppedTopics.slice(0, 4).map((topic) => (
                 <div key={topic.unitId} className="flex items-start justify-between gap-3 text-xs">
-                  <span className="text-white/70 leading-relaxed break-words">{topic.name}</span>
-                  <span className="shrink-0 text-red-300/90">
+                  <span className="text-text-secondary leading-relaxed break-words">{topic.name}</span>
+                  <span className="shrink-0 text-pastel-rose-text">
                     {topic.droppedSessions} missing | {topic.placedSessions}/{topic.totalSessions}
                   </span>
                 </div>
@@ -738,38 +739,38 @@ export default function PlanPreview({
                 moveSession(draggedSessionIndex, bucket.date)
                 setDraggedSessionIndex(null)
               }}
-              className={`bg-white/[0.03] border rounded-xl p-3 space-y-2 transition-colors ${
-                isFlexDay ? "border-amber-500/20" : "border-white/[0.06]"
-              } ${draggedSessionIndex != null ? "hover:border-sky-400/30" : ""}`}
+              className={`bg-surface-panel border rounded-2xl p-3 space-y-2 transition-colors shadow-card ${
+                isFlexDay ? "border-pastel-peach-text/20" : "border-border-hairline"
+              } ${draggedSessionIndex != null ? "hover:border-pastel-sky-text/30" : ""}`}
             >
-              <div className="flex items-center justify-between text-white/80 gap-3">
+              <div className="flex items-center justify-between text-text-primary gap-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-sm">{bucket.date}</span>
                   {isFlexDay && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold">
+                    <span className="chip-peach">
                       +{flexExtra}m flex
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <div className="text-xs text-white/40">
+                  <div className="text-xs text-text-muted">
                     {bucket.sessions.length} sessions | {bucket.totalMinutes} min
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => openManualDraft(bucket.date)}
-                    className="text-[11px] font-semibold px-2.5 py-1 rounded-md border border-white/[0.08] text-white/55 hover:border-white/20 hover:text-white/75"
-                  >
-                    + Add Session
-                  </button>
+              <button
+                type="button"
+                onClick={() => openManualDraft(bucket.date)}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-full border border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0"
+              >
+                + Add Session
+              </button>
                 </div>
               </div>
 
               {manualDraft?.date === bucket.date && (
-                <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-3 space-y-3">
+                <div className="rounded-2xl border border-pastel-butter-text/20 bg-pastel-butter/15 p-3 space-y-3">
                   <div className="grid gap-3 md:grid-cols-2">
                     <label className="space-y-1">
-                      <span className="text-[10px] uppercase tracking-widest text-white/35">Subject</span>
+                      <span className="text-[10px] uppercase tracking-widest text-text-muted">Subject</span>
                       <select
                         value={manualDraft.subjectId}
                         onChange={(event) => {
@@ -781,7 +782,7 @@ export default function PlanPreview({
                             topicId: nextTopicId,
                           } : current)
                         }}
-                        className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white/75 outline-none"
+                        className="w-full rounded-input border border-border-subtle bg-surface-page px-3 py-2 text-sm text-text-primary outline-none focus:border-border-strong"
                       >
                         {subjects.map((subject) => (
                           <option key={subject.id} value={subject.id}>{subject.name}</option>
@@ -790,14 +791,14 @@ export default function PlanPreview({
                     </label>
 
                     <label className="space-y-1">
-                      <span className="text-[10px] uppercase tracking-widest text-white/35">Topic</span>
+                      <span className="text-[10px] uppercase tracking-widest text-text-muted">Topic</span>
                       <select
                         value={manualDraft.topicId}
                         onChange={(event) => setManualDraft((current) => current ? {
                           ...current,
                           topicId: event.target.value,
                         } : current)}
-                        className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white/75 outline-none"
+                        className="w-full rounded-input border border-border-subtle bg-surface-page px-3 py-2 text-sm text-text-primary outline-none focus:border-border-strong"
                       >
                         <option value="">Custom session (no topic link)</option>
                         {selectedSubjectTopics.map((topic) => (
@@ -807,7 +808,7 @@ export default function PlanPreview({
                     </label>
 
                     <label className="space-y-1">
-                      <span className="text-[10px] uppercase tracking-widest text-white/35">Duration</span>
+                      <span className="text-[10px] uppercase tracking-widest text-text-muted">Duration</span>
                       <input
                         type="number"
                         min="15"
@@ -817,12 +818,12 @@ export default function PlanPreview({
                           ...current,
                           durationMinutes: Math.max(15, parseInt(event.target.value) || 15),
                         } : current)}
-                        className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white/75 outline-none"
+                        className="w-full rounded-input border border-border-subtle bg-surface-page px-3 py-2 text-sm text-text-primary outline-none focus:border-border-strong"
                       />
                     </label>
 
                     <label className="space-y-1">
-                      <span className="text-[10px] uppercase tracking-widest text-white/35">
+                      <span className="text-[10px] uppercase tracking-widest text-text-muted">
                         {manualDraft.topicId ? "Note" : "Custom Title"}
                       </span>
                       <input
@@ -833,7 +834,7 @@ export default function PlanPreview({
                           note: event.target.value,
                         } : current)}
                         placeholder={manualDraft.topicId ? "Optional label" : "Optional custom session title"}
-                        className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white/75 outline-none placeholder:text-white/20"
+                        className="w-full rounded-input border border-border-subtle bg-surface-page px-3 py-2 text-sm text-text-primary outline-none focus:border-border-strong placeholder:text-text-muted"
                       />
                     </label>
                   </div>
@@ -842,14 +843,14 @@ export default function PlanPreview({
                     <button
                       type="button"
                       onClick={() => setManualDraft(null)}
-                      className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-white/[0.08] text-white/50 hover:border-white/20 hover:text-white/70"
+                      className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-border-subtle text-text-muted hover:border-border-strong hover:text-text-secondary transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0"
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
                       onClick={addManualSession}
-                      className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200 hover:bg-fuchsia-500/15 disabled:border-white/[0.08] disabled:bg-white/[0.03] disabled:text-white/30 disabled:cursor-not-allowed"
+                      className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-pastel-butter-text/30 bg-pastel-butter/40 text-pastel-butter-text hover:bg-pastel-butter/50 disabled:border-border-hairline disabled:bg-surface-panel-muted disabled:text-text-muted disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0"
                     >
                       Add Session
                     </button>
@@ -861,13 +862,13 @@ export default function PlanPreview({
                 {bucket.subjectBuckets.map((subject) => (
                   <div
                     key={subject.subjectId}
-                    className="rounded-xl border border-white/[0.06] bg-white/[0.015] overflow-hidden"
+                    className="rounded-2xl border border-border-hairline bg-surface-panel-muted overflow-hidden"
                   >
-                    <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-white/[0.05] bg-white/[0.02]">
-                      <div className="text-xs font-semibold text-white/80 truncate min-w-0">
+                    <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-border-hairline bg-surface-panel">
+                      <div className="text-xs font-semibold text-text-primary truncate min-w-0">
                         {subject.subjectLabel}
                       </div>
-                      <div className="text-[11px] text-white/45 shrink-0">
+                      <div className="text-[11px] text-text-muted shrink-0">
                         {subject.items.length} sessions | {subject.totalMinutes} min
                       </div>
                     </div>
@@ -887,40 +888,40 @@ export default function PlanPreview({
                               }
                             }}
                             className={`flex items-center justify-between rounded-xl px-2 py-1.5 border cursor-pointer transition-all ${sessionTypeColor(session)} ${
-                              isSwapSource ? "ring-1 ring-fuchsia-400/70" : canReceiveSwap ? "hover:ring-1 hover:ring-fuchsia-400/30" : ""
+                              isSwapSource ? "ring-1 ring-pastel-lilac-text/50" : canReceiveSwap ? "hover:ring-1 hover:ring-pastel-lilac-text/20" : ""
                             }`}
                           >
                             <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-[10px] text-white/25">::</span>
-                              <span className="text-xs truncate min-w-0">
+                              <span className="text-[10px] text-text-muted">::</span>
+                              <span className="text-xs truncate min-w-0 text-text-primary">
                                 {stripSubjectPrefix(session.title, subject.subjectLabel)}
                               </span>
                               {session.session_type !== "core" && (
-                                <span className="text-[9px] uppercase font-bold opacity-60">
+                                <span className="text-[9px] uppercase font-bold opacity-60 text-text-secondary">
                                   {session.session_type}
                                 </span>
                               )}
                               {session.is_manual && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-200 font-semibold">
+                                <span className="chip-butter">
                                   manual
                                 </span>
                               )}
                               {session.is_pinned && !session.is_manual && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/15 border border-sky-500/30 text-sky-200 font-semibold">
+                                <span className="chip-sky">
                                   pinned
                                 </span>
                               )}
                               {session.is_topic_final_session && (
-                                <span className="text-[9px]" title="Final session for this topic">done</span>
+                                <span className="text-[9px] text-text-muted" title="Final session for this topic">done</span>
                               )}
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               {session.topic_completion_after != null && session.topic_completion_after > 0 && (
-                                <span className="text-[9px] text-emerald-400/70 font-medium">
+                                <span className="text-[9px] text-pastel-mint-text font-medium">
                                   {Math.round(session.topic_completion_after * 100)}%
                                 </span>
                               )}
-                              <span className="text-xs text-white/50">
+                              <span className="text-xs text-text-muted">
                                 {session.duration_minutes}m
                               </span>
                               {!session.is_manual && (
@@ -930,7 +931,7 @@ export default function PlanPreview({
                                     event.stopPropagation()
                                     togglePin(sessionIndex)
                                   }}
-                                  className={`text-xs ${session.is_pinned ? "text-sky-300" : "text-white/35 hover:text-white/70"}`}
+                                  className={`text-xs min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center ${session.is_pinned ? "text-pastel-sky-text" : "text-text-muted hover:text-text-primary"} transition-colors`}
                                   title={session.is_pinned ? "Unpin session" : "Pin session"}
                                 >
                                   pin
@@ -942,7 +943,7 @@ export default function PlanPreview({
                                   event.stopPropagation()
                                   startSwap(sessionIndex)
                                 }}
-                                className={`text-xs ${isSwapSource ? "text-fuchsia-300" : "text-white/35 hover:text-white/70"}`}
+                                className={`text-xs min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center ${isSwapSource ? "text-pastel-lilac-text" : "text-text-muted hover:text-text-primary"} transition-colors`}
                                 title="Swap with another session"
                               >
                                 swap
@@ -953,7 +954,7 @@ export default function PlanPreview({
                                   event.stopPropagation()
                                   removeSession(sessionIndex)
                                 }}
-                                className="text-red-400/40 hover:text-red-400 text-xs"
+                                className="text-pastel-rose-text/60 hover:text-pastel-rose-text text-xs min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center transition-colors"
                                 title="Remove from preview"
                               >
                                 x
@@ -972,9 +973,9 @@ export default function PlanPreview({
       </div>
 
       <div className="flex justify-end">
-        <button onClick={onConfirm} disabled={localSessions.length === 0} className="btn-primary disabled:cursor-not-allowed disabled:opacity-40">
+        <Button variant="primary" size="md" className="min-h-[44px] md:min-h-0" onClick={onConfirm} disabled={localSessions.length === 0}>
           Continue to Confirm
-        </button>
+        </Button>
       </div>
     </div>
   )

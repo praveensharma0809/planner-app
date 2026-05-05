@@ -7,6 +7,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { createBrowserClient } from "@supabase/ssr"
 import { useSidebar, type SidebarMode } from "./AppShell"
 
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function getFocusableElements(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+}
+
 function useSupabaseBrowserClient() {
   return useMemo(
     () =>
@@ -310,6 +317,61 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
 export function Sidebar({ className, style }: { className?: string; style?: React.CSSProperties }) {
   const { mode, setMode, setIsHovering, mobileOpen, closeMobile } = useSidebar()
   const pathname = usePathname()
+  const sidebarRef = useRef<HTMLDivElement>(null)
+  const previousActiveEl = useRef<HTMLElement | null>(null)
+
+  // ── Focus trap for mobile drawer (F5.5) ──
+  const trapFocus = useCallback((e: KeyboardEvent) => {
+    if (e.key !== "Tab" || !sidebarRef.current) return
+    const focusable = getFocusableElements(sidebarRef.current)
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+  }, [])
+
+  const handleEscape = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeMobile()
+    },
+    [closeMobile]
+  )
+
+  useEffect(() => {
+    if (!mobileOpen) {
+      if (previousActiveEl.current && typeof previousActiveEl.current.focus === "function") {
+        previousActiveEl.current.focus()
+        previousActiveEl.current = null
+      }
+      return
+    }
+
+    previousActiveEl.current = document.activeElement as HTMLElement
+    document.addEventListener("keydown", handleEscape)
+    document.addEventListener("keydown", trapFocus)
+
+    requestAnimationFrame(() => {
+      if (sidebarRef.current) {
+        const focusable = getFocusableElements(sidebarRef.current)
+        if (focusable.length > 0) focusable[0].focus()
+      }
+    })
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape)
+      document.removeEventListener("keydown", trapFocus)
+    }
+  }, [mobileOpen, handleEscape, trapFocus])
 
   // Debounce refs for hover-expand (F3.3)
   const enterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -374,8 +436,14 @@ export function Sidebar({ className, style }: { className?: string; style?: Reac
 
   const isPinned = mode === "locked-open"
 
+  // F5.3: Nav sections rendered — on mobile, skip the primary nav (handled by tab bar)
+  const navSectionsToRender = mobileOpen
+    ? NAV_SECTIONS.filter((s) => s.id === "system")
+    : NAV_SECTIONS
+
   return (
     <aside
+      ref={sidebarRef}
       className={[
         "sidebar-root",
         isCollapsed ? "sidebar-collapsed" : "",
@@ -436,7 +504,7 @@ export function Sidebar({ className, style }: { className?: string; style?: Reac
         className="flex flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-3"
         aria-label="App navigation"
       >
-        {NAV_SECTIONS.map((section, sectionIndex) => (
+        {navSectionsToRender.map((section, sectionIndex) => (
           <div
             key={section.id}
             className={`px-2 ${sectionIndex > 0 ? "mt-2" : ""}`}
@@ -465,6 +533,20 @@ export function Sidebar({ className, style }: { className?: string; style?: Reac
           </div>
         ))}
       </nav>
+
+      {/* F5.3: Mobile Account link */}
+      {mobileOpen && !isCollapsed && (
+        <div className="px-2 pb-2">
+          <Link
+            href="/dashboard/settings"
+            onClick={closeMobile}
+            className="group relative flex items-center gap-3 w-full px-3 py-2.5 rounded-full text-[13.5px] font-medium transition-all duration-150 select-none text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+          >
+            <SettingsIcon />
+            <span className="truncate">Account</span>
+          </Link>
+        </div>
+      )}
 
       <SidebarFooter collapsed={isCollapsed} />
     </aside>

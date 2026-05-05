@@ -27,7 +27,7 @@ export function Progress({
     <div className={`flex items-center gap-3 ${className}`}>
       <div
         className="ui-progress-track flex-1"
-        style={{ height }}
+        style={{ height: `${height}px` }}
         role="progressbar"
         aria-valuenow={clamped}
         aria-valuemin={0}
@@ -39,7 +39,7 @@ export function Progress({
         />
       </div>
       {showLabel && (
-        <span className="text-xs tabular-nums" style={{ color: "var(--sh-text-muted)", minWidth: "2.5rem", textAlign: "right" }}>
+        <span className="text-xs tabular-nums" style={{ color: "var(--text-muted)", minWidth: "2.5rem", textAlign: "right" }}>
           {clamped}%
         </span>
       )}

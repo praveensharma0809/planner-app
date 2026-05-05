@@ -71,7 +71,7 @@ export function DashboardTaskToggle({
         disabled={isPending}
         aria-label="Complete task"
         aria-disabled={isPending}
-        className="dashboard-task-checkbox"
+        className="ui-checkbox shrink-0"
       >
         <span className="sr-only">Complete</span>
       </button>
@@ -86,10 +86,10 @@ export function DashboardTaskToggle({
       aria-label="Mark task as not completed"
       aria-disabled={isPending}
       title="Mark as not completed"
-      className="dashboard-task-complete-check"
+      className="ui-checkbox ui-checkbox-checked shrink-0"
     >
-      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+      <svg className="w-2.5 h-2.5" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" viewBox="0 0 12 12" aria-hidden="true">
+        <polyline points="2 6 5 9 10 3" />
       </svg>
     </button>
   )

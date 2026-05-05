@@ -63,15 +63,7 @@ export function TaskComposerModal({
           <button
             type="button"
             onClick={() => onTaskCreateModeChange("single")}
-            className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-            style={{
-              borderColor:
-                taskCreateMode === "single" ? "var(--sh-primary-glow)" : "var(--sh-border)",
-              color:
-                taskCreateMode === "single" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-              background:
-                taskCreateMode === "single" ? "var(--sh-primary-muted)" : "transparent",
-            }}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${taskCreateMode === "single" ? "bg-black text-white" : "bg-transparent text-text-secondary border border-border-subtle hover:bg-surface-hover"}`}
           >
             Single Task
           </button>
@@ -79,15 +71,7 @@ export function TaskComposerModal({
           <button
             type="button"
             onClick={() => onTaskCreateModeChange("bulk")}
-            className="rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors"
-            style={{
-              borderColor:
-                taskCreateMode === "bulk" ? "var(--sh-primary-glow)" : "var(--sh-border)",
-              color:
-                taskCreateMode === "bulk" ? "var(--sh-primary-light)" : "var(--sh-text-secondary)",
-              background:
-                taskCreateMode === "bulk" ? "var(--sh-primary-muted)" : "transparent",
-            }}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${taskCreateMode === "bulk" ? "bg-black text-white" : "bg-transparent text-text-secondary border border-border-subtle hover:bg-surface-hover"}`}
           >
             Bulk Series
           </button>
@@ -142,7 +126,7 @@ export function TaskComposerModal({
               />
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
+                <label className="text-xs font-semibold text-text-secondary">
                   Number Placement
                 </label>
                 <select
@@ -158,7 +142,7 @@ export function TaskComposerModal({
               </div>
 
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
+                <label className="text-xs font-semibold text-text-secondary">
                   Separator (what goes between name and number)
                 </label>
                 <select
@@ -176,14 +160,11 @@ export function TaskComposerModal({
             </div>
 
             {bulkPreview.length > 0 && (
-              <div
-                className="rounded-md border p-2.5"
-                style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.015)" }}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
+              <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-2.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                   Preview
                 </p>
-                <p className="mt-1 text-xs" style={{ color: "var(--sh-text-secondary)" }}>
+                <p className="mt-1 text-xs text-text-secondary">
                   {bulkPreview.join("  |  ")}
                 </p>
               </div>
@@ -200,7 +181,7 @@ export function TaskComposerModal({
           >
             Cancel
           </Button>
-          <Button type="submit" variant="primary" size="sm" disabled={saving}>
+          <Button type="submit" variant="primary" size="md" disabled={saving}>
             {saving
               ? "Saving..."
               : taskCreateMode === "single"

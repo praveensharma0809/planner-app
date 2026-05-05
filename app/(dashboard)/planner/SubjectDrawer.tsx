@@ -271,19 +271,18 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
         aria-label="Close drawer"
       />
 
-      {/* Centered panel */}
+      {/* Responsive panel: bottom sheet on mobile, centered modal on desktop */}
       <div
-        className={`fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border shadow-2xl transition-all duration-300 ease-out ${open ? "scale-100 opacity-100 pointer-events-auto" : "scale-95 opacity-0 pointer-events-none"}`}
-        style={{ background: "var(--sh-card)", borderColor: "var(--sh-border)" }}
+        className={`fixed z-50 flex max-h-[85vh] flex-col overflow-hidden bg-surface-panel shadow-[--shadow-app] transition-all duration-300 ease-out
+          inset-x-0 bottom-0 top-auto w-full rounded-t-3xl rounded-b-none border-x-0 border-b-0 border-t border-border-hairline
+          md:inset-auto md:left-1/2 md:top-1/2 md:w-[calc(100%-2rem)] md:max-w-xl md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border
+          ${open ? "translate-y-0 opacity-100 pointer-events-auto md:scale-100" : "translate-y-full opacity-0 pointer-events-none md:scale-95 md:translate-y-0"}`}
         role="dialog"
         aria-modal="true"
         aria-label={mode === "create" ? "Add New Subject" : "Edit Subject"}
       >
-        <div
-          className="flex items-center justify-between p-6 shrink-0"
-          style={{ borderBottom: "1px solid var(--sh-border)" }}
-        >
-          <h2 className="text-xl font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+        <div className="flex items-center justify-between p-6 shrink-0 border-b border-border-hairline">
+          <h2 className="text-xl font-semibold text-text-primary">
             {mode === "create" ? "Add New Subject" : "Edit Subject"}
           </h2>
           <button
@@ -292,8 +291,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
               onClose()
             }}
             disabled={busy}
-            className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors focus-ring"
-            style={{ color: "var(--sh-text-muted)" }}
+            className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-text-muted hover:bg-surface-hover"
             aria-label="Close"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -305,10 +303,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
         <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-6">
           <form id="subject-form" onSubmit={handleSaveSubject} className="space-y-5">
             <div>
-              <label
-                className="block text-xs font-semibold uppercase tracking-wide mb-2"
-                style={{ color: "var(--sh-text-muted)" }}
-              >
+              <label className="block text-xs font-semibold uppercase tracking-wide mb-2 text-text-muted">
                 Subject Name
               </label>
               <input
@@ -324,10 +319,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
 
             <div className="grid gap-4 sm:grid-cols-1">
               <div>
-                <label
-                  className="block text-xs font-semibold uppercase tracking-wide mb-2"
-                  style={{ color: "var(--sh-text-muted)" }}
-                >
+                <label className="block text-xs font-semibold uppercase tracking-wide mb-2 text-text-muted">
                   Deadline
                 </label>
                 <input
@@ -340,14 +332,14 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
               </div>
             </div>
 
-            <p className="text-xs leading-relaxed" style={{ color: "var(--sh-text-muted)" }}>
+            <p className="text-xs leading-relaxed text-text-muted">
               This page is for structure storage. Keep subjects, chapters, topics, and task titles organized here.
             </p>
 
             {mode === "edit" && (
-              <div className="rounded-lg border p-3" style={{ borderColor: "rgba(248,113,113,0.35)", background: "rgba(248,113,113,0.08)" }}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-red-300">Danger Zone</p>
-                <p className="mt-1 text-xs text-red-200/80">
+              <div className="rounded-xl border border-pastel-rose/40 p-3 bg-pastel-rose/30">
+                <p className="text-xs font-semibold uppercase tracking-wide text-pastel-rose-text">Danger Zone</p>
+                <p className="mt-1 text-xs text-pastel-rose-text/80">
                   Deleting a subject is permanent and cannot be undone.
                 </p>
                 <button
@@ -356,7 +348,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
                     void handleDeleteSubject()
                   }}
                   disabled={busy}
-                  className="ui-btn ui-btn-danger ui-btn-sm mt-2"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-pill font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] bg-pastel-rose text-pastel-rose-text hover:opacity-90 h-8 px-3 text-xs mt-2"
                 >
                   {deleting ? "Deleting..." : "Delete Subject"}
                 </button>
@@ -365,16 +357,13 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
           </form>
         </div>
 
-        <div
-          className="p-6 shrink-0"
-          style={{ borderTop: "1px solid var(--sh-border)", background: "var(--sh-card)" }}
-        >
+        <div className="p-6 shrink-0 border-t border-border-hairline bg-surface-panel">
           {mode === "create" ? (
             <button
               form="subject-form"
               type="submit"
               disabled={busy}
-              className="ui-btn ui-btn-primary ui-btn-md w-full justify-center disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-pill font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] bg-action-primary-bg text-action-primary-fg hover:bg-action-primary-bg-hover shadow-none h-10 px-4 text-sm w-full"
             >
               {loading ? "Saving…" : "Create Subject"}
             </button>
@@ -384,7 +373,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
                 form="subject-form"
                 type="submit"
                 disabled={busy}
-                className="ui-btn ui-btn-primary ui-btn-md flex-1 justify-center disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 rounded-pill font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] bg-action-primary-bg text-action-primary-fg hover:bg-action-primary-bg-hover shadow-none h-10 px-4 text-sm flex-1"
               >
                 {loading ? "Saving..." : "Save Changes"}
               </button>
@@ -394,7 +383,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
                   void handleArchiveSubject()
                 }}
                 disabled={busy}
-                className="ui-btn ui-btn-danger ui-btn-md flex-1 justify-center disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 rounded-pill font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] bg-pastel-rose text-pastel-rose-text hover:opacity-90 h-10 px-4 text-sm flex-1"
               >
                 {archiving ? "Archiving..." : "Archive Subject"}
               </button>

@@ -454,6 +454,16 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - 2026-05-06 · F4.4 · DSP · PASS — removed hideMenuOnRoute suppression; hamburger menu icon visible on every route below lg
 - 2026-05-06 · F4.5 · DSP · PASS — added pr-4 to ScheduleTopbarControls outer container; subject chips use flex-wrap below lg to prevent horizontal overflow
 
+- 2026-05-06 · Bug 1 (Topbar CTA contrast) · DSP · PASS — both "+ New Plan" buttons use inline styles `style={{ background: "#1A1612", color: "#FFFFFF" }}` to bypass `.text-white { color: #1a1a2e; }` global CSS remapping; visible in all states on both standard and schedule topbar branches
+- 2026-05-06 · Bug 2 (Schedule chips overflow) · DSP · PASS — removed `overflow-x-auto` from outer ScheduleTopbarControls container; changed subject chips container to always `flex-wrap` (removed `overflow-x-auto lg:flex-nowrap`); chips wrap cleanly at 768px with `gap-1.5`
+- 2026-05-06 · F5.1 · DSP · PASS — created `MobileTabBar.tsx` with 5 tabs (Overview/Subjects/Calendar/Schedule/Planner), fixed bottom visible only `<md`, 56px min-height touch targets, `--canvas` bg with top hairline border, active state via `usePathname()` with primary/secondary text color distinction
+- 2026-05-06 · F5.2 · DSP · PASS — wired `<MobileTabBar />` in AppShell below `<main>`; added `pb-[calc(64px+env(safe-area-inset-bottom,0px))] md:pb-6` to main content area so last items remain scroll-reachable above tab bar on mobile
+- 2026-05-06 · F5.3 · DSP · PASS — mobile drawer filters out main nav section (5 primary items now handled by tab bar); shows only system nav (Settings) + Account link (maps to /dashboard/settings) + branding + Sign out; desktop sidebar behavior unchanged
+- 2026-05-06 · F5.4 · DSP · PASS — hamburger renders unconditionally on every route in both Topbar branches (schedule and non-schedule); opens mobile drawer with new overflow-only contents; no route-specific suppression
+- 2026-05-06 · F5.5 · DSP · PASS — MobileTabBar uses `<nav role="navigation" aria-label="Primary mobile">` with `aria-current="page"` on active tab and `aria-label` on each tab control; mobile drawer has focus trap (ported from Modal.tsx pattern) with Tab cycling within open drawer and Escape to close; previous focus restored on drawer close
+- 2026-05-06 · F5.6 · DSP · PASS — MobileTabBar respects `env(safe-area-inset-bottom)` via inline style; `.topbar-root` uses `padding-top: calc(0px + env(safe-area-inset-top, 0px))` without breaking non-notch layouts
+- 2026-05-06 · Gate F5 · DSP · PASS — all 200 tests pass (191 existing + 9 new MobileTabBar tests); TypeScript typecheck clean; mobile user on 375px can reach all primary routes via bottom tabs + secondary actions via hamburger drawer
+
 ---
 
 ## 8. Working agreements

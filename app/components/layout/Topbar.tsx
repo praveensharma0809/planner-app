@@ -164,7 +164,11 @@ export function Topbar() {
 
           <div className="flex items-center justify-end gap-2 shrink-0">
             {!pathname.startsWith("/planner") && (
-              <Link href="/planner" className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] md:min-h-0 md:h-9 px-4 text-xs font-semibold bg-black text-white hover:bg-[--action-primary-bg-hover] transition-all duration-150">
+              <Link
+                href="/planner"
+                className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] md:min-h-0 md:h-9 px-4 text-xs font-semibold transition-all duration-150"
+                style={{ background: "#1A1612", color: "#FFFFFF" }}
+              >
                 + New Plan
               </Link>
             )}
@@ -261,7 +265,8 @@ export function Topbar() {
       {!isPlannerRoute && (
         <Link
           href="/planner"
-          className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] md:min-h-0 md:h-9 px-4 text-xs font-semibold bg-[#1A1612] text-white hover:bg-[#2A2622] transition-all duration-150 flex-shrink-0"
+          className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] md:min-h-0 md:h-9 px-4 text-xs font-semibold transition-all duration-150 flex-shrink-0"
+          style={{ background: "#1A1612", color: "#FFFFFF" }}
         >
           + New Plan
         </Link>
@@ -272,7 +277,7 @@ export function Topbar() {
 
 function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
   return (
-        <div className="flex min-h-0 items-center gap-2 overflow-x-auto px-2 py-1.5 pr-4" aria-label="Schedule controls">
+    <div className="flex min-h-0 items-center gap-2 px-2 py-1.5 pr-4" aria-label="Schedule controls">
       {/* Navigation — segmented pill */}
       <div
         className="flex shrink-0 items-center gap-0.5 rounded-full p-1"
@@ -287,7 +292,7 @@ function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
       </div>
 
       {/* Subject chips */}
-      <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto flex-wrap lg:flex-nowrap" aria-label="Subject filters">
+      <div className="flex min-w-0 items-center gap-1.5 flex-wrap" aria-label="Subject filters">
         {state.chips.map((chip) => {
           const isActive = chip.id === state.activeChipId
           return (

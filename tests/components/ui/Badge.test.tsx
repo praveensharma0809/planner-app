@@ -13,24 +13,34 @@ describe("Badge", () => {
     expect(screen.getByText("Label")).toBeInTheDocument()
   })
 
-  it("renders with default variant class", () => {
+  it("renders with default neutral variant class", () => {
     renderBadge()
-    expect(screen.getByText("Label")).toHaveClass("ui-badge-default")
+    expect(screen.getByText("Label")).toHaveClass("chip-neutral")
   })
 
-  it("renders success variant class", () => {
+  it("renders success variant class (legacy → chip-mint)", () => {
     renderBadge({ variant: "success" })
-    expect(screen.getByText("Label")).toHaveClass("ui-badge-success")
+    expect(screen.getByText("Label")).toHaveClass("chip-mint")
   })
 
-  it("renders warning variant class", () => {
+  it("renders warning variant class (legacy → chip-peach)", () => {
     renderBadge({ variant: "warning" })
-    expect(screen.getByText("Label")).toHaveClass("ui-badge-warning")
+    expect(screen.getByText("Label")).toHaveClass("chip-peach")
   })
 
-  it("renders danger variant class", () => {
+  it("renders danger variant class (legacy → chip-rose)", () => {
     renderBadge({ variant: "danger" })
-    expect(screen.getByText("Label")).toHaveClass("ui-badge-danger")
+    expect(screen.getByText("Label")).toHaveClass("chip-rose")
+  })
+
+  it("renders mint variant class", () => {
+    renderBadge({ variant: "mint" })
+    expect(screen.getByText("Label")).toHaveClass("chip-mint")
+  })
+
+  it("renders lilac variant class", () => {
+    renderBadge({ variant: "lilac" })
+    expect(screen.getByText("Label")).toHaveClass("chip-lilac")
   })
 
   it("applies custom className", () => {
@@ -38,20 +48,30 @@ describe("Badge", () => {
     expect(screen.getByText("Label")).toHaveClass("my-custom")
   })
 
-  it("renders sm size class", () => {
+  it("renders sm size with smaller text and padding", () => {
     renderBadge({ size: "sm" })
-    expect(screen.getByText("Label")).toHaveClass("ui-badge-sm")
+    const badge = screen.getByText("Label")
+    expect(badge).toHaveClass("text-[11px]")
+    expect(badge).toHaveClass("px-2")
   })
 
-  it("renders lg size class", () => {
+  it("renders lg size with larger text", () => {
     renderBadge({ size: "lg" })
-    expect(screen.getByText("Label")).toHaveClass("ui-badge-lg")
+    const badge = screen.getByText("Label")
+    expect(badge).toHaveClass("text-[13px]")
   })
 
-  it("renders md size with no extra size class", () => {
+  it("renders md size with default chip classes only", () => {
     renderBadge({ size: "md" })
     const badge = screen.getByText("Label")
-    expect(badge).not.toHaveClass("ui-badge-sm")
-    expect(badge).not.toHaveClass("ui-badge-lg")
+    expect(badge).toHaveClass("chip-neutral")
+  })
+
+  it("renders dot when dot prop is true", () => {
+    renderBadge({ dot: true })
+    const badge = screen.getByText("Label")
+    const dot = badge.querySelector('span[aria-hidden="true"]')
+    expect(dot).toBeInTheDocument()
+    expect(dot).toHaveClass("rounded-full")
   })
 })

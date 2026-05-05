@@ -1,17 +1,17 @@
 import type { ReactNode } from "react"
-import { ThemeProvider } from "@/app/components/ThemeProvider"
 import { ToastProvider } from "@/app/components/Toast"
 
 /**
  * Wraps children with all providers needed for component tests.
  * Use with React Testing Library's `render(ui, { wrapper: TestProviders })`.
+ *
+ * ThemeProvider removed — the app is strictly light-mode.
+ * The `data-theme="light"` attribute is set on the root <html> tag in layout.tsx.
  */
 export function TestProviders({ children }: { children: ReactNode }) {
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        {children}
-      </ToastProvider>
-    </ThemeProvider>
+    <ToastProvider>
+      {children}
+    </ToastProvider>
   )
 }

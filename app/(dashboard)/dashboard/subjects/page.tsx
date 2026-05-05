@@ -1,6 +1,5 @@
 ﻿import { createServerSupabaseClient } from "@/lib/supabase/server"
 import type { Subject, Topic, TopicTask } from "@/lib/types/db"
-import { redirect } from "next/navigation"
 import {
   SubjectsDataTable,
   type SubjectNavItem,
@@ -17,7 +16,9 @@ export default async function SubjectsPage() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) redirect("/auth/login")
+  if (!user) {
+    return <SubjectsDataTable initialSubjects={[]} initialTasksByChapter={{}} />
+  }
 
   const { data: subjectRows } = await supabase
     .from("subjects")

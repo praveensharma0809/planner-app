@@ -17,10 +17,10 @@ const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 const sizeClass = {
-  sm: "max-w-sm",
-  md: "max-w-lg",
-  lg: "max-w-2xl",
-  xl: "max-w-4xl",
+  sm: "md:max-w-sm",
+  md: "md:max-w-lg",
+  lg: "md:max-w-2xl",
+  xl: "md:max-w-4xl",
 }
 
 function getFocusableElements(root: HTMLElement): HTMLElement[] {
@@ -103,7 +103,7 @@ export function Modal({
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/20 backdrop-blur-[2px]"
         onClick={backdropClose ? onClose : undefined}
         aria-hidden="true"
       />
@@ -111,30 +111,26 @@ export function Modal({
       {/* Panel */}
       <div
         ref={panelRef}
-        className={`fixed left-1/2 top-1/2 z-[61] flex max-h-[90vh] w-[calc(100%-2rem)] ${sizeClass[size]} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border animate-slide-in`}
+        className={`fixed z-[61] flex max-h-[85vh] flex-col overflow-hidden animate-slide-in
+          inset-x-0 bottom-0 top-auto w-full rounded-t-3xl rounded-b-none
+          md:inset-auto md:left-1/2 md:top-1/2 md:w-[calc(100%-2rem)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[28px]
+          ${sizeClass[size]}`}
         style={{
-          background: "var(--sh-card)",
-          border: "1px solid var(--sh-border)",
-          boxShadow: "var(--sh-shadow-lg)",
+          background: "var(--surface-panel)",
+          boxShadow: "var(--shadow-app)",
         }}
       >
         {/* Header */}
         {title && (
-          <div
-            className="flex items-center justify-between px-6 py-4 border-b"
-            style={{ borderColor: "var(--sh-border)" }}
-          >
-            <h2
-              className="text-base font-bold"
-              style={{ color: "var(--sh-text-primary)" }}
-            >
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[--border-hairline]">
+            <h2 className="text-base font-medium" style={{ color: "var(--text-primary)" }}>
               {title}
             </h2>
             <button
               onClick={onClose}
               aria-label="Close modal"
-              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5"
-              style={{ color: "var(--sh-text-muted)" }}
+              className="min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:w-8 md:h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[--surface-hover]"
+              style={{ color: "var(--text-muted)" }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <line x1="18" y1="6" x2="6" y2="18" />

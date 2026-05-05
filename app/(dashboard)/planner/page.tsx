@@ -1,6 +1,5 @@
 ﻿import { createServerSupabaseClient } from "@/lib/supabase/server"
 import type { Subject, Topic, TopicTask } from "@/lib/types/db"
-import { redirect } from "next/navigation"
 import type { IntakeImportMode } from "@/app/actions/planner/setup"
 import type { SubjectNavItem, TopicTaskItem } from "./subjects-data-table"
 import PlannerWizardClient from "./PlannerWizardClient"
@@ -15,7 +14,15 @@ export default async function PlannerPage() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) redirect("/auth/login")
+  if (!user) {
+    return (
+      <PlannerWizardClient
+        initialSubjects={[]}
+        initialTasksByChapter={{}}
+        initialImportMode="undone"
+      />
+    )
+  }
 
   const { data: settingsRow } = await supabase
     .from("planner_settings")

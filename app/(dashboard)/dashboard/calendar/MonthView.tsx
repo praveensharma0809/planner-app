@@ -34,17 +34,15 @@ interface Props {
 }
 
 const SUBJECT_COLORS = [
-  { dot: "bg-blue-400",    badge: "primary"  },
-  { dot: "bg-violet-400",  badge: "accent"   },
-  { dot: "bg-emerald-400", badge: "success"  },
-  { dot: "bg-orange-400",  badge: "warning"  },
-  { dot: "bg-pink-400",    badge: "danger"   },
-  { dot: "bg-cyan-400",    badge: "primary"  },
-  { dot: "bg-amber-400",   badge: "warning"  },
-  { dot: "bg-rose-400",    badge: "danger"   },
+  { badge: "primary" as const, chip: "chip-sky",    bg: "var(--pastel-sky)",    text: "var(--pastel-sky-text)" },
+  { badge: "accent"  as const, chip: "chip-lilac",  bg: "var(--pastel-lilac)",  text: "var(--pastel-lilac-text)" },
+  { badge: "success" as const, chip: "chip-mint",   bg: "var(--pastel-mint)",   text: "var(--pastel-mint-text)" },
+  { badge: "warning" as const, chip: "chip-peach",  bg: "var(--pastel-peach)",  text: "var(--pastel-peach-text)" },
+  { badge: "danger"  as const, chip: "chip-rose",   bg: "var(--pastel-rose)",   text: "var(--pastel-rose-text)" },
+  { badge: "primary" as const, chip: "chip-butter", bg: "var(--pastel-butter)", text: "var(--pastel-butter-text)" },
 ] as const
 
-type SubjectBadgeVariant = "primary" | "accent" | "success" | "warning" | "danger"
+type SubjectBadgeVariant = (typeof SUBJECT_COLORS)[number]["badge"]
 
 const SESSION_LABEL: Record<string, string> = {
   core: "Core",
@@ -150,7 +148,7 @@ export function MonthView({
 
   const handleComplete = async (taskId: string) => {
     setCompletingId(taskId)
-    setTaskCompletedLocally(taskId, true) // optimistic
+    setTaskCompletedLocally(taskId, true)
     try {
       const result = await setTaskCompletion(taskId, true)
       if (result.status === "SUCCESS") {
@@ -158,7 +156,6 @@ export function MonthView({
         return
       }
 
-      // Rollback on failure
       setTaskCompletedLocally(taskId, false)
       if (result.status === "UNAUTHORIZED") {
         addToast("Please sign in again.", "error")
@@ -177,7 +174,7 @@ export function MonthView({
 
   const handleUncomplete = async (taskId: string) => {
     setUncompletingId(taskId)
-    setTaskCompletedLocally(taskId, false) // optimistic
+    setTaskCompletedLocally(taskId, false)
     try {
       const result = await setTaskCompletion(taskId, false)
       if (result.status === "SUCCESS") {
@@ -219,7 +216,6 @@ export function MonthView({
         return
       }
 
-      // Rollback
       if (previousDate) {
         setTaskRows((prev) =>
           prev.map((t) => (t.id === taskId ? { ...t, scheduled_date: previousDate } : t))
@@ -290,13 +286,13 @@ export function MonthView({
               />
 
               <div
-                className="flex items-center gap-1 rounded-xl px-3 py-1.5"
-                style={{ background: "var(--sh-card)", border: "1px solid var(--sh-border)" }}
+                className="flex items-center gap-1 rounded-full px-3 py-1.5"
+                style={{ background: "var(--surface-page)", border: "1px solid var(--border-hairline)" }}
               >
                 <Link
                   href={`/dashboard/calendar?month=${prevMonth}`}
-                  className="p-1.5 rounded-lg transition-colors"
-                  style={{ color: "var(--sh-text-muted)" }}
+                  className="p-1.5 rounded-lg transition-colors hover:bg-[--surface-hover] min-h-[44px] min-w-[44px] flex items-center justify-center md:min-h-0 md:min-w-0"
+                  style={{ color: "var(--text-secondary)" }}
                   aria-label="Previous month"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -304,15 +300,15 @@ export function MonthView({
                   </svg>
                 </Link>
                 <span
-                  className="text-sm font-semibold min-w-[148px] text-center px-1"
-                  style={{ color: "var(--sh-text-primary)" }}
+                  className="text-sm font-medium min-w-[148px] text-center px-1"
+                  style={{ color: "var(--text-primary)" }}
                 >
                   {monthLabel}
                 </span>
                 <Link
                   href={`/dashboard/calendar?month=${nextMonth}`}
-                  className="p-1.5 rounded-lg transition-colors"
-                  style={{ color: "var(--sh-text-muted)" }}
+                  className="p-1.5 rounded-lg transition-colors hover:bg-[--surface-hover] min-h-[44px] min-w-[44px] flex items-center justify-center md:min-h-0 md:min-w-0"
+                  style={{ color: "var(--text-secondary)" }}
                   aria-label="Next month"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -327,19 +323,19 @@ export function MonthView({
 
       {/* Calendar grid */}
       <div
-        className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl"
-        style={{ border: "1px solid var(--sh-border)", background: "var(--sh-card)" }}
+        className="hidden md:flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl"
+        style={{ border: "1px solid var(--border-hairline)", background: "var(--surface-panel)" }}
       >
         {/* Day-of-week header */}
         <div
           className="grid shrink-0 grid-cols-7"
-          style={{ borderBottom: "1px solid var(--sh-border)", background: "rgba(255,255,255,0.025)" }}
+          style={{ borderBottom: "1px solid var(--border-hairline)" }}
         >
           {WEEK_DAYS.map((d, i) => (
             <div
               key={d}
-              className="py-2 text-center text-[10px] font-bold tracking-widest uppercase"
-              style={{ color: i === 6 ? "rgba(239,68,68,0.70)" : "var(--sh-text-muted)" }}
+              className="py-2 text-center text-[10px] font-semibold tracking-widest uppercase"
+              style={{ color: i === 6 ? "var(--pastel-rose-text)" : "var(--text-muted)" }}
             >
               {d}
             </div>
@@ -366,15 +362,13 @@ export function MonthView({
               .filter((t) => t.task_source === "plan")
               .reduce((sum, t) => sum + t.duration_minutes, 0)
             const studyHrs = studyMin / 60
-            const previewTasks = dayTasks.slice(0, 3)
-            const overflowCount = Math.max(0, dayTasks.length - previewTasks.length)
 
             if (!inCurrentMonth || !dateStr) {
               return (
                 <div
                   key={`empty-${cellIndex}`}
                   className="flex h-full min-h-0 flex-col border-b border-r p-1.5"
-                  style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.01)" }}
+                  style={{ borderColor: "var(--border-hairline)" }}
                   aria-hidden="true"
                 >
                   <div className="mb-1 flex shrink-0 items-center justify-between gap-1">
@@ -394,32 +388,37 @@ export function MonthView({
                     ? `, ${dayTasks.length} task${dayTasks.length !== 1 ? "s" : ""}`
                     : ""
                 }`}
-                className="flex h-full min-h-0 cursor-pointer flex-col border-b border-r p-1.5 text-left transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-indigo-500/60"
+                className="flex h-full min-h-0 cursor-pointer flex-col border-b border-r p-1.5 text-left transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[--focus-ring]/30"
                 style={{
-                  borderColor: "var(--sh-border)",
-                  background: isToday ? "rgba(124,108,255,0.08)" : "transparent",
+                  borderColor: "var(--border-hairline)",
+                  background: isToday
+                    ? "color-mix(in srgb, var(--pastel-butter) 28%, transparent)"
+                    : "transparent",
                 }}
               >
                 <div className="mb-1 flex shrink-0 items-center justify-between gap-1">
                   <span
                     className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold leading-none"
                     style={{
-                      background: isToday ? "var(--sh-primary)" : "transparent",
+                      background: isToday ? "var(--pastel-butter)" : "transparent",
                       color: isToday
-                        ? "#fff"
+                        ? "var(--pastel-butter-text)"
                         : isSunday
-                          ? "rgba(239,68,68,0.75)"
+                          ? "var(--pastel-rose-text)"
                           : isPast
-                            ? "var(--sh-text-muted)"
-                            : "var(--sh-text-secondary)",
+                            ? "var(--text-muted)"
+                            : "var(--text-secondary)",
                     }}
                   >
                     {dayNum}
                   </span>
                   {studyHrs > 0 && (
-                    <Badge variant="success" size="sm" className="hidden sm:inline-flex">
+                    <span
+                      className="hidden sm:inline-flex items-center rounded-full px-1.5 py-px text-[10px] font-medium"
+                      style={{ background: "var(--pastel-mint)", color: "var(--pastel-mint-text)" }}
+                    >
                       {studyHrs % 1 === 0 ? studyHrs.toFixed(0) : studyHrs.toFixed(1)}h
-                    </Badge>
+                    </span>
                   )}
                 </div>
 
@@ -427,37 +426,64 @@ export function MonthView({
                   {dayTasks.length === 0 ? (
                     <div className="flex h-full items-start pt-1">
                       <span
-                        className="h-1.5 w-1.5 rounded-full opacity-35"
-                        style={{ background: "var(--sh-text-muted)" }}
+                        className="h-1.5 w-1.5 rounded-full opacity-20"
+                        style={{ background: "var(--text-muted)" }}
                       />
                     </div>
                   ) : (
-                    <div className="flex h-full min-h-0 flex-col gap-[3px] overflow-hidden">
-                      {previewTasks.map((task) => {
+                    <div className="flex h-full min-h-0 flex-col gap-1 overflow-hidden">
+                      {/* Event 1 — shown on all breakpoints */}
+                      {[0].map((idx) => {
+                        const task = dayTasks[idx]
+                        if (!task) return null
                         const isDone = task.completed
                         const color = getColor(task.subject_id)
                         return (
-                          <div key={task.id} className="flex items-center gap-1">
-                            <span
-                              className={`h-[5px] w-[5px] shrink-0 rounded-full ${color.dot} ${
-                                isDone ? "opacity-25" : ""
-                              }`}
-                            />
-                            <span
-                              className="truncate text-[10px] leading-tight"
-                              style={{
-                                color: isDone ? "var(--sh-text-muted)" : "var(--sh-text-secondary)",
-                                textDecoration: isDone ? "line-through" : "none",
-                              }}
-                            >
-                              {task.title}
-                            </span>
+                          <div
+                            key={task.id}
+                            className="truncate rounded-[6px] px-1.5 py-0.5 text-[10px] font-medium leading-tight"
+                            style={{
+                              background: isDone ? "transparent" : color.bg,
+                              color: isDone ? "var(--text-muted)" : color.text,
+                              textDecoration: isDone ? "line-through" : "none",
+                              opacity: isDone ? 0.5 : 1,
+                            }}
+                          >
+                            {task.title}
                           </div>
                         )
                       })}
-                      {overflowCount > 0 && (
-                        <p className="shrink-0 pl-2.5 text-[10px]" style={{ color: "var(--sh-text-muted)" }}>
-                          +{overflowCount} more
+                      {/* Event 2 — desktop only (lg+) */}
+                      {[1].map((idx) => {
+                        const task = dayTasks[idx]
+                        if (!task) return null
+                        const isDone = task.completed
+                        const color = getColor(task.subject_id)
+                        return (
+                          <div
+                            key={task.id}
+                            className="hidden lg:block truncate rounded-[6px] px-1.5 py-0.5 text-[10px] font-medium leading-tight"
+                            style={{
+                              background: isDone ? "transparent" : color.bg,
+                              color: isDone ? "var(--text-muted)" : color.text,
+                              textDecoration: isDone ? "line-through" : "none",
+                              opacity: isDone ? 0.5 : 1,
+                            }}
+                          >
+                            {task.title}
+                          </div>
+                        )
+                      })}
+                      {/* Overflow count — tablet (md–lg) shows +N after 1 event */}
+                      {dayTasks.length > 1 && (
+                        <p className="shrink-0 pl-1.5 text-[10px] font-medium lg:hidden" style={{ color: "var(--text-muted)" }}>
+                          +{dayTasks.length - 1} more
+                        </p>
+                      )}
+                      {/* Overflow count — desktop (lg+) shows +N after 2 events */}
+                      {dayTasks.length > 2 && (
+                        <p className="shrink-0 pl-1.5 text-[10px] font-medium hidden lg:block" style={{ color: "var(--text-muted)" }}>
+                          +{dayTasks.length - 2} more
                         </p>
                       )}
                     </div>
@@ -469,15 +495,118 @@ export function MonthView({
         </div>
       </div>
 
+      {/* Mobile agenda list */}
+      <div className="md:hidden flex flex-col gap-4 overflow-y-auto flex-1 min-h-0 px-1 pb-2">
+        {/* Month label for mobile context */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-medium" style={{ color: "var(--text-primary)" }}>
+            {monthLabel}
+          </h2>
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            {taskRows.length} task{taskRows.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const dayNum = i + 1
+          const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`
+          const dayTasks = getTasksForDate(taskRows, dateStr)
+          if (dayTasks.length === 0) return null
+
+          const isToday = dateStr === today
+          const isPast = dateStr < today
+
+          return (
+            <div key={dateStr} className="flex flex-col gap-2">
+              <button
+                onClick={() => setSelectedDay(dateStr)}
+                className="flex items-center gap-2 text-left active:opacity-70 transition-opacity min-h-[44px]"
+              >
+                <span
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold leading-none"
+                  style={{
+                    background: isToday ? "var(--pastel-butter)" : "var(--surface-page)",
+                    color: isToday ? "var(--pastel-butter-text)" : isPast ? "var(--text-muted)" : "var(--text-primary)",
+                  }}
+                >
+                  {dayNum}
+                </span>
+                <span className="text-sm font-medium" style={{ color: isToday ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                  {formatDayName(dateStr)}
+                </span>
+                {isToday && (
+                  <span className="chip-butter text-[10px]">Today</span>
+                )}
+              </button>
+
+              <div className="flex flex-col gap-1.5 pl-9">
+                {dayTasks.map((task) => {
+                  const isDone = task.completed
+                  const color = getColor(task.subject_id)
+                  const subjectName = getSubjectName(task)
+
+                  return (
+                    <button
+                      key={task.id}
+                      onClick={() => setSelectedDay(dateStr)}
+                      className="w-full text-left rounded-xl p-3 transition-all active:scale-[0.98]"
+                      style={{
+                        background: isDone ? "var(--surface-page)" : color.bg,
+                        opacity: isDone ? 0.55 : 1,
+                      }}
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={color.chip}>{subjectName}</span>
+                        <span className="text-[10px] font-medium" style={{ color: isDone ? "var(--text-muted)" : color.text }}>
+                          {SESSION_LABEL[task.session_type] ?? task.session_type}
+                        </span>
+                      </div>
+                      <p
+                        className="mt-1 text-sm font-medium leading-snug"
+                        style={{
+                          color: isDone ? "var(--text-muted)" : color.text,
+                          textDecoration: isDone ? "line-through" : "none",
+                        }}
+                      >
+                        {task.title}
+                      </p>
+                      <p className="mt-0.5 text-[11px]" style={{ color: isDone ? "var(--text-muted)" : "var(--text-secondary)" }}>
+                        {task.duration_minutes} min
+                      </p>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Empty month state */}
+        {taskRows.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="text-4xl mb-3 opacity-20">&#9788;</div>
+            <p className="text-sm font-medium" style={{ color: "var(--text-muted)" }}>
+              No tasks this month
+            </p>
+            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+              Enjoy the free time!
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Subject colour legend */}
       {subjects.length > 0 && (
-        <div className="shrink-0 flex flex-wrap gap-2 pt-1">
+        <div className="shrink-0 flex flex-nowrap md:flex-wrap items-center gap-2 pt-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0">
+          <span className="text-[10px] uppercase tracking-wide font-medium shrink-0" style={{ color: "var(--text-muted)" }}>
+            Subjects
+          </span>
           {subjects.map((s, i) => {
             const c = SUBJECT_COLORS[i % SUBJECT_COLORS.length]
             return (
-              <Badge key={s.id} variant={c.badge as SubjectBadgeVariant} size="sm">
+              <span key={s.id} className={`${c.chip} shrink-0`}>
                 {s.name}
-              </Badge>
+              </span>
             )
           })}
         </div>
@@ -493,7 +622,7 @@ export function MonthView({
         {selectedDay && (
           <>
             <div className="-mt-2 mb-4 flex items-center justify-between gap-2">
-              <p className="text-sm" style={{ color: "var(--sh-text-muted)" }}>
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                 {formatFullDate(selectedDay)}
               </p>
               <AddTaskButton
@@ -507,11 +636,11 @@ export function MonthView({
 
             {selectedTasks.length === 0 ? (
               <div className="text-center py-10">
-                <div className="text-5xl mb-3 opacity-20">☀</div>
-                <p className="text-sm" style={{ color: "var(--sh-text-muted)" }}>
+                <div className="text-5xl mb-3 opacity-20">&#9788;</div>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                   No tasks scheduled for this day.
                 </p>
-                <p className="text-xs mt-1" style={{ color: "var(--sh-text-muted)" }}>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
                   Enjoy the free time!
                 </p>
               </div>
@@ -530,8 +659,8 @@ export function MonthView({
                       key={task.id}
                       className="rounded-xl p-2 transition-all"
                       style={{
-                        background: isDone ? "rgba(255,255,255,0.02)" : "var(--sh-card)",
-                        border: "1px solid var(--sh-border)",
+                        background: isDone ? "var(--surface-page)" : "var(--surface-panel)",
+                        border: "1px solid var(--border-hairline)",
                         opacity: isDone ? 0.6 : 1,
                       }}
                     >
@@ -541,12 +670,13 @@ export function MonthView({
                           <button
                             onClick={() => handleUncomplete(task.id)}
                             disabled={isUncompleting}
-                            className="w-5 h-5 shrink-0 mt-0.5 rounded border-2 border-emerald-500/60 bg-emerald-500/10 flex items-center justify-center disabled:opacity-40"
+                            className="w-5 h-5 shrink-0 mt-0.5 rounded border-2 border-[--pastel-mint-text]/60 bg-[--pastel-mint]/40 flex items-center justify-center disabled:opacity-40"
                             title="Undo complete"
                             aria-label="Undo complete"
                           >
                             <svg
-                              className="w-3 h-3 text-emerald-400"
+                              className="w-3 h-3"
+                              style={{ color: "var(--pastel-mint-text)" }}
                               fill="none"
                               strokeLinecap="round"
                               strokeLinejoin="round"
@@ -562,7 +692,7 @@ export function MonthView({
                             onClick={() => handleComplete(task.id)}
                             disabled={isCompleting}
                             className="w-5 h-5 shrink-0 mt-0.5 rounded border-2 transition-colors disabled:opacity-40"
-                            style={{ borderColor: "var(--sh-border)" }}
+                            style={{ borderColor: "var(--border-subtle)" }}
                             aria-label="Mark complete"
                           />
                         )}
@@ -578,7 +708,7 @@ export function MonthView({
                               </Badge>
                               <span
                                 className="text-[10px] uppercase tracking-wide font-medium"
-                                style={{ color: "var(--sh-text-muted)" }}
+                                style={{ color: "var(--text-muted)" }}
                               >
                                 {SESSION_LABEL[task.session_type] ?? task.session_type}
                               </span>
@@ -591,7 +721,7 @@ export function MonthView({
                               className="mt-1 break-words text-sm font-semibold leading-snug"
                               title={task.title}
                               style={{
-                                color: isDone ? "var(--sh-text-muted)" : "var(--sh-text-primary)",
+                                color: isDone ? "var(--text-muted)" : "var(--text-primary)",
                                 textDecoration: isDone ? "line-through" : "none",
                               }}
                             >
@@ -603,7 +733,7 @@ export function MonthView({
                             <div className="flex items-center gap-1.5">
                               <span
                                 className="text-[11px] flex items-center gap-1"
-                                style={{ color: "var(--sh-text-muted)" }}
+                                style={{ color: "var(--text-muted)" }}
                               >
                                 <svg
                                   className="w-3 h-3"

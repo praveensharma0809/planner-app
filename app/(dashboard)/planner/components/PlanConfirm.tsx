@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useState } from "react"
+import { Button } from "@/app/components/ui"
 import type { ScheduledSession, FeasibilityResult } from "@/lib/planner/engine"
 import type { KeepPreviousMode } from "@/app/actions/planner/plan"
 
@@ -14,6 +15,10 @@ interface PlanConfirmProps {
   commitBlocked?: boolean
   commitBlockedReason?: string
   onResolveIssues?: () => void
+  keepMode?: KeepPreviousMode
+  summary?: string
+  onKeepModeChange?: (mode: KeepPreviousMode) => void
+  onSummaryChange?: (summary: string) => void
 }
 
 function formatMinutes(totalMinutes: number): string {
@@ -34,9 +39,26 @@ export default function PlanConfirm({
   commitBlocked,
   commitBlockedReason,
   onResolveIssues,
+  keepMode: externalKeepMode,
+  summary: externalSummary,
+  onKeepModeChange,
+  onSummaryChange,
 }: PlanConfirmProps) {
-  const [keepMode, setKeepMode] = useState<KeepPreviousMode>("until")
-  const [summary, setSummary] = useState("")
+  const [internalKeepMode, setInternalKeepMode] = useState<KeepPreviousMode>("until")
+  const [internalSummary, setInternalSummary] = useState("")
+
+  const keepMode = externalKeepMode ?? internalKeepMode
+  const summary = externalSummary ?? internalSummary
+
+  function setKeepMode(mode: KeepPreviousMode) {
+    setInternalKeepMode(mode)
+    onKeepModeChange?.(mode)
+  }
+
+  function setSummary(value: string) {
+    setInternalSummary(value)
+    onSummaryChange?.(value)
+  }
 
   const totalMinutes = sessions.reduce((s, t) => s + t.duration_minutes, 0)
   const uniqueDays = new Set(sessions.map((s) => s.scheduled_date)).size
@@ -60,20 +82,20 @@ export default function PlanConfirm({
     ? `/dashboard/calendar?month=${newPlanStart.slice(0, 7)}`
     : "/dashboard/calendar"
 
-  const keepOptions: { value: KeepPreviousMode; label: string; desc: string; tone: "emerald" | "red" }[] = [
+  const keepOptions: { value: KeepPreviousMode; label: string; desc: string; tone: "mint" | "rose" }[] = [
     {
       value: "until",
       label: "Keep previous tasks until new plan start date",
       desc: newPlanStart
         ? `Keep all tasks before ${newPlanStart}. Delete all tasks on/after ${newPlanStart}, then insert the new plan from that date onward.`
         : "Keep all tasks before the new plan start date. Delete all tasks on/after the new start date, then insert the new plan from that date onward.",
-      tone: "emerald",
+      tone: "mint",
     },
     {
       value: "none",
       label: "Delete all previous tasks",
       desc: "Delete all previous tasks, then insert the full new plan.",
-      tone: "red",
+      tone: "rose",
     },
   ]
 
@@ -88,15 +110,15 @@ export default function PlanConfirm({
           { label: "Topics", value: uniqueTopics },
           { label: "Total Time", value: formatMinutes(totalMinutes) },
         ].map(({ label, value }) => (
-          <div key={label} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-center">
-            <div className="text-[10px] text-white/35 uppercase tracking-wider mb-1">{label}</div>
-            <div className="text-xl font-bold text-white/90">{value}</div>
+          <div key={label} className="bg-surface-panel border border-border-hairline rounded-2xl p-3 text-center shadow-card">
+            <div className="text-[10px] text-text-muted uppercase tracking-wider mb-1">{label}</div>
+            <div className="text-xl font-bold text-text-primary">{value}</div>
           </div>
         ))}
       </div>
 
       {!feasibility.feasible && (
-        <div className="bg-amber-500/[0.06] border border-amber-500/20 rounded-xl p-3 text-xs text-amber-300">
+        <div className="bg-pastel-peach/20 border border-pastel-peach-text/20 rounded-2xl p-3 text-xs text-pastel-peach-text">
           <span className="font-semibold">Warning:</span>{" "}
           {commitBlocked
             ? "The plan has unresolved critical issues. Resolve them before commit."
@@ -104,12 +126,12 @@ export default function PlanConfirm({
         </div>
       )}
 
-      <div className="text-[11px] text-white/35">
+      <div className="text-[11px] text-text-muted">
         Feasibility indicators are based on the last generated plan snapshot.
       </div>
 
       {commitBlocked && (
-        <div className="bg-red-500/[0.07] border border-red-500/25 rounded-xl p-3 text-xs text-red-300 flex items-center justify-between gap-3">
+        <div className="bg-pastel-rose/20 border border-pastel-rose-text/20 rounded-2xl p-3 text-xs text-pastel-rose-text flex items-center justify-between gap-3">
           <span>
             <span className="font-semibold">Commit locked:</span>{" "}
             {commitBlockedReason ?? "Resolve critical plan issues first."}
@@ -118,7 +140,7 @@ export default function PlanConfirm({
             <button
               type="button"
               onClick={onResolveIssues}
-              className="shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded border border-red-400/35 text-red-200 hover:bg-red-500/20"
+              className="shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-pastel-rose-text/30 text-pastel-rose-text hover:bg-pastel-rose/30 transition-colors"
             >
               Open Issue Window
             </button>
@@ -127,7 +149,7 @@ export default function PlanConfirm({
       )}
 
       {sessions.length === 0 && (
-        <div className="bg-red-500/[0.06] border border-red-500/20 rounded-xl p-3 text-xs text-red-300">
+        <div className="bg-pastel-rose/15 border border-pastel-rose-text/15 rounded-2xl p-3 text-xs text-pastel-rose-text">
           <span className="font-semibold">No sessions to commit.</span> Return to the preview and regenerate or restore sessions first.
         </div>
       )}
@@ -135,20 +157,20 @@ export default function PlanConfirm({
       {/* Previous plan handling */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <div className="w-1 h-3 bg-gradient-to-b from-amber-400 to-orange-500 rounded-full" />
-          <p className="text-xs font-semibold text-white/60 uppercase tracking-wider">Previous Plan</p>
+          <div className="w-1 h-3 bg-pastel-peach rounded-full" />
+          <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Previous Plan</p>
         </div>
-        <p className="text-xs text-white/40">Choose what happens to existing tasks before the new plan is inserted.</p>
+        <p className="text-xs text-text-muted">Choose what happens to existing tasks before the new plan is inserted.</p>
 
         <div className="space-y-2">
           {keepOptions.map((opt) => {
             const colors: Record<string, string> = {
-              emerald: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
-              red: "border-red-500/40 bg-red-500/10 text-red-300",
+              mint: "border-pastel-mint-text/30 bg-pastel-mint/20 text-pastel-mint-text",
+              rose: "border-pastel-rose-text/30 bg-pastel-rose/20 text-pastel-rose-text",
             }
             const inactiveColors: Record<string, string> = {
-              emerald: "border-white/[0.08] hover:border-emerald-500/25",
-              red: "border-white/[0.08] hover:border-red-500/25",
+              mint: "border-border-hairline hover:border-pastel-mint-text/20",
+              rose: "border-border-hairline hover:border-pastel-rose-text/20",
             }
             const isSelected = keepMode === opt.value
             return (
@@ -156,12 +178,12 @@ export default function PlanConfirm({
                 key={opt.value}
                 type="button"
                 onClick={() => setKeepMode(opt.value)}
-                className={`w-full text-left px-4 py-3 rounded-xl border transition-all duration-200 ${
-                  isSelected ? colors[opt.tone] : `bg-white/[0.02] ${inactiveColors[opt.tone]} text-white/50`
+                className={`w-full text-left px-4 py-3 rounded-2xl border transition-all duration-200 ${
+                  isSelected ? colors[opt.tone] : `bg-surface-panel-muted ${inactiveColors[opt.tone]} text-text-muted`
                 }`}
               >
-                <div className={`text-sm font-semibold mb-0.5 ${isSelected ? "" : "text-white/70"}`}>{opt.label}</div>
-                <div className={`text-[11px] leading-relaxed ${isSelected ? "opacity-80" : "text-white/35"}`}>{opt.desc}</div>
+                <div className={`text-sm font-semibold mb-0.5 ${isSelected ? "" : "text-text-primary"}`}>{opt.label}</div>
+                <div className={`text-[11px] leading-relaxed ${isSelected ? "opacity-80" : "text-text-muted"}`}>{opt.desc}</div>
               </button>
             )
           })}
@@ -170,23 +192,23 @@ export default function PlanConfirm({
 
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <div className="w-1 h-3 bg-gradient-to-b from-sky-400 to-indigo-500 rounded-full" />
-          <p className="text-xs font-semibold text-white/60 uppercase tracking-wider">Snapshot Summary</p>
+          <div className="w-1 h-3 bg-pastel-sky rounded-full" />
+          <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Snapshot Summary</p>
         </div>
-        <p className="text-xs text-white/40">Optional label for plan history and later comparisons.</p>
+        <p className="text-xs text-text-muted">Optional label for plan history and later comparisons.</p>
         <input
           type="text"
           maxLength={120}
           value={summary}
           onChange={(e) => setSummary(e.target.value)}
           placeholder={summaryPlaceholder}
-          className="w-full rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-white/80 outline-none transition-all duration-200 placeholder:text-white/20 hover:border-sky-400/30 focus:border-sky-400/60 focus:bg-white/[0.04]"
+          className="ui-input"
         />
       </div>
 
       {/* What happens note */}
-      <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 space-y-1 text-[11px] text-white/35">
-        <div className="font-medium text-white/50 mb-1.5">After committing:</div>
+      <div className="bg-surface-panel-muted border border-border-hairline rounded-2xl p-3 space-y-1 text-[11px] text-text-muted">
+        <div className="font-medium text-text-secondary mb-1.5">After committing:</div>
         <div>- Manually created tasks are always preserved.</div>
         <div>- A snapshot of this plan is saved for history.</div>
         <div>- You can return here any time and commit a new version.</div>
@@ -194,32 +216,34 @@ export default function PlanConfirm({
 
       {/* Commit result messages */}
       {commitResult?.status === "SUCCESS" && (
-        <div className="bg-emerald-500/[0.06] border border-emerald-500/15 rounded-xl p-3 text-sm text-emerald-300">
+        <div className="bg-pastel-mint/15 border border-pastel-mint-text/15 rounded-2xl p-3 text-sm text-pastel-mint-text">
           Plan committed successfully. {commitResult.taskCount} tasks created.
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link href="/dashboard" className="rounded-md border border-emerald-400/35 px-2.5 py-1 text-[11px] font-semibold hover:bg-emerald-500/20">
+            <Link href="/dashboard" className="rounded-full border border-pastel-mint-text/30 px-2.5 py-1 text-[11px] font-semibold hover:bg-pastel-mint/20 transition-colors">
               Open Dashboard
             </Link>
-            <Link href={calendarMonthHref} className="rounded-md border border-emerald-400/35 px-2.5 py-1 text-[11px] font-semibold hover:bg-emerald-500/20">
+            <Link href={calendarMonthHref} className="rounded-full border border-pastel-mint-text/30 px-2.5 py-1 text-[11px] font-semibold hover:bg-pastel-mint/20 transition-colors">
               Open Calendar
             </Link>
-            <Link href="/schedule" className="rounded-md border border-emerald-400/35 px-2.5 py-1 text-[11px] font-semibold hover:bg-emerald-500/20">
+            <Link href="/schedule" className="rounded-full border border-pastel-mint-text/30 px-2.5 py-1 text-[11px] font-semibold hover:bg-pastel-mint/20 transition-colors">
               Open Scheduler
             </Link>
           </div>
         </div>
       )}
       {commitResult?.status === "ERROR" && (
-        <div className="bg-red-500/[0.06] border border-red-500/15 rounded-xl p-3 text-sm text-red-300">
+        <div className="bg-pastel-rose/15 border border-pastel-rose-text/15 rounded-2xl p-3 text-sm text-pastel-rose-text">
           {commitResult.message ?? "Failed to commit plan. Please try again."}
         </div>
       )}
 
       <div className="flex justify-end">
-        <button
+        <Button
+          variant="primary"
+          size="lg"
+          className="min-h-[44px] md:min-h-0"
           onClick={() => onCommit(keepMode, summary.trim() || undefined)}
           disabled={isCommitting || sessions.length === 0 || commitBlocked}
-          className="relative overflow-hidden bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:from-white/10 disabled:to-white/10 text-white disabled:text-white/40 text-sm font-semibold px-6 py-2.5 rounded-lg transition-all duration-200 shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 disabled:shadow-none disabled:cursor-not-allowed"
         >
           {commitBlocked
             ? "Resolve Issues to Commit"
@@ -230,7 +254,7 @@ export default function PlanConfirm({
             : commitResult?.status === "SUCCESS"
               ? "Recommit Plan"
               : "Commit Plan"}
-        </button>
+        </Button>
       </div>
     </div>
   )

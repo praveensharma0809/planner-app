@@ -988,6 +988,7 @@ summary:focus-visible,
   display: flex;
   align-items: center;
   padding: 0 20px;
+  padding-top: calc(0px + env(safe-area-inset-top, 0px));
   gap: 12px;
   flex-shrink: 0;
 }

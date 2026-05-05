@@ -155,17 +155,13 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
       />
 
       <div
-        className="fixed left-1/2 top-1/2 z-10 flex max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border shadow-2xl"
-        style={{ background: "var(--sh-card)", borderColor: "var(--sh-border)" }}
+        className="fixed inset-x-0 bottom-0 top-auto z-10 flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-3xl rounded-b-none border-x-0 border-b-0 border-t border-border-hairline bg-surface-panel shadow-[--shadow-app] md:inset-auto md:left-1/2 md:top-1/2 md:w-[calc(100%-2rem)] md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border"
         role="dialog"
         aria-modal="true"
         aria-label={mode === "create" ? "Add New Subject" : "Edit Subject"}
       >
-        <div
-          className="flex items-center justify-between px-6 py-4"
-          style={{ borderBottom: "1px solid var(--sh-border)" }}
-        >
-          <h2 className="text-xl font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-hairline">
+          <h2 className="text-xl font-semibold text-text-primary">
             {mode === "create" ? "Add New Subject" : "Edit Subject"}
           </h2>
           <button
@@ -174,8 +170,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
               onClose()
             }}
             disabled={busy}
-            className="h-8 w-8 rounded-lg transition-colors hover:bg-white/5"
-            style={{ color: "var(--sh-text-muted)" }}
+            className="h-8 w-8 rounded-lg transition-colors hover:bg-surface-hover text-text-muted"
             aria-label="Close"
           >
             <svg className="mx-auto h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -187,10 +182,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
           <form id="subject-form" onSubmit={handleSaveSubject} className="space-y-5">
             <div>
-              <label
-                className="mb-2 block text-xs font-semibold uppercase tracking-wide"
-                style={{ color: "var(--sh-text-muted)" }}
-              >
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-text-muted">
                 Subject Name
               </label>
               <input
@@ -204,21 +196,18 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
               />
             </div>
 
-            <p className="text-xs leading-relaxed" style={{ color: "var(--sh-text-muted)" }}>
+            <p className="text-xs leading-relaxed text-text-muted">
               This page is for structure storage. Keep subjects, chapters, topics, and task titles organized here.
             </p>
           </form>
         </div>
 
-        <div
-          className="flex items-center gap-2 p-6"
-          style={{ borderTop: "1px solid var(--sh-border)", background: "var(--sh-card)" }}
-        >
+        <div className="flex items-center gap-2 p-6 border-t border-border-hairline bg-surface-panel">
           <button
             form="subject-form"
             type="submit"
             disabled={busy}
-            className="ui-btn ui-btn-primary ui-btn-md flex-1 justify-center disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 rounded-pill font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] bg-action-primary-bg text-action-primary-fg hover:bg-action-primary-bg-hover shadow-none h-10 px-4 text-sm flex-1"
           >
             {loading ? "Saving…" : mode === "create" ? "Create Subject" : "Save Changes"}
           </button>
@@ -230,7 +219,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
                 void handleToggleArchive()
               }}
               disabled={busy}
-              className="ui-btn ui-btn-danger ui-btn-md flex-1 justify-center disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-pill font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] bg-pastel-rose text-pastel-rose-text hover:opacity-90 h-10 px-4 text-sm flex-1"
             >
               {archiving
                 ? "Saving..."

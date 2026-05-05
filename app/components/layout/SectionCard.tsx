@@ -5,35 +5,19 @@ interface SectionCardProps {
   action?: ReactNode
   children: ReactNode
   className?: string
-  /** Omit the default body padding — useful when content has its own layout */
   noPadding?: boolean
 }
 
-/**
- * SectionCard — the standard named card section used across all pages.
- *
- * Usage:
- *   <SectionCard
- *     title="Today's Tasks"
- *     action={<Link href="…">See all</Link>}
- *   >
- *     content here
- *   </SectionCard>
- */
 export function SectionCard({ title, action, children, className = "", noPadding }: SectionCardProps) {
   return (
-    <div className={`section-card ${className}`}>
+    <div className={`bg-surface-panel rounded-card border border-border-hairline shadow-none overflow-hidden ${className}`}>
       {(title || action) && (
-        <div className="section-card-header">
-          {title && <div className="section-card-title">{title}</div>}
-          {action && (
-            <div className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
-              {action}
-            </div>
-          )}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border-hairline">
+          {title && <h3 className="text-sm font-semibold text-text-primary">{title}</h3>}
+          {action && <div className="text-xs text-text-muted">{action}</div>}
         </div>
       )}
-      <div className={noPadding ? "" : "section-card-body"}>{children}</div>
+      <div className={noPadding ? "" : "p-5"}>{children}</div>
     </div>
   )
 }

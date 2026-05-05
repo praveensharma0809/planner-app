@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react"
+﻿import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { type ScheduleSubjectOption } from "@/app/actions/schedule/getWeekSchedule"
 import { STANDALONE_SUBJECT_ID } from "@/lib/constants"
@@ -102,14 +102,9 @@ export function AddEventModal({
       />
 
       <div
-        className="fixed left-1/2 top-1/2 z-10 max-h-[90vh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border p-5"
-        style={{
-          background: "var(--sh-card)",
-          borderColor: "var(--sh-border)",
-          boxShadow: "var(--sh-shadow-lg)",
-        }}
+        className="fixed bottom-0 left-0 right-0 top-auto z-10 max-h-[85vh] w-full overflow-y-auto rounded-t-3xl rounded-b-none border border-border-hairline border-b-0 bg-surface-panel p-5 shadow-[var(--shadow-app)] md:left-1/2 md:top-1/2 md:max-h-[90vh] md:w-[calc(100%-2rem)] md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border-b"
       >
-        <h2 className="mb-4 text-lg font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+        <h2 className="mb-4 text-lg font-semibold text-text-primary">
           {initialEvent ? "Edit Event" : "Add Event"}
         </h2>
 
@@ -119,8 +114,7 @@ export function AddEventModal({
               required
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              className={FIELD_INPUT_CLASS}
-              style={FIELD_INPUT_STYLE}
+              className="ui-input"
               placeholder="Enter event title"
               disabled={isSaving}
             />
@@ -131,8 +125,7 @@ export function AddEventModal({
               <select
                 value={subjectId}
                 onChange={(event) => setSubjectId(event.target.value)}
-                className={FIELD_INPUT_CLASS}
-                style={FIELD_INPUT_STYLE}
+                className="ui-input"
                 disabled={isSaving}
               >
                 {subjectOptions.map((value) => (
@@ -147,8 +140,7 @@ export function AddEventModal({
               <select
                 value={day}
                 onChange={(event) => setDay(Number(event.target.value))}
-                className={FIELD_INPUT_CLASS}
-                style={FIELD_INPUT_STYLE}
+                className="ui-input"
                 disabled={isSaving}
               >
                 {DAY_LABELS.map((label, index) => (
@@ -164,8 +156,7 @@ export function AddEventModal({
             <select
               value={durationMinutes}
               onChange={(event) => setDurationMinutes(Number(event.target.value))}
-              className={FIELD_INPUT_CLASS}
-              style={FIELD_INPUT_STYLE}
+              className="ui-input"
               disabled={isSaving}
             >
               {durationOptions.map((value) => (
@@ -179,7 +170,7 @@ export function AddEventModal({
           <button
             type="submit"
             disabled={isSaving}
-            className="w-full rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-[--action-primary-bg-hover] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSaving ? "Saving..." : initialEvent ? "Save Event" : "Create Event"}
           </button>
@@ -193,19 +184,10 @@ export function AddEventModal({
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-medium" style={{ color: "var(--sh-text-secondary)" }}>
+      <span className="mb-1.5 block text-xs font-medium text-text-secondary">
         {label}
       </span>
       {children}
     </label>
   )
-}
-
-const FIELD_INPUT_CLASS =
-  "w-full rounded-lg border px-3 py-2 text-xs outline-none transition focus:border-indigo-500"
-
-const FIELD_INPUT_STYLE: CSSProperties = {
-  background: "color-mix(in srgb, var(--sh-card) 88%, var(--foreground) 12%)",
-  borderColor: "var(--sh-border)",
-  color: "var(--sh-text-primary)",
 }

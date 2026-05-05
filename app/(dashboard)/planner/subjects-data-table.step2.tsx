@@ -70,26 +70,14 @@ export function Step2ConstraintsSection({
 }: Step2ConstraintsSectionProps) {
   return (
     <>
-      <p
-        className="mt-4 mb-2 text-[11px] font-semibold uppercase tracking-[0.14em]"
-        style={{ color: "var(--sh-text-muted)" }}
-      >
+      <p className="mt-4 mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
         Step-2
       </p>
 
-      <div className="flex min-h-[520px] items-stretch gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
-        <section
-          className="min-w-[320px] flex-1 rounded-xl border px-4 py-4 sm:px-5 sm:py-5 snap-start flex flex-col"
-          style={{
-            borderColor: "var(--sh-border)",
-            background: "var(--sh-card)",
-          }}
-        >
+      <div className="flex flex-col md:flex-row min-h-[520px] items-stretch gap-3 overflow-hidden">
+        <section className="w-full md:flex-1 md:min-w-0 rounded-2xl border border-border-hairline bg-surface-panel px-4 py-4 sm:px-5 sm:py-5 flex flex-col shadow-card">
           {constraintsLoading ? (
-            <div
-              className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-4 text-center text-sm"
-              style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-            >
+            <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-border-hairline p-4 text-center text-sm text-text-muted">
               Loading constraints...
             </div>
           ) : (
@@ -127,22 +115,22 @@ export function Step2ConstraintsSection({
               </div>
 
               {hasStep2DateError && (
-                <p className="text-xs text-red-400/90">
+                <p className="text-xs text-pastel-rose-text">
                   Final deadline must be after start date.
                 </p>
               )}
 
-              <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}>
-                <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
+              <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-2.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                   Set Particular Day Capacity
                 </p>
-                <p className="mt-1 text-[11px]" style={{ color: "var(--sh-text-secondary)" }}>
+                <p className="mt-1 text-[11px] text-text-secondary">
                   Leave blank to use weekday/weekend defaults.
                 </p>
                 <div className="mt-2 grid grid-cols-7 gap-1.5">
                   {WEEKDAY_LABELS.map((label, index) => (
                     <div key={label} className="space-y-1">
-                      <p className="text-[10px] text-center" style={{ color: "var(--sh-text-muted)" }}>
+                      <p className="text-[10px] text-center text-text-muted">
                         {label}
                       </p>
                       <input
@@ -150,7 +138,7 @@ export function Step2ConstraintsSection({
                         min={0}
                         value={constraintsDraft.day_of_week_capacity[index] ?? ""}
                         onChange={(event) => onDayOfWeekCapacityChange(index, event.target.value)}
-                        className="ui-input h-8 px-1 text-center text-xs"
+                        className="ui-input min-h-[44px] md:min-h-0 md:h-8 px-1 text-center text-xs"
                         placeholder="-"
                       />
                     </div>
@@ -158,9 +146,9 @@ export function Step2ConstraintsSection({
                 </div>
               </div>
 
-              <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}>
+              <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                     Calendar (Custom Capacity)
                   </p>
                   <div className="flex items-center gap-1.5">
@@ -172,7 +160,7 @@ export function Step2ConstraintsSection({
                     >
                       Prev
                     </Button>
-                    <span className="text-[11px] font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
+                    <span className="text-[11px] font-semibold text-text-secondary">
                       {step2CalendarLabel}
                     </span>
                     <Button
@@ -187,13 +175,13 @@ export function Step2ConstraintsSection({
                 </div>
 
                 <div className="mt-2 space-y-1.5">
-                  <p className="text-[11px]" style={{ color: "var(--sh-text-secondary)" }}>
+                  <p className="text-[11px] text-text-secondary">
                     Click days to select date-specific capacity overrides.
                   </p>
 
                   <div className="grid grid-cols-7 gap-1">
                     {WEEKDAY_LABELS.map((label) => (
-                      <div key={`custom-cal-head-${label}`} className="text-center text-[10px]" style={{ color: "var(--sh-text-muted)" }}>
+                      <div key={`custom-cal-head-${label}`} className="text-center text-[10px] text-text-muted">
                         {label}
                       </div>
                     ))}
@@ -214,22 +202,13 @@ export function Step2ConstraintsSection({
                             key={`custom-day-${isoDate}`}
                             type="button"
                             onClick={() => onToggleCustomDate(isoDate)}
-                            className="h-8 rounded-md border text-[11px] font-medium transition-colors"
-                            style={{
-                              borderColor: selected
-                                ? "rgba(56, 189, 248, 0.6)"
+                            className={`h-8 min-h-[44px] md:min-h-8 rounded-md border text-[11px] font-medium transition-colors ${
+                              selected
+                                ? "border-pastel-sky-text/40 bg-pastel-sky/30 text-pastel-sky-text"
                                 : hasCustom
-                                  ? "rgba(56, 189, 248, 0.35)"
-                                  : "var(--sh-border)",
-                              background: selected
-                                ? "rgba(56, 189, 248, 0.18)"
-                                : hasCustom
-                                  ? "rgba(56, 189, 248, 0.1)"
-                                  : "rgba(255,255,255,0.01)",
-                              color: selected
-                                ? "#bae6fd"
-                                : "var(--sh-text-secondary)",
-                            }}
+                                  ? "border-pastel-sky-text/25 bg-pastel-sky/15 text-text-secondary"
+                                  : "border-border-hairline bg-surface-panel text-text-secondary hover:bg-surface-hover"
+                            }`}
                             title={[
                               hasCustom ? `${constraintsDraft.custom_day_capacity[isoDate]} min capacity` : "No custom capacity",
                             ].join(" • ")}
@@ -242,13 +221,13 @@ export function Step2ConstraintsSection({
                   ))}
 
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border px-2 py-1 text-[10px]" style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-secondary)" }}>
+                    <span className="chip-neutral">
                       Capacity selected: {selectedCustomDates.size}
                     </span>
                   </div>
 
-                  <div className="mt-2 space-y-2 rounded-md border p-2" style={{ borderColor: "rgba(56, 189, 248, 0.35)", background: "rgba(56, 189, 248, 0.06)" }}>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#bae6fd" }}>
+                  <div className="mt-2 space-y-2 rounded-xl border border-pastel-sky/40 bg-pastel-sky/10 p-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-pastel-sky-text">
                       Custom Capacity Actions
                     </p>
 
@@ -262,7 +241,7 @@ export function Step2ConstraintsSection({
                       />
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
                         onClick={onApplyCustomCapacity}
                       >
@@ -280,17 +259,16 @@ export function Step2ConstraintsSection({
                     </div>
 
                     {customCapacityEntries.length === 0 ? (
-                      <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
+                      <p className="text-xs text-text-muted">
                         No custom date overrides yet.
                       </p>
                     ) : (
                       customCapacityEntries.map(([date, minutes]) => (
                         <div
                           key={date}
-                          className="flex items-center justify-between gap-2 rounded border px-2 py-1"
-                          style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.01)" }}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-border-hairline bg-surface-panel px-2 py-1"
                         >
-                          <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
+                          <p className="text-xs text-text-secondary">
                             {date} - {minutes} min
                           </p>
                           <Button
@@ -311,24 +289,15 @@ export function Step2ConstraintsSection({
           )}
         </section>
 
-        <section
-          className="min-w-[320px] h-full flex-1 rounded-xl border px-4 py-4 sm:px-5 sm:py-5 snap-start flex flex-col"
-          style={{
-            borderColor: "var(--sh-border)",
-            background: "var(--sh-card)",
-          }}
-        >
+        <section className="w-full md:flex-1 md:min-w-0 h-full rounded-2xl border border-border-hairline bg-surface-panel px-4 py-4 sm:px-5 sm:py-5 flex flex-col shadow-card">
           {constraintsLoading ? (
-            <div
-              className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-4 text-center text-sm"
-              style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-            >
+            <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-border-hairline p-4 text-center text-sm text-text-muted">
               Loading controls...
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col justify-between gap-3">
               <div className="space-y-3">
-                <p className="text-xs" style={{ color: "var(--sh-text-secondary)" }}>
+                <p className="text-xs text-text-secondary">
                   Fine-tune scheduling flexibility and hard caps used in plan generation.
                 </p>
 
@@ -352,8 +321,8 @@ export function Step2ConstraintsSection({
                 />
               </div>
 
-              <div className="rounded-lg border p-3" style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}>
-                <p className="text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
+              <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-3">
+                <p className="text-[11px] text-text-muted">
                   Save Step-2 constraints before generating Phase-2 preview.
                 </p>
                 <div className="mt-2">

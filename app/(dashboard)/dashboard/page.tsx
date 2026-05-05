@@ -8,7 +8,7 @@ import { DashboardTaskToggle, DashboardTaskDelete } from "./DashboardTaskActions
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import type { Task } from "@/lib/types/db"
 import { Badge } from "@/app/components/ui"
-import { Button } from "@/app/components/ui"
+
 import { Progress } from "@/app/components/ui"
 import { PageHeader } from "@/app/components/layout/PageHeader"
 import { ContentGrid } from "@/app/components/layout/ContentGrid"
@@ -31,7 +31,6 @@ const HEALTH_BADGE: Record<string, { variant: "success" | "warning" | "danger" |
   no_deadline: { variant: "default", label: "No deadline" },
 }
 
-const SUBJECT_ACCENTS = ["#7C6CFF", "#34D399", "#F59E0B", "#EF4444", "#06B6D4", "#F472B6"]
 
 function formatDate(iso: string) {
   return new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", {
@@ -96,12 +95,6 @@ function getSubjectProgressVariant(subject: SubjectProgress): "default" | "succe
   return "default"
 }
 
-function getProgressFillClass(percent: number) {
-  if (percent === 100) return "overview-progress-fill-success"
-  if (percent >= 65) return "overview-progress-fill-default"
-  if (percent >= 35) return "overview-progress-fill-warning"
-  return "overview-progress-fill-danger"
-}
 
 export default async function DashboardPage() {
   const [streak, weekly, subjectProgress, backlog, supabase] = await Promise.all([
@@ -241,15 +234,10 @@ export default async function DashboardPage() {
         eyebrow={formatDate(today)}
         title={greeting}
         subtitle="Focus on what matters. Track your rhythm, your day's load, and what's pressing."
-        actions={
-          <Link href="/planner">
-            <Button variant="primary" size="md">New Plan</Button>
-          </Link>
-        }
       />
 
       <ContentGrid layout="main-aside">
-        <div className="space-y-5">
+        <div className="space-y-4 md:space-y-5">
           {/* Today's Progress Card */}
           <SectionCard className="dashboard-hero-card">
             <div className="dashboard-hero-content">
@@ -262,7 +250,7 @@ export default async function DashboardPage() {
                   </span>
                   <span className="dashboard-hero-label-sub">{todayPaceLabel}</span>
                 </div>
-                <p className="dashboard-hero-description">
+                <p className="dashboard-hero-description" style={{ color: "var(--text-secondary)" }}>
                   {todayTasks.length === 0
                     ? "Generate a plan or use quick add when you're ready."
                     : pendingToday.length === 0
@@ -271,14 +259,12 @@ export default async function DashboardPage() {
                 </p>
               </div>
               <div className="dashboard-hero-right">
-                <div className="dashboard-progress-track">
-                  <div
-                    className={`dashboard-progress-fill ${getProgressFillClass(todayProgressPercent)}`}
-                    style={{
-                      width: !todayTasks.length ? "0%" : `${Math.max(todayProgressPercent, 4)}%`,
-                    }}
-                  />
-                </div>
+                <Progress
+                  value={todayTasks.length === 0 ? 0 : Math.max(todayProgressPercent, 4)}
+                  variant="default"
+                  height={10}
+                  className="w-full"
+                />
                 <div className="dashboard-hero-stats">
                   <div className="dashboard-stat">
                     <div className="dashboard-stat-value">{doneToday.length}</div>
@@ -289,7 +275,7 @@ export default async function DashboardPage() {
                     <div className="dashboard-stat-label">Pending</div>
                   </div>
                   <div className="dashboard-stat">
-                    <div className="dashboard-stat-value">{thisWeekDoneCount}/ {thisWeekTotalCount}</div>
+                    <div className="dashboard-stat-value">{thisWeekDoneCount}/{thisWeekTotalCount}</div>
                     <div className="dashboard-stat-label">This week</div>
                   </div>
                 </div>
@@ -305,9 +291,7 @@ export default async function DashboardPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                 </svg>
                 <span>Today&apos;s Tasks</span>
-                <span className="text-xs px-2 py-1 rounded-full" style={{ background: "var(--sh-border)" }}>
-                  {pendingToday.length} left
-                </span>
+                <Badge variant="peach" size="sm">{pendingToday.length} left</Badge>
               </div>
             }
             action={
@@ -316,46 +300,28 @@ export default async function DashboardPage() {
                   subjects={subjectList}
                   initialDate={today}
                   buttonLabel="Quick add for today"
-                  buttonClassName="ui-btn ui-btn-ghost ui-btn-sm"
+                  buttonClassName="ui-btn ui-btn-ghost ui-btn-sm min-h-[44px] md:min-h-0"
                 />
-                <Link href="/dashboard/calendar" className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
+                <Link href="/dashboard/calendar" className="text-xs font-medium min-h-[44px] flex items-center px-2 md:min-h-0 md:px-0" style={{ color: "var(--text-secondary)" }}>
                   Calendar →
                 </Link>
               </div>
             }
           >
-            <div className="space-y-3">
+            <div>
               {todayTasks.length === 0 ? (
                 <div className="dashboard-empty-state">
-                  <div className="dashboard-empty-icon">
-                    <svg className="w-8 h-8" fill="none" strokeWidth="1.5" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
+                  <svg className="w-8 h-8 mb-3" style={{ color: "var(--text-muted)" }} fill="none" strokeWidth="1.5" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
                   <p className="dashboard-empty-title">No tasks scheduled</p>
                   <p className="dashboard-empty-text">Start by generating a plan or using quick add above</p>
                 </div>
               ) : (
-                <div className="space-y-3 pt-1">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div
-                      className="rounded-lg border px-3 py-2"
-                      style={{ borderColor: "var(--sh-border)", background: "var(--sh-card)" }}
-                    >
-                      <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>Pending</p>
-                      <p className="text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
-                        {pendingToday.length}
-                      </p>
-                    </div>
-                    <div
-                      className="rounded-lg border px-3 py-2"
-                      style={{ borderColor: "var(--sh-border)", background: "var(--sh-card)" }}
-                    >
-                      <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>Done</p>
-                      <p className="text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
-                        {doneToday.length}
-                      </p>
-                    </div>
+                <div>
+                  <div className="flex items-center gap-3 mb-3">
+                    <Badge variant="peach" size="sm">{pendingToday.length} Pending</Badge>
+                    <Badge variant="mint" size="sm">{doneToday.length} Done</Badge>
                   </div>
 
                   {pendingTodaySorted.length === 0 && doneToday.length > 0 && (
@@ -370,30 +336,31 @@ export default async function DashboardPage() {
                   )}
 
                   {visiblePendingTasks.length > 0 && (
-                    <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+                    <div className="max-h-[320px] overflow-y-auto -mx-1 px-1">
                       {visiblePendingTasks.map((task) => (
                         <div
                           key={task.id}
                           data-task-row
-                          className="flex items-center gap-2 rounded-xl border px-2.5 py-2"
-                          style={{ borderColor: "var(--sh-border)", background: "var(--sh-card)" }}
+                          className="flex items-center gap-3 border-b border-subtle py-2.5 last:border-b-0 md:py-2 min-h-[44px]"
                         >
                           <DashboardTaskToggle taskId={task.id} mode="pending" />
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium" style={{ color: "var(--sh-text-primary)" }}>
+                            <p className="truncate text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>
                               {task.title}
                             </p>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
-                              <span>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                              <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                                 {task.task_type === "standalone"
                                   ? STANDALONE_SUBJECT_LABEL
                                   : (task.subject_id ? subjectNameById.get(task.subject_id) : null) ?? "Unknown"}
                               </span>
-                              <span>{task.duration_minutes}m</span>
+                              <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>{task.duration_minutes}m</span>
                               {task.session_number != null && task.total_sessions != null && task.total_sessions > 1 && (
-                                <span>{task.session_number}/{task.total_sessions}</span>
+                                <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>{task.session_number}/{task.total_sessions}</span>
                               )}
-                              {task.session_type !== "core" && <span>{task.session_type}</span>}
+                              {task.session_type !== "core" && (
+                                <Badge variant="neutral" size="sm">{task.session_type}</Badge>
+                              )}
                             </div>
                           </div>
                           <DashboardTaskDelete taskId={task.id} />
@@ -403,7 +370,7 @@ export default async function DashboardPage() {
                   )}
 
                   {hiddenPendingCount > 0 && (
-                    <p className="text-[11px] font-medium" style={{ color: "var(--sh-text-muted)" }}>
+                    <p className="text-[11px] font-medium mt-2" style={{ color: "var(--text-muted)" }}>
                       +{hiddenPendingCount} more pending tasks in Calendar view
                     </p>
                   )}
@@ -415,13 +382,11 @@ export default async function DashboardPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                         </svg>
                         <span>Completed Today</span>
-                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "var(--sh-border)" }}>
-                          {doneToday.length}
-                        </span>
+                        <Badge variant="mint" size="sm">{doneToday.length}</Badge>
                       </summary>
-                      <div className="mt-3 space-y-1.5">
+                      <div className="mt-3 space-y-1">
                         {doneTodaySorted.map((task) => (
-                          <div key={task.id} data-task-row className="dashboard-task-completed">
+                          <div key={task.id} data-task-row className="dashboard-task-completed min-h-[44px] md:min-h-0">
                             <DashboardTaskToggle taskId={task.id} mode="completed" />
                             <span className="dashboard-task-completed-title">{task.title}</span>
                             <span className="dashboard-task-completed-time">
@@ -444,43 +409,45 @@ export default async function DashboardPage() {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-5">
+        <div className="space-y-4 md:space-y-5">
           {/* Alerts */}
           <SectionCard
             title={
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" strokeWidth="1.5" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4v2m0 4v2M7 5h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2zm0 0V3a2 2 0 012-2h2a2 2 0 012 2v2" /> 
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4v2m0 4v2M7 5h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2zm0 0V3a2 2 0 012-2h2a2 2 0 012 2v2" />
                 </svg>
                 <span>Alerts</span>
-                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: riskSignalCount > 0 ? "rgba(239,68,68,0.15)" : "rgba(52,211,153,0.15)" }}>
+                <Badge variant={riskSignalCount === 0 ? "mint" : "rose"} size="sm">
                   {riskSignalCount === 0 ? "Clear" : `${riskSignalCount}`}
-                </span>
+                </Badge>
               </div>
             }
           >
             {riskSignalCount === 0 ? (
               <div className="dashboard-alert-empty">
-                <p className="dashboard-alert-title">All systems go</p>
-                <p className="dashboard-alert-text">No deadlines at risk. Keep your momentum.</p>
+                <p className="dashboard-alert-empty-title">All systems go</p>
+                <p className="dashboard-alert-empty-text">No deadlines at risk. Keep your momentum.</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {alertItems.map((alert) => {
-                  const containerClass =
-                    alert.tone === "danger"
-                      ? "dashboard-alert-danger"
-                      : "dashboard-alert-warning"
-                  const iconClass =
-                    alert.tone === "danger"
-                      ? "bg-red-500/15 text-red-400"
-                      : alert.tone === "warning"
-                        ? "bg-amber-500/15 text-amber-400"
-                        : "bg-sky-500/15 text-sky-300"
+                  const isDanger = alert.tone === "danger"
+                  const bgClass = isDanger ? "dashboard-alert-rose" : "dashboard-alert-peach"
+                  const iconBgClass = isDanger
+                    ? "bg-[--pastel-rose]"
+                    : alert.tone === "warning"
+                      ? "bg-[--pastel-peach]"
+                      : "bg-[--pastel-sky]"
+                  const iconTextClass = isDanger
+                    ? "text-[--pastel-rose-text]"
+                    : alert.tone === "warning"
+                      ? "text-[--pastel-peach-text]"
+                      : "text-[--pastel-sky-text]"
 
                   return (
-                    <div key={alert.id} className={containerClass}>
-                      <div className={`dashboard-alert-icon ${iconClass}`}>
+                    <div key={alert.id} className={`${bgClass} min-h-[44px] md:min-h-0`}>
+                      <div className={`dashboard-alert-icon ${iconBgClass} ${iconTextClass}`}>
                         <svg className="w-4 h-4" fill="none" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -508,7 +475,7 @@ export default async function DashboardPage() {
               </div>
             }
             action={
-              <Link href="/dashboard/subjects" className="text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
+              <Link href="/dashboard/subjects" className="text-xs font-medium min-h-[44px] flex items-center px-2 md:min-h-0 md:px-0" style={{ color: "var(--text-secondary)" }}>
                 All →
               </Link>
             }
@@ -519,40 +486,48 @@ export default async function DashboardPage() {
                 <p className="dashboard-empty-text">Add subjects to start tracking progress</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {visibleSubjects.map((subject) => {
                   const badge = HEALTH_BADGE[subject.health] ?? HEALTH_BADGE.no_deadline
-                  const accent =
-                    subject.health === "overdue"
-                      ? "#EF4444"
-                      : subject.health === "at_risk" || subject.health === "behind"
-                        ? "#F59E0B"
-                        : SUBJECT_ACCENTS[visibleSubjects.indexOf(subject) % SUBJECT_ACCENTS.length]
+                  const isOverdue = subject.health === "overdue"
+                  const isWarn = subject.health === "at_risk" || subject.health === "behind"
+
+                  const rowBg = isOverdue
+                    ? "bg-[--pastel-rose]/40"
+                    : isWarn
+                      ? "bg-[--pastel-peach]/40"
+                      : subject.percent >= 100
+                        ? "bg-[--pastel-mint]/40"
+                        : "bg-[--pastel-sky]/30"
 
                   return (
-                    <div key={subject.id} className="dashboard-subject-row">
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <span className="dashboard-subject-dot" style={{ background: accent }} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="dashboard-subject-name">{subject.name}</p>
-                            <Badge variant={badge.variant} size="sm">
-                              {badge.label}
-                            </Badge>
-                          </div>
-                          <p className="dashboard-subject-meta">
-                            {subject.completed_tasks}/{subject.total_tasks} ⬢ {subject.percent}%
-                          </p>
+                    <div key={subject.id} className={`dashboard-subject-row ${rowBg} min-h-[44px] md:min-h-0`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <p className="dashboard-subject-name">{subject.name}</p>
+                          <Badge variant={badge.variant} size="sm">
+                            {badge.label}
+                          </Badge>
                         </div>
+                        <span className="dashboard-subject-deadline">{formatDeadlineLabel(subject.daysLeft)}</span>
                       </div>
-                      <span className="dashboard-subject-deadline">{formatDeadlineLabel(subject.daysLeft)}</span>
-                      <Progress value={subject.percent} variant={getSubjectProgressVariant(subject)} height={3} className="mt-2 w-full" />
+                      <div className="flex items-center gap-3">
+                        <span className="dashboard-subject-meta">
+                          {subject.completed_tasks}/{subject.total_tasks} tasks · {subject.percent}%
+                        </span>
+                        <Progress
+                          value={subject.percent}
+                          variant={getSubjectProgressVariant(subject)}
+                          height={4}
+                          className="flex-1"
+                        />
+                      </div>
                     </div>
                   )
                 })}
 
                 {hiddenSubjectsCount > 0 && (
-                  <p className="text-[11px] font-medium" style={{ color: "var(--sh-text-muted)" }}>
+                  <p className="text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>
                     {hiddenSubjectsCount} more in All subjects
                   </p>
                 )}

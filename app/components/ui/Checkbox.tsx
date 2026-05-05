@@ -56,12 +56,12 @@ export function Checkbox({ label, description, className = "", id, ...props }: C
       {(label || description) && (
         <div className="flex flex-col gap-0.5 min-w-0">
           {label && (
-            <span className="text-[13.5px] font-medium" style={{ color: "var(--sh-text-primary)" }}>
+            <span className="text-[13.5px] font-medium" style={{ color: "var(--text-primary)" }}>
               {label}
             </span>
           )}
           {description && (
-            <span className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
               {description}
             </span>
           )}

@@ -28,7 +28,14 @@ export type WeekRangeMeta = {
   title: string
 }
 
-const SUBJECT_ACCENTS = ["#3B82F6", "#A855F7", "#22C55E", "#F97316", "#06B6D4", "#EC4899", "#EAB308"] as const
+const PASTEL_PALETTES = [
+  { bg: "var(--pastel-sky)", text: "var(--pastel-sky-text)", chip: "chip-sky" },
+  { bg: "var(--pastel-lilac)", text: "var(--pastel-lilac-text)", chip: "chip-lilac" },
+  { bg: "var(--pastel-mint)", text: "var(--pastel-mint-text)", chip: "chip-mint" },
+  { bg: "var(--pastel-peach)", text: "var(--pastel-peach-text)", chip: "chip-peach" },
+  { bg: "var(--pastel-rose)", text: "var(--pastel-rose-text)", chip: "chip-rose" },
+  { bg: "var(--pastel-butter)", text: "var(--pastel-butter-text)", chip: "chip-butter" },
+] as const
 
 export function parseISODate(iso: string) {
   const normalized = normalizeLocalDate(iso)
@@ -133,15 +140,15 @@ function hashString(value: string) {
   return Math.abs(hash)
 }
 
-function resolveSubjectAccent(subject: string) {
+function resolveSubjectPalette(subject: string) {
   const normalized = subject.trim().toLowerCase()
 
-  if (normalized.includes("math")) return "#3B82F6"
-  if (normalized.includes("art")) return "#A855F7"
-  if (normalized.includes("phys")) return "#22C55E"
-  if (normalized.includes("sport")) return "#F97316"
+  if (normalized.includes("math")) return PASTEL_PALETTES[0]
+  if (normalized.includes("art")) return PASTEL_PALETTES[1]
+  if (normalized.includes("phys")) return PASTEL_PALETTES[2]
+  if (normalized.includes("sport")) return PASTEL_PALETTES[3]
 
-  return SUBJECT_ACCENTS[hashString(normalized) % SUBJECT_ACCENTS.length]
+  return PASTEL_PALETTES[hashString(normalized) % PASTEL_PALETTES.length]
 }
 
 export function formatDuration(minutes: number) {
@@ -154,13 +161,14 @@ export function formatDuration(minutes: number) {
 }
 
 export function getSubjectPalette(subject: string) {
-  const accent = resolveSubjectAccent(subject)
+  const palette = resolveSubjectPalette(subject)
   return {
-    accent,
+    accent: palette.text,
+    chip: palette.chip,
     containerStyle: {
-      background: `color-mix(in srgb, var(--sh-card) 76%, ${accent} 24%)`,
-      borderColor: `color-mix(in srgb, ${accent} 52%, transparent)`,
-      color: "var(--sh-text-primary)",
+      background: palette.bg,
+      borderColor: "transparent",
+      color: palette.text,
     } as CSSProperties,
   }
 }

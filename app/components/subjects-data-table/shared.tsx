@@ -22,8 +22,7 @@ export const RowActionButton = memo(function RowActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="rounded-md border p-1 transition-colors hover:bg-white/5 disabled:opacity-50"
-      style={{ borderColor: "var(--sh-border)", color: danger ? "#f87171" : "var(--sh-text-muted)" }}
+      className={`flex items-center justify-center rounded-full p-1.5 transition-colors disabled:opacity-40 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 ${danger ? "text-text-muted hover:bg-pastel-rose hover:text-pastel-rose-text" : "text-text-muted hover:bg-surface-hover hover:text-text-primary"}`}
       aria-label={label}
       title={label}
     >

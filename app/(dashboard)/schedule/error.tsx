@@ -9,33 +9,22 @@ export default function ScheduleError({
 }) {
   return (
     <div className="page-root flex h-full min-h-0 flex-col overflow-hidden">
-      <section
-        className="flex min-h-0 flex-1 items-center justify-center rounded-2xl border px-6"
-        style={{
-          borderColor: "var(--sh-border)",
-          background: "var(--sh-card)",
-          boxShadow: "var(--sh-shadow-sm)",
-        }}
-      >
+      <section className="flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-border-hairline bg-surface-panel px-6">
         <div className="max-w-md space-y-3 text-center">
-          <h2 className="text-xl font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+          <h2 className="text-xl font-semibold text-text-primary">
             Schedule failed to load
           </h2>
-          <p className="text-sm" style={{ color: "var(--sh-text-muted)" }}>
+          <p className="text-sm text-text-muted">
             Please try again. If this keeps happening, refresh the page and retry your last action.
           </p>
           {error.digest ? (
-            <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>
+            <p className="text-xs text-text-muted">
               Reference: {error.digest}
             </p>
           ) : null}
           <button
             onClick={reset}
-            className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-            style={{
-              background: "var(--sh-primary)",
-              color: "white",
-            }}
+            className="rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[--action-primary-bg-hover]"
           >
             Try again
           </button>

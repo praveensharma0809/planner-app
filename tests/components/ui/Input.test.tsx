@@ -30,7 +30,7 @@ describe("Input", () => {
   it("shows error styling when error prop is set", () => {
     render(<Input error="Required field" />, { wrapper: TestProviders })
     expect(screen.getByText("Required field")).toBeInTheDocument()
-    expect(screen.getByRole("textbox")).toHaveClass("border-[rgba(239,68,68,0.50)]")
+    expect(screen.getByRole("textbox")).toHaveClass("border-[#EF4444]")
   })
 
   it("disables input when disabled prop is set", () => {

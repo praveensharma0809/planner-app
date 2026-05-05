@@ -18,8 +18,6 @@ function NavigationColumnRow({ item, isActive, draggable, onSelect }: Navigation
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = sortable
 
   const style: CSSProperties = {
-    borderColor: isActive ? "var(--sh-primary-glow)" : "transparent",
-    background: isActive ? "var(--sh-primary-muted)" : "transparent",
     transform: draggable ? CSS.Transform.toString(transform) : undefined,
     transition: draggable ? transition : undefined,
     opacity: draggable && isDragging ? 0.6 : 1,
@@ -28,7 +26,7 @@ function NavigationColumnRow({ item, isActive, draggable, onSelect }: Navigation
   return (
     <div
       ref={draggable ? setNodeRef : undefined}
-      className="rounded-lg border p-1.5 transition-colors"
+      className={`rounded-xl p-1.5 transition-colors ${isActive ? "bg-pastel-lilac/60" : "hover:bg-surface-hover"}`}
       style={style}
     >
       <div className="flex items-start gap-1.5">
@@ -36,35 +34,31 @@ function NavigationColumnRow({ item, isActive, draggable, onSelect }: Navigation
           <button
             type="button"
             aria-label={`Reorder ${item.label}`}
-            className="mt-1 flex h-5 w-3 shrink-0 cursor-grab items-center justify-center rounded text-[10px] active:cursor-grabbing"
-            style={{ color: "var(--sh-text-muted)" }}
+            className="mt-1 flex shrink-0 cursor-grab items-center justify-center rounded text-[10px] active:cursor-grabbing text-text-muted min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0"
             {...attributes}
             {...listeners}
           >
-            ⋮⋮
+            <span className="md:mt-0">⋮⋮</span>
           </button>
         )}
         <button
           type="button"
           onClick={() => onSelect(item.id)}
-          className="min-w-0 flex-1 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-[rgba(124,108,255,0.08)]"
+          className="min-w-0 flex-1 rounded-lg px-1.5 py-1 text-left transition-colors min-h-[44px] md:min-h-0 flex flex-col justify-center"
         >
           <p
-            className="truncate text-sm font-semibold"
-            style={{
-              color: isActive ? "var(--sh-primary-light)" : "var(--sh-text-primary)",
-            }}
+            className={`truncate text-sm font-medium ${isActive ? "text-pastel-lilac-text" : "text-text-primary"}`}
           >
             {item.label}
           </p>
           {item.hint && (
-            <p className="mt-0.5 text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
+            <p className="mt-0.5 text-[11px] text-text-muted">
               {item.hint}
             </p>
           )}
         </button>
 
-        <div className="flex shrink-0 items-center gap-1 pt-1">
+        <div className="flex shrink-0 items-center gap-1 pt-0.5 md:pt-1">
           {item.onEdit && (
             <RowActionButton
               label={`Edit ${item.label}`}
@@ -133,24 +127,17 @@ const NavigationColumn = memo(function NavigationColumn({
 
   return (
     <section
-      className="w-[220px] min-w-[208px] h-full shrink-0 rounded-xl border px-2 py-2 snap-start flex flex-col"
-      style={{
-        borderColor: "var(--sh-border)",
-        background: "color-mix(in srgb, var(--sh-card) 94%, var(--foreground) 6%)",
-      }}
+      className="w-full lg:w-[220px] lg:min-w-[208px] h-full shrink-0 rounded-2xl border border-border-hairline bg-surface-panel px-2 py-2 snap-start flex flex-col shadow-card"
     >
       <div className="px-1.5 pb-2">
-        <p
-          className="text-[11px] font-semibold uppercase tracking-[0.14em]"
-          style={{ color: "var(--sh-text-muted)" }}
-        >
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
           {title}
         </p>
       </div>
 
-      <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto pr-1">
+      <div className="flex-1 min-h-0 space-y-1 overflow-y-auto pr-1">
         {items.length === 0 && (
-          <p className="px-2 py-4 text-sm" style={{ color: "var(--sh-text-muted)" }}>
+          <p className="px-2 py-4 text-sm text-text-muted">
             {emptyMessage}
           </p>
         )}
@@ -174,10 +161,7 @@ const NavigationColumn = memo(function NavigationColumn({
       </div>
 
       {footer && (
-        <div
-          className="mt-2 space-y-1.5 border-t px-1 pt-2"
-          style={{ borderColor: "var(--sh-border)" }}
-        >
+        <div className="mt-2 space-y-1.5 border-t border-border-hairline px-1 pt-2">
           {footer}
         </div>
       )}

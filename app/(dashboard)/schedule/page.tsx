@@ -574,14 +574,9 @@ export default function SchedulePage() {
     <div className="page-root animate-fade-in flex h-full min-h-0 flex-col overflow-hidden">
       {isLoadingWeek ? (
         <section
-          className="flex min-h-0 flex-1 items-center justify-center rounded-2xl border"
-          style={{
-            borderColor: "var(--sh-border)",
-            background: "var(--sh-card)",
-            boxShadow: "var(--sh-shadow-sm)",
-          }}
+          className="flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-border-hairline bg-surface-panel"
         >
-          <p className="text-sm" style={{ color: "var(--sh-text-muted)" }}>
+          <p className="text-sm text-text-muted">
             Loading week schedule...
           </p>
         </section>
@@ -716,12 +711,7 @@ function WeeklyCalendarGrid({
 
   return (
     <section
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border"
-      style={{
-        borderColor: "var(--sh-border)",
-        background: "var(--sh-card)",
-        boxShadow: "var(--sh-shadow-sm)",
-      }}
+      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border-hairline bg-surface-panel"
     >
       <DndContext
         collisionDetection={collisionDetectionStrategy}
@@ -730,29 +720,24 @@ function WeeklyCalendarGrid({
         onDragCancel={onDragCancel}
         onDragEnd={onDragEnd}
       >
-        <div
-            className="hidden border-b md:grid md:grid-cols-7"
-            style={{ borderColor: "var(--sh-border)" }}
-        >
+        {/* Desktop header */}
+        <div className="hidden border-b border-border-hairline lg:grid lg:grid-cols-7">
           {DAY_LABELS.map((label, index) => (
             <div
               key={label}
-              className={`flex flex-col items-center gap-0.5 py-2 text-center text-xs ${index < DAY_LABELS.length - 1 ? "border-r" : ""}`}
-              style={{
-                color: "var(--sh-text-secondary)",
-                borderColor: "var(--sh-border)",
-              }}
+              className={`flex flex-col items-center gap-0.5 py-2 text-center text-xs ${index < DAY_LABELS.length - 1 ? "border-r border-border-hairline" : ""}`}
             >
-              <span className="font-semibold">{label}</span>
-              <span className="text-[11px]" style={{ color: "var(--sh-text-muted)" }}>
+              <span className="font-semibold text-text-secondary">{label}</span>
+              <span className="text-[11px] text-text-muted">
                 {formatDayDateLabel(weekDates[index])}
               </span>
             </div>
           ))}
         </div>
 
-        <div className="border-b p-2 md:hidden" style={{ borderColor: "var(--sh-border)" }}>
-          <div className="flex gap-1 overflow-x-auto pb-1">
+        {/* Mobile day-tab strip */}
+        <div className="border-b border-border-hairline p-2 md:hidden">
+          <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
             {DAY_LABELS.map((label, index) => {
               const isActive = index === mobileDay
               return (
@@ -760,20 +745,11 @@ function WeeklyCalendarGrid({
                   key={label}
                   type="button"
                   onClick={() => onMobileDayChange(index)}
-                  className="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
-                  style={
+                  className={`flex min-h-[44px] shrink-0 items-center justify-center rounded-full border px-3 text-xs font-semibold transition ${
                     isActive
-                      ? {
-                          color: "#fff",
-                          background: "var(--sh-primary)",
-                          borderColor: "transparent",
-                        }
-                      : {
-                          color: "var(--sh-text-secondary)",
-                          background: "var(--sh-card)",
-                          borderColor: "var(--sh-border)",
-                        }
-                  }
+                      ? "border-transparent bg-black text-white"
+                      : "border-border-subtle bg-surface-panel text-text-secondary hover:bg-surface-hover"
+                  }`}
                 >
                   {label} {formatDayDateLabel(weekDates[index])}
                 </button>
@@ -782,7 +758,38 @@ function WeeklyCalendarGrid({
           </div>
         </div>
 
-        <div className="hidden min-h-0 flex-1 md:grid md:grid-cols-7">
+        {/* Tablet portrait: 3-day rolling scrollable view */}
+        <div className="hidden min-h-0 flex-1 md:flex lg:hidden overflow-x-auto snap-x snap-mandatory no-scrollbar">
+          {DAY_LABELS.map((label, day) => (
+            <div
+              key={day}
+              className="flex min-w-[240px] flex-1 snap-start flex-col border-r border-border-hairline last:border-r-0"
+            >
+              <div className="flex flex-col items-center gap-0.5 border-b border-border-hairline py-2 text-center text-xs">
+                <span className="font-semibold text-text-secondary">{label}</span>
+                <span className="text-[11px] text-text-muted">
+                  {formatDayDateLabel(weekDates[day])}
+                </span>
+              </div>
+              <div className="min-h-0 flex-1">
+                <DayColumn
+                  day={day}
+                  events={eventsByDay[day]}
+                  eventElementMapRef={eventElementMapRef}
+                  isLast={day === DAY_LABELS.length - 1}
+                  busyTaskIds={busyTaskIds}
+                  onQuickAdd={onQuickAdd}
+                  onEditEvent={onEditEvent}
+                  onDeleteEvent={onDeleteEvent}
+                  onToggleComplete={onToggleComplete}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop: full 7-day grid */}
+        <div className="hidden min-h-0 flex-1 lg:grid lg:grid-cols-7">
           {DAY_LABELS.map((_, day) => (
             <DayColumn
               key={day}
@@ -799,6 +806,7 @@ function WeeklyCalendarGrid({
           ))}
         </div>
 
+        {/* Mobile: single day view */}
         <div className="min-h-0 flex-1 md:hidden">
           <DayColumn
             day={mobileDay}

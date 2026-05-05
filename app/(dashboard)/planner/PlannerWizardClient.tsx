@@ -105,6 +105,9 @@ export default function PlannerWizardClient({
     message?: string
   } | null>(null)
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0)
+
+  const [confirmKeepMode, setConfirmKeepMode] = useState<KeepPreviousMode>("until")
+  const [confirmSummary, setConfirmSummary] = useState("")
   const [planIssues, setPlanIssues] = useState<PlanIssue[]>([])
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false)
   const [lastPlanStatus, setLastPlanStatus] = useState<string | null>(null)
@@ -713,25 +716,86 @@ export default function PlannerWizardClient({
     }
   }
 
+  const canGoBack = phase > 1
+  const canGoNext = phase < 3
+
+  const nextButtonLabel = useMemo(() => {
+    if (phase === 1) return isAdvancing || isGenerating ? "Preparing..." : "Generate Preview"
+    if (phase === 2) return "Continue to Confirm"
+    return isCommitting ? "Committing..." : "Commit Plan"
+  }, [phase, isAdvancing, isGenerating, isCommitting])
+
+  const nextButtonDisabled = useMemo(() => {
+    if (phase === 1) return isAdvancing || isGenerating
+    if (phase === 2) return !feasibility || sessions.length === 0
+    return isCommitting || sessions.length === 0 || missingGeneratedSessions > 0 || hasCriticalPlanIssues
+  }, [phase, isAdvancing, isGenerating, feasibility, sessions.length, isCommitting, missingGeneratedSessions, hasCriticalPlanIssues])
+
+  function handleStickyNext() {
+    if (phase === 1) {
+      void continueToPreview()
+    } else if (phase === 2) {
+      handlePreviewConfirm()
+    } else if (phase === 3) {
+      void handleCommit(confirmKeepMode, confirmSummary.trim() || undefined)
+    }
+  }
+
   return (
-    <div className="page-root fade-in flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto">
-      <div className="ui-card mt-3 p-4 sm:p-5">
-        <div className="mb-3 flex flex-col gap-2">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            {phase === 3 ? (
-              <p className="text-sm" style={{ color: "var(--sh-text-secondary)" }}>
-                Phase 3: Confirm + Commit - Choose commit strategy and save the final plan.
-              </p>
-            ) : (
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-[11px] uppercase tracking-[0.14em] font-semibold text-sky-400/85">
-                  {activePhase.title}
-                </h2>
-                <p className="text-sm" style={{ color: "var(--sh-text-secondary)" }}>
-                  {activePhase.description}
-                </p>
+    <div className="page-root fade-in flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto pb-24 md:pb-0">
+      <div className="panel mt-3 p-4 sm:p-5">
+        {/* Step indicator */}
+        <div className="mb-4 flex flex-col gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            {/* Desktop step indicator */}
+            <div className="hidden md:flex ui-tabs-list">
+              {PLANNER_PHASES.map((p) => {
+                const isActive = p.id === phase
+                const isDisabled = p.id > maxPhase
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => { if (!isDisabled) goToPhase(p.id) }}
+                    disabled={isDisabled}
+                    className={`ui-tabs-trigger ${isActive ? "ui-tabs-trigger-active" : ""}`}
+                    aria-selected={isActive}
+                    role="tab"
+                  >
+                    {p.shortLabel}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Mobile compact step indicator */}
+            <div className="flex md:hidden items-center gap-2">
+              <span className="text-xs font-medium bg-surface-page rounded-full px-3 py-1.5 text-text-primary">
+                {activePhase.shortLabel}
+              </span>
+              <div className="flex gap-1.5">
+                {PLANNER_PHASES.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => { if (p.id <= maxPhase) goToPhase(p.id) }}
+                    disabled={p.id > maxPhase}
+                    className="h-[44px] w-[44px] flex items-center justify-center"
+                    aria-label={`Go to ${p.shortLabel}`}
+                  >
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${
+                        p.id === phase
+                          ? "bg-text-primary"
+                          : p.id <= maxPhase
+                            ? "bg-text-secondary"
+                            : "bg-border-hairline"
+                      }`}
+                    />
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
 
             <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5">
               {phase === 2 && phaseTwoHeaderChips.length > 0 && (
@@ -739,7 +803,7 @@ export default function PlannerWizardClient({
                   {phaseTwoHeaderChips.map((chip) => (
                     <span
                       key={chip}
-                      className="text-[11px] px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/[0.08] text-white/60"
+                      className="chip-neutral"
                     >
                       {chip}
                     </span>
@@ -747,6 +811,15 @@ export default function PlannerWizardClient({
                 </>
               )}
             </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-[11px] uppercase tracking-[0.14em] font-semibold text-text-muted">
+              {activePhase.title}
+            </h2>
+            <p className="text-sm text-text-secondary">
+              {activePhase.description}
+            </p>
           </div>
         </div>
 
@@ -761,9 +834,9 @@ export default function PlannerWizardClient({
               onSelectedTaskIdsChange={setSelectedIntakeTaskIds}
             />
 
-            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 sm:p-4">
+            <div className="rounded-2xl border border-border-hairline bg-surface-panel-muted p-3 sm:p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs sm:text-sm" style={{ color: "var(--sh-text-secondary)" }}>
+                <p className="text-xs sm:text-sm text-text-secondary">
                   Continue when your structure includes at least one subject and one chapter.
                 </p>
                 <Button
@@ -795,11 +868,11 @@ export default function PlannerWizardClient({
                 isReoptimizing={isReoptimizing}
               />
             ) : (
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 text-center">
-                <p className="text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+              <div className="rounded-2xl border border-border-hairline bg-surface-panel-muted p-6 text-center">
+                <p className="text-base font-semibold text-text-primary">
                   Generate the plan first
                 </p>
-                <p className="mt-2 text-sm" style={{ color: "var(--sh-text-secondary)" }}>
+                <p className="mt-2 text-sm text-text-secondary">
                   Finish intake in Phase 1 to produce a plan preview.
                 </p>
                 <div className="mt-4">
@@ -829,6 +902,10 @@ export default function PlannerWizardClient({
                         : undefined
                   }
                   onResolveIssues={() => setIsIssueModalOpen(true)}
+                  keepMode={confirmKeepMode}
+                  summary={confirmSummary}
+                  onKeepModeChange={setConfirmKeepMode}
+                  onSummaryChange={setConfirmSummary}
                 />
 
                 <PlanHistory
@@ -841,11 +918,11 @@ export default function PlannerWizardClient({
                 />
               </div>
             ) : (
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 text-center">
-                <p className="text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+              <div className="rounded-2xl border border-border-hairline bg-surface-panel-muted p-6 text-center">
+                <p className="text-base font-semibold text-text-primary">
                   Preview required before commit
                 </p>
-                <p className="mt-2 text-sm" style={{ color: "var(--sh-text-secondary)" }}>
+                <p className="mt-2 text-sm text-text-secondary">
                   Complete Phase 2 before moving to commit.
                 </p>
                 <div className="mt-4">
@@ -857,14 +934,14 @@ export default function PlannerWizardClient({
             )}
           </div>
         ) : (
-          <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-6 text-center">
-            <p className="text-[10px] uppercase tracking-widest text-white/40">
+          <div className="mt-4 rounded-2xl border border-border-hairline bg-surface-panel-muted p-6 text-center">
+            <p className="text-[10px] uppercase tracking-widest text-text-muted">
               Phase {phase}
             </p>
-            <p className="mt-2 text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+            <p className="mt-2 text-base font-semibold text-text-primary">
               Unknown phase
             </p>
-            <p className="mt-2 text-sm" style={{ color: "var(--sh-text-secondary)" }}>
+            <p className="mt-2 text-sm text-text-secondary">
               Use the phase stepper to return to a valid step.
             </p>
 
@@ -875,6 +952,28 @@ export default function PlannerWizardClient({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Mobile sticky bottom action bar */}
+      <div className="md:hidden fixed bottom-0 inset-x-0 bg-surface-panel px-4 py-3 border-t border-border-hairline z-10 flex items-center gap-3">
+        <Button
+          variant="secondary"
+          size="md"
+          className="min-h-[44px] flex-1"
+          onClick={() => goToPhase(phase - 1)}
+          disabled={!canGoBack}
+        >
+          Back
+        </Button>
+        <Button
+          variant="primary"
+          size="md"
+          className="min-h-[44px] flex-1"
+          onClick={handleStickyNext}
+          disabled={nextButtonDisabled}
+        >
+          {nextButtonLabel}
+        </Button>
       </div>
 
       <PlanIssueModal

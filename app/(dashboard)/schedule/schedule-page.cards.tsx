@@ -1,17 +1,6 @@
-﻿import type { CSSProperties } from "react"
-import { useSortable } from "@dnd-kit/sortable"
+﻿import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { formatDuration, getSubjectPalette } from "./schedule-page.helpers"
-
-const COMPLETED_BADGE_STYLE: CSSProperties = {
-  background: "color-mix(in srgb, #10B981 28%, transparent)",
-  color: "#34D399",
-}
-
-const PENDING_BADGE_STYLE: CSSProperties = {
-  background: "color-mix(in srgb, #F59E0B 28%, transparent)",
-  color: "#FBBF24",
-}
 
 export type ScheduleCardEvent = {
   id: string
@@ -54,10 +43,10 @@ export function EventCard({ event, registerElement, busy, onEdit, onDelete, onTo
       <div
         {...attributes}
         {...listeners}
-        className={`cursor-grab rounded-lg border p-1.5 text-xs shadow-sm transition duration-200 ${
+        className={`cursor-grab rounded-[6px] border p-2 text-xs transition duration-200 ${
           isDragging
-            ? "scale-[1.02] cursor-grabbing shadow-xl"
-            : "hover:-translate-y-0.5 hover:shadow-md"
+            ? "scale-[1.02] cursor-grabbing shadow-[var(--shadow-pop)]"
+            : "hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]"
         }`}
         onPointerDownCapture={(event) => {
           const target = event.target as HTMLElement
@@ -68,7 +57,7 @@ export function EventCard({ event, registerElement, busy, onEdit, onDelete, onTo
         style={palette.containerStyle}
       >
         <div className="flex items-start gap-1.5">
-          <div className="min-w-0 flex flex-1 items-start gap-1">
+          <div className="min-w-0 flex flex-1 items-start gap-1.5">
             <button
               type="button"
               onClick={(clickEvent) => {
@@ -79,9 +68,9 @@ export function EventCard({ event, registerElement, busy, onEdit, onDelete, onTo
               disabled={busy}
               className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] disabled:opacity-50"
               style={{
-                borderColor: event.completed ? "#34D399" : "var(--sh-border)",
-                background: event.completed ? "rgba(52, 211, 153, 0.18)" : "transparent",
-                color: event.completed ? "#34D399" : "var(--sh-text-muted)",
+                borderColor: event.completed ? "var(--pastel-mint-text)" : "var(--border-subtle)",
+                background: event.completed ? "var(--pastel-mint)" : "transparent",
+                color: event.completed ? "var(--pastel-mint-text)" : "var(--text-muted)",
               }}
               aria-label={event.completed ? "Mark as pending" : "Mark as completed"}
             >
@@ -91,25 +80,22 @@ export function EventCard({ event, registerElement, busy, onEdit, onDelete, onTo
             <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-1">
               <div className="min-w-0">
                 <p
-                  className="text-[12.5px] font-semibold leading-snug break-words"
+                  className="text-xs font-semibold leading-snug break-words"
                   title={event.title}
                   style={{
-                    color: "var(--sh-text-primary)",
+                    color: "var(--text-primary)",
                     textDecoration: event.completed ? "line-through" : "none",
-                    opacity: event.completed ? 0.72 : 1,
+                    opacity: event.completed ? 0.6 : 1,
                   }}
                 >
                   {event.title}
                 </p>
 
-                <div className="mt-0.5 flex items-center gap-1.5 text-[10.5px]">
-                  <span
-                    className="shrink-0 rounded px-1.5 py-px font-medium"
-                    style={event.completed ? COMPLETED_BADGE_STYLE : PENDING_BADGE_STYLE}
-                  >
+                <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                  <span className={`shrink-0 ${event.completed ? "chip-mint" : "chip-peach"}`}>
                     {event.completed ? "Completed" : "Pending"}
                   </span>
-                  <span className="shrink-0" style={{ color: "var(--sh-text-muted)" }}>
+                  <span className="shrink-0" style={{ color: "var(--text-muted)" }}>
                     {formatDuration(event.durationMinutes)}
                   </span>
                 </div>
@@ -167,7 +153,7 @@ export function DragPreviewCard({ event }: { event: ScheduleCardEvent }) {
 
   return (
     <div
-      className="w-56 rounded-md border p-2 text-xs shadow-2xl"
+      className="w-56 rounded-[6px] border p-2 text-xs shadow-[var(--shadow-pop)]"
       style={{
         transform: "scale(1.03)",
         cursor: "grabbing",
@@ -176,13 +162,10 @@ export function DragPreviewCard({ event }: { event: ScheduleCardEvent }) {
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+          <div className="truncate font-semibold" style={{ color: "var(--text-primary)" }}>
             {event.title}
           </div>
-          <span
-            className="mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
-            style={event.completed ? COMPLETED_BADGE_STYLE : PENDING_BADGE_STYLE}
-          >
+          <span className={`mt-1 inline-flex items-center ${event.completed ? "chip-mint" : "chip-peach"}`}>
             {event.completed ? "Completed" : "Pending"}
           </span>
         </div>
@@ -200,11 +183,11 @@ export function QuickAddButton({ onClick }: QuickAddButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition"
+      className="flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-full transition hover:bg-[--surface-hover] md:h-8 md:min-h-8 md:min-w-8 md:w-8"
       style={{
-        background: "color-mix(in srgb, var(--sh-card) 70%, var(--sh-primary) 30%)",
-        border: "1px solid color-mix(in srgb, var(--sh-primary) 24%, var(--sh-border) 76%)",
-        color: "var(--sh-text-secondary)",
+        background: "var(--surface-page)",
+        border: "1px solid var(--border-subtle)",
+        color: "var(--text-secondary)",
       }}
       aria-label="Quick add event"
     >

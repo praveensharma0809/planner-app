@@ -34,10 +34,9 @@ const DayColumn = React.memo(function DayColumn({
   return (
     <div
       ref={setNodeRef}
-      className={isLast ? "flex h-full min-h-0 flex-col" : "flex h-full min-h-0 flex-col border-r"}
+      className={`flex h-full min-h-0 flex-col ${isLast ? "" : "border-r border-border-hairline"}`}
       style={{
-        borderColor: "var(--sh-border)",
-        background: isOver ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent",
+        background: isOver ? "var(--surface-hover)" : "transparent",
       }}
     >
       <div
@@ -48,10 +47,10 @@ const DayColumn = React.memo(function DayColumn({
       >
         {events.length === 0 ? (
           <div
-            className="flex h-full min-h-[180px] items-center justify-center rounded-lg border border-dashed text-xs"
+            className="flex h-full min-h-[180px] items-center justify-center rounded-[6px] border border-dashed text-xs"
             style={{
-              borderColor: isOver ? "var(--sh-primary)" : "var(--sh-border)",
-              color: isOver ? "var(--sh-text-primary)" : "var(--sh-text-muted)",
+              borderColor: isOver ? "var(--border-subtle)" : "var(--border-hairline)",
+              color: isOver ? "var(--text-primary)" : "var(--text-muted)",
             }}
           >
             {isOver ? "Release to move task" : "No tasks for this day"}
@@ -82,7 +81,7 @@ const DayColumn = React.memo(function DayColumn({
         )}
       </div>
 
-      <div className="flex h-10 items-center justify-center border-t" style={{ borderColor: "var(--sh-border)" }}>
+      <div className="flex h-10 items-center justify-center border-t border-border-hairline">
         <QuickAddButton onClick={() => onQuickAdd(day)} />
       </div>
     </div>

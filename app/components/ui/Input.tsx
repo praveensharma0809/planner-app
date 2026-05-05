@@ -13,19 +13,19 @@ export function Input({ label, error, hint, className = "", id, ...props }: Inpu
       {label && (
         <label
           htmlFor={inputId}
-          className="text-xs font-semibold"
-          style={{ color: "var(--sh-text-secondary)" }}
+          className="text-xs font-medium"
+          style={{ color: "var(--text-secondary)" }}
         >
           {label}
         </label>
       )}
       <input
         id={inputId}
-        className={`ui-input ${error ? "border-[rgba(239,68,68,0.50)]" : ""} ${className}`}
+        className={`ui-input ${error ? "border-[#EF4444]" : ""} ${className}`}
         {...props}
       />
       {error && <p className="text-xs text-[#EF4444]">{error}</p>}
-      {!error && hint && <p className="text-xs" style={{ color: "var(--sh-text-muted)" }}>{hint}</p>}
+      {!error && hint && <p className="text-xs" style={{ color: "var(--text-muted)" }}>{hint}</p>}
     </div>
   )
 }

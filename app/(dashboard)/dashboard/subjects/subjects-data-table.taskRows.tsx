@@ -35,28 +35,21 @@ export function DraggableTaskRow({
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging || isReordering ? 0.7 : 1,
-        borderColor: isDragging ? "var(--sh-primary-glow)" : "var(--sh-border)",
-        background: task.completed
-          ? "rgba(52, 211, 153, 0.08)"
-          : isDragging
-            ? "rgba(124, 108, 255, 0.1)"
-            : "rgba(255, 255, 255, 0.02)",
         cursor: isDragging ? "grabbing" : "grab",
       }}
-      className="group rounded-lg border px-2.5 py-1.5 transition-colors"
+      className={`group rounded-xl px-2.5 py-2 transition-colors ${task.completed ? "bg-pastel-mint/40" : isDragging ? "bg-surface-hover" : "hover:bg-surface-hover"}`}
     >
-      <div className={`flex gap-1.5 ${showFullTitle ? "items-start" : "items-center"}`}>
+      <div className={`flex gap-2 ${showFullTitle ? "items-start" : "items-center"}`}>
         <button
           type="button"
           {...attributes}
           {...listeners}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs transition-colors hover:bg-white/5 disabled:opacity-50"
-          style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
+          className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded text-xs transition-colors text-text-muted hover:bg-surface-hover disabled:opacity-50 md:min-h-0 md:min-w-0"
           aria-label="Drag to reorder"
           title="Drag to reorder"
         >
           <svg
-            className="h-3 w-3"
+            className="h-3.5 w-3.5"
             fill="currentColor"
             viewBox="0 0 16 16"
           >
@@ -69,31 +62,26 @@ export function DraggableTaskRow({
           type="button"
           onClick={() => onToggle(!task.completed)}
           disabled={isPending || !canEdit}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors disabled:opacity-50"
-          style={{
-            borderColor: task.completed
-              ? "var(--sh-success)"
-              : "var(--sh-border)",
-            background: task.completed ? "var(--sh-success)" : "transparent",
-          }}
+          className={`flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-[5px] transition-colors disabled:opacity-50 md:min-h-0 md:min-w-0 ${task.completed ? "border-2 border-black bg-black" : "border-2 border-border-subtle hover:border-text-primary bg-transparent"}`}
           aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
         >
-          {task.completed && (
-            <svg
-              className="h-3 w-3 text-white"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              viewBox="0 0 24 24"
-            >
-              <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
+          <span className="flex h-[18px] w-[18px] items-center justify-center">
+            {task.completed && (
+              <svg
+                className="h-3 w-3 text-white"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                viewBox="0 0 24 24"
+              >
+                <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </span>
         </button>
 
         <p
-          className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through opacity-60" : ""} ${showFullTitle ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}
-          style={{ color: "var(--sh-text-primary)" }}
+          className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through text-text-muted" : "text-text-primary"} ${showFullTitle ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}
           title={task.title}
         >
           {task.title}
