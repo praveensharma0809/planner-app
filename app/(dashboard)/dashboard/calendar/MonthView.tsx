@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useState, useEffect, useCallback, useTransition } from "react"
+import { useState, useEffect, useCallback, useTransition, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { Task } from "@/lib/types/db"
@@ -269,6 +269,48 @@ export function MonthView({
   }
 
   const selectedTasks = selectedDay ? getTasksForDate(taskRows, selectedDay) : []
+
+  const agendaWeeks = useMemo(() => {
+    const weeks: {
+      label: string
+      days: {
+        dayNum: number
+        dateStr: string
+        dayTasks: Task[]
+        isToday: boolean
+        isPast: boolean
+      }[]
+    }[] = []
+
+    for (let w = 0; w < calendarWeekRows; w++) {
+      const weekDays = []
+      for (let d = 0; d < 7; d++) {
+        const cellIndex = w * 7 + d
+        const dayNum = cellIndex - firstDayOfWeek + 1
+        if (dayNum >= 1 && dayNum <= daysInMonth) {
+          const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`
+          const dayTasks = getTasksForDate(taskRows, dateStr)
+          if (dayTasks.length > 0) {
+            weekDays.push({
+              dayNum,
+              dateStr,
+              dayTasks,
+              isToday: dateStr === today,
+              isPast: dateStr < today,
+            })
+          }
+        }
+      }
+      if (weekDays.length > 0) {
+        const firstDayDate = new Date(year, month - 1, weekDays[0].dayNum)
+        const lastDayDate = new Date(year, month - 1, weekDays[weekDays.length - 1].dayNum)
+        const label = `${firstDayDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${lastDayDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+        weeks.push({ label, days: weekDays })
+      }
+    }
+    return weeks
+  }, [calendarWeekRows, firstDayOfWeek, daysInMonth, year, month, taskRows, today])
+
   const rootClassName = `flex w-full min-h-0 flex-1 self-stretch flex-col overflow-hidden px-4 pb-3 pt-2 sm:px-6 ${className ?? ""}`.trim()
 
   return (
@@ -323,7 +365,7 @@ export function MonthView({
 
       {/* Calendar grid */}
       <div
-        className="hidden md:flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl"
+        className="hidden lg:flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl"
         style={{ border: "1px solid var(--border-hairline)", background: "var(--surface-panel)" }}
       >
         {/* Day-of-week header */}
@@ -495,8 +537,8 @@ export function MonthView({
         </div>
       </div>
 
-      {/* Mobile agenda list */}
-      <div className="md:hidden flex flex-col gap-4 overflow-y-auto flex-1 min-h-0 px-1 pb-2">
+      {/* Agenda list (<lg) */}
+      <div className="lg:hidden flex flex-col gap-4 overflow-y-auto flex-1 min-h-0 px-1 pb-2">
         {/* Month label for mobile context */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium" style={{ color: "var(--text-primary)" }}>
@@ -507,79 +549,79 @@ export function MonthView({
           </span>
         </div>
 
-        {Array.from({ length: daysInMonth }).map((_, i) => {
-          const dayNum = i + 1
-          const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`
-          const dayTasks = getTasksForDate(taskRows, dateStr)
-          if (dayTasks.length === 0) return null
-
-          const isToday = dateStr === today
-          const isPast = dateStr < today
-
-          return (
-            <div key={dateStr} className="flex flex-col gap-2">
-              <button
-                onClick={() => setSelectedDay(dateStr)}
-                className="flex items-center gap-2 text-left active:opacity-70 transition-opacity min-h-[44px]"
-              >
-                <span
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold leading-none"
-                  style={{
-                    background: isToday ? "var(--pastel-butter)" : "var(--surface-page)",
-                    color: isToday ? "var(--pastel-butter-text)" : isPast ? "var(--text-muted)" : "var(--text-primary)",
-                  }}
+        {agendaWeeks.map((week) => (
+          <div key={week.label} className="flex flex-col gap-2">
+            <div
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: "var(--text-muted)" }}
+            >
+              {week.label}
+            </div>
+            {week.days.map((day) => (
+              <div key={day.dateStr} className="flex flex-col gap-2">
+                <button
+                  onClick={() => setSelectedDay(day.dateStr)}
+                  className="flex items-center gap-2 text-left active:opacity-70 transition-opacity min-h-[44px]"
                 >
-                  {dayNum}
-                </span>
-                <span className="text-sm font-medium" style={{ color: isToday ? "var(--text-primary)" : "var(--text-secondary)" }}>
-                  {formatDayName(dateStr)}
-                </span>
-                {isToday && (
-                  <span className="chip-butter text-[10px]">Today</span>
-                )}
-              </button>
+                  <span
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold leading-none"
+                    style={{
+                      background: day.isToday ? "var(--pastel-butter)" : "var(--surface-page)",
+                      color: day.isToday ? "var(--pastel-butter-text)" : day.isPast ? "var(--text-muted)" : "var(--text-primary)",
+                    }}
+                  >
+                    {day.dayNum}
+                  </span>
+                  <span className="text-sm font-medium" style={{ color: day.isToday ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                    {formatDayName(day.dateStr)}
+                  </span>
+                  {day.isToday && (
+                    <span className="chip-butter text-[10px]">Today</span>
+                  )}
+                </button>
 
-              <div className="flex flex-col gap-1.5 pl-9">
-                {dayTasks.map((task) => {
-                  const isDone = task.completed
-                  const color = getColor(task.subject_id)
-                  const subjectName = getSubjectName(task)
+                <div className="flex flex-col gap-1.5 pl-9">
+                  {day.dayTasks.map((task) => {
+                    const isDone = task.completed
+                    const color = getColor(task.subject_id)
+                    const subjectName = getSubjectName(task)
 
-                  return (
-                    <button
-                      key={task.id}
-                      onClick={() => setSelectedDay(dateStr)}
-                      className="w-full text-left rounded-xl p-3 transition-all active:scale-[0.98]"
-                      style={{
-                        background: isDone ? "var(--surface-page)" : color.bg,
-                        opacity: isDone ? 0.55 : 1,
-                      }}
-                    >
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={color.chip}>{subjectName}</span>
-                        <span className="text-[10px] font-medium" style={{ color: isDone ? "var(--text-muted)" : color.text }}>
-                          {SESSION_LABEL[task.session_type] ?? task.session_type}
-                        </span>
-                      </div>
-                      <p
-                        className="mt-1 text-sm font-medium leading-snug"
+                    return (
+                      <button
+                        key={task.id}
+                        onClick={() => setSelectedDay(day.dateStr)}
+                        className="w-full text-left rounded-xl p-3 transition-all active:scale-[0.98]"
                         style={{
-                          color: isDone ? "var(--text-muted)" : color.text,
-                          textDecoration: isDone ? "line-through" : "none",
+                          background: isDone ? "var(--surface-page)" : color.bg,
+                          opacity: isDone ? 0.55 : 1,
                         }}
                       >
-                        {task.title}
-                      </p>
-                      <p className="mt-0.5 text-[11px]" style={{ color: isDone ? "var(--text-muted)" : "var(--text-secondary)" }}>
-                        {task.duration_minutes} min
-                      </p>
-                    </button>
-                  )
-                })}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={color.chip}>{subjectName}</span>
+                          <span className="text-[10px] font-medium" style={{ color: isDone ? "var(--text-muted)" : color.text }}>
+                            {SESSION_LABEL[task.session_type] ?? task.session_type}
+                          </span>
+                        </div>
+                        <p
+                          className="mt-1 text-sm font-medium leading-snug"
+                          style={{
+                            color: isDone ? "var(--text-muted)" : color.text,
+                            textDecoration: isDone ? "line-through" : "none",
+                          }}
+                        >
+                          {task.title}
+                        </p>
+                        <p className="mt-0.5 text-[11px]" style={{ color: isDone ? "var(--text-muted)" : "var(--text-secondary)" }}>
+                          {task.duration_minutes} min
+                        </p>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )
-        })}
+            ))}
+          </div>
+        ))}
 
         {/* Empty month state */}
         {taskRows.length === 0 && (

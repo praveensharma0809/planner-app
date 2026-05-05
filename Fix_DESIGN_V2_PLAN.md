@@ -478,6 +478,8 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - 2026-05-06 · F7.7 · DSP · PASS — Planner phase stepper: numbered circles (1/2/3) replace tabs, active uses --accent-selected-bg, locked shows lock icon, topbar shows step numbers
 - 2026-05-06 · F7.8 · DSP · PASS — Planner intake workspace fills viewport: Subjects/Chapters/Tasks 3-column flex layout with overflow-y-auto per pane (same pattern as F7.2)
 - 2026-05-06 · F7.9 · DSP · PASS — Settings viewport-fill: tab panels use min-h-0 flex-1, Profile/Preferences/Billing fill available space, Save Changes button sticky bottom on <lg
+- 2026-05-05 · F7.4 · K2 · PASS — Calendar <lg agenda view: grid hidden below lg, list grouped by week with existing event chip component, empty month state preserved
+- 2026-05-05 · F7.6 · K2 · PASS — Schedule <lg single-column: replaced mobile day-tabs + tablet 3-day scroll with vertical day cards (surface-card, 320/360px height), desktop 7-column grid unchanged, pager controls remain at top via ScheduleTopbarControls
 
 ---
 

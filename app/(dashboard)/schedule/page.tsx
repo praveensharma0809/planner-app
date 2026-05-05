@@ -91,7 +91,6 @@ export default function SchedulePage() {
     weekDates,
     isCurrentWeek,
     mobileDay,
-    setMobileDay,
     handleGoPrevWeek,
     handleGoNextWeek,
     handleGoCurrentWeek,
@@ -588,8 +587,6 @@ export default function SchedulePage() {
           eventElementMapRef={eventElementMapRef}
           activeDragEvent={activeDragEvent}
           busyTaskIds={busyTaskIds}
-          mobileDay={mobileDay}
-          onMobileDayChange={setMobileDay}
           onDragStart={handleDragStart}
           onDragCancel={handleDragCancel}
           onDragEnd={handleDragEnd}
@@ -623,8 +620,6 @@ type WeeklyCalendarGridProps = {
   eventElementMapRef: MutableRefObject<Map<string, HTMLDivElement>>
   activeDragEvent: CalendarEvent | null
   busyTaskIds: Set<string>
-  mobileDay: number
-  onMobileDayChange: (day: number) => void
   onDragStart: (event: DragStartEvent) => void
   onDragEnd: (event: DragEndEvent) => void
   onDragCancel: () => void
@@ -641,8 +636,6 @@ function WeeklyCalendarGrid({
   eventElementMapRef,
   activeDragEvent,
   busyTaskIds,
-  mobileDay,
-  onMobileDayChange,
   onDragStart,
   onDragEnd,
   onDragCancel,
@@ -735,48 +728,25 @@ function WeeklyCalendarGrid({
           ))}
         </div>
 
-        {/* Mobile day-tab strip */}
-        <div className="border-b border-border-hairline p-2 md:hidden">
-          <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
-            {DAY_LABELS.map((label, index) => {
-              const isActive = index === mobileDay
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => onMobileDayChange(index)}
-                  className={`flex min-h-[44px] shrink-0 items-center justify-center rounded-full border px-3 text-xs font-semibold transition ${
-                    isActive
-                      ? "border-transparent bg-black text-white"
-                      : "border-border-subtle bg-surface-panel text-text-secondary hover:bg-surface-hover"
-                  }`}
-                >
-                  {label} {formatDayDateLabel(weekDates[index])}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Tablet portrait: 3-day rolling scrollable view */}
-        <div className="hidden min-h-0 flex-1 md:flex lg:hidden overflow-x-auto snap-x snap-mandatory no-scrollbar">
+        {/* Below lg: single-column day cards */}
+        <div className="flex min-h-0 flex-1 flex-col gap-[var(--gap-card)] overflow-y-auto lg:hidden p-3 md:p-4">
           {DAY_LABELS.map((label, day) => (
             <div
               key={day}
-              className="flex min-w-[240px] flex-1 snap-start flex-col border-r border-border-hairline last:border-r-0"
+              className="surface-card rounded-xl flex flex-col h-[320px] md:h-[360px]"
             >
-              <div className="flex flex-col items-center gap-0.5 border-b border-border-hairline py-2 text-center text-xs">
-                <span className="font-semibold text-text-secondary">{label}</span>
+              <div className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-border-hairline">
+                <span className="font-semibold text-text-secondary text-sm">{label}</span>
                 <span className="text-[11px] text-text-muted">
                   {formatDayDateLabel(weekDates[day])}
                 </span>
               </div>
-              <div className="min-h-0 flex-1">
+              <div className="flex-1 min-h-0">
                 <DayColumn
                   day={day}
                   events={eventsByDay[day]}
                   eventElementMapRef={eventElementMapRef}
-                  isLast={day === DAY_LABELS.length - 1}
+                  isLast
                   busyTaskIds={busyTaskIds}
                   onQuickAdd={onQuickAdd}
                   onEditEvent={onEditEvent}
@@ -804,21 +774,6 @@ function WeeklyCalendarGrid({
               onToggleComplete={onToggleComplete}
             />
           ))}
-        </div>
-
-        {/* Mobile: single day view */}
-        <div className="min-h-0 flex-1 md:hidden">
-          <DayColumn
-            day={mobileDay}
-            events={eventsByDay[mobileDay]}
-            eventElementMapRef={eventElementMapRef}
-            isLast
-            busyTaskIds={busyTaskIds}
-            onQuickAdd={onQuickAdd}
-            onEditEvent={onEditEvent}
-            onDeleteEvent={onDeleteEvent}
-            onToggleComplete={onToggleComplete}
-          />
         </div>
 
         <DragOverlay>
