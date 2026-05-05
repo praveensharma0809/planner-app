@@ -434,21 +434,21 @@ export default async function DashboardPage() {
             ) : (
               <div className="space-y-2.5">
                 {alertItems.map((alert) => {
-                  const isDanger = alert.tone === "danger"
-                  const bgClass = isDanger ? "dashboard-alert-rose" : "dashboard-alert-peach"
-                  const iconBgClass = isDanger
-                    ? "bg-[--pastel-rose]"
-                    : alert.tone === "warning"
-                      ? "bg-[--pastel-peach]"
-                      : "bg-[--pastel-sky]"
-                  const iconTextClass = isDanger
-                    ? "text-[--pastel-rose-text]"
-                    : alert.tone === "warning"
-                      ? "text-[--pastel-peach-text]"
-                      : "text-[--pastel-sky-text]"
+                  const severityBgClass =
+                    alert.tone === "danger" ? "dashboard-alert-critical" :
+                    alert.tone === "warning" ? "dashboard-alert-warn" :
+                    "dashboard-alert-info"
+                  const iconBgClass =
+                    alert.tone === "danger" ? "bg-[--alert-critical-bg]" :
+                    alert.tone === "warning" ? "bg-[--alert-warn-bg]" :
+                    "bg-[--alert-info-bg]"
+                  const iconTextClass =
+                    alert.tone === "danger" ? "text-[--alert-critical-fg]" :
+                    alert.tone === "warning" ? "text-[--alert-warn-fg]" :
+                    "text-[--alert-info-fg]"
 
                   return (
-                    <div key={alert.id} className={`${bgClass} min-h-[44px] md:min-h-0`}>
+                    <div key={alert.id} className={`${severityBgClass} min-h-[44px] md:min-h-0`}>
                       <div className={`dashboard-alert-icon ${iconBgClass} ${iconTextClass}`}>
                         <svg className="w-4 h-4" fill="none" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />

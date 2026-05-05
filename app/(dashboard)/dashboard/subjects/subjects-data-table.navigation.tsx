@@ -26,7 +26,7 @@ function NavigationColumnRow({ item, isActive, draggable, onSelect }: Navigation
   return (
     <div
       ref={draggable ? setNodeRef : undefined}
-      className={`rounded-xl p-1.5 transition-colors ${isActive ? "bg-pastel-lilac/60" : "hover:bg-surface-hover"}`}
+      className={`rounded-xl p-1.5 transition-colors ${isActive ? "bg-[--accent-selected-bg]" : "hover:bg-surface-hover"}`}
       style={style}
     >
       <div className="flex items-start gap-1.5">
@@ -47,7 +47,7 @@ function NavigationColumnRow({ item, isActive, draggable, onSelect }: Navigation
           className="min-w-0 flex-1 rounded-lg px-1.5 py-1 text-left transition-colors min-h-[44px] md:min-h-0 flex flex-col justify-center"
         >
           <p
-            className={`truncate text-sm font-medium ${isActive ? "text-pastel-lilac-text" : "text-text-primary"}`}
+            className={`truncate text-sm font-medium ${isActive ? "text-[--accent-selected-fg] font-semibold" : "text-text-primary"}`}
           >
             {item.label}
           </p>

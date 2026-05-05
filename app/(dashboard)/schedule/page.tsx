@@ -715,30 +715,45 @@ function WeeklyCalendarGrid({
       >
         {/* Desktop header */}
         <div className="hidden border-b border-border-hairline lg:grid lg:grid-cols-7">
-          {DAY_LABELS.map((label, index) => (
+          {DAY_LABELS.map((label, index) => {
+            const dateStr = weekDates[index]
+            const isToday = dateStr === getTodayLocalDate()
+            return (
             <div
               key={label}
               className={`flex flex-col items-center gap-0.5 py-2 text-center text-xs ${index < DAY_LABELS.length - 1 ? "border-r border-border-hairline" : ""}`}
+              style={
+                isToday
+                  ? { background: "var(--accent-selected-bg)" }
+                  : undefined
+              }
             >
-              <span className="font-semibold text-text-secondary">{label}</span>
-              <span className="text-[11px] text-text-muted">
-                {formatDayDateLabel(weekDates[index])}
+              <span className={`font-semibold ${isToday ? "text-[--accent-selected-fg]" : "text-text-secondary"}`}>{label}</span>
+              <span className={`text-[11px] ${isToday ? "text-[--accent-selected-fg]" : "text-text-muted"}`}>
+                {formatDayDateLabel(dateStr)}
               </span>
             </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Below lg: single-column day cards */}
         <div className="flex min-h-0 flex-1 flex-col gap-[var(--gap-card)] overflow-y-auto lg:hidden p-3 md:p-4">
-          {DAY_LABELS.map((label, day) => (
+          {DAY_LABELS.map((label, day) => {
+            const dateStr = weekDates[day]
+            const isToday = dateStr === getTodayLocalDate()
+            return (
             <div
               key={day}
-              className="surface-card rounded-xl flex flex-col h-[320px] md:h-[360px]"
+              className={`surface-card rounded-xl flex flex-col h-[320px] md:h-[360px] ${isToday ? "border-[--accent-selected-bar]" : ""}`}
+              style={isToday ? { borderLeftWidth: "3px" } : undefined}
             >
-              <div className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-border-hairline">
-                <span className="font-semibold text-text-secondary text-sm">{label}</span>
-                <span className="text-[11px] text-text-muted">
-                  {formatDayDateLabel(weekDates[day])}
+              <div className={`flex items-center gap-2 px-3 pt-3 pb-2 border-b border-border-hairline`}
+                style={isToday ? { background: "var(--accent-selected-bg)" } : undefined}
+              >
+                <span className={`font-semibold text-sm ${isToday ? "text-[--accent-selected-fg]" : "text-text-secondary"}`}>{label}</span>
+                <span className={`text-[11px] ${isToday ? "text-[--accent-selected-fg]" : "text-text-muted"}`}>
+                  {formatDayDateLabel(dateStr)}
                 </span>
               </div>
               <div className="flex-1 min-h-0">
@@ -755,7 +770,8 @@ function WeeklyCalendarGrid({
                 />
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Desktop: full 7-day grid */}

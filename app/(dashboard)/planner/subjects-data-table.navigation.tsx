@@ -36,7 +36,7 @@ export function NavigationItemCard({
 }: NavigationItemCardProps) {
   return (
     <div
-      className={`rounded-xl p-1.5 transition-colors ${isDragging ? "bg-surface-hover opacity-90" : isActive ? "bg-pastel-lilac/60" : "hover:bg-surface-hover"}`}
+      className={`rounded-xl p-1.5 transition-colors ${isDragging ? "bg-surface-hover opacity-90" : isActive ? "bg-[--accent-selected-bg]" : "hover:bg-surface-hover"}`}
     >
       <div className="flex items-start gap-1.5">
         <button
@@ -49,7 +49,7 @@ export function NavigationItemCard({
           title={dragEnabled ? `Drag to reorder ${item.label}` : undefined}
         >
           <p
-            className={`truncate text-sm font-medium ${isActive ? "text-pastel-lilac-text" : "text-text-primary"}`}
+            className={`truncate text-sm font-medium ${isActive ? "text-[--accent-selected-fg] font-semibold" : "text-text-primary"}`}
           >
             {item.label}
           </p>

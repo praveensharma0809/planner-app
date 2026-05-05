@@ -1,4 +1,10 @@
-﻿@import "tailwindcss";
+﻿/* ══════════════════════════════════════════════════════════════
+   F8.3 — BUTTON SHAPE RULE
+   Primary CTA buttons → rounded-full (pill)
+   Secondary / destructive / ghost buttons → rounded-lg (rounded-rect)
+   ══════════════════════════════════════════════════════════════ */
+
+@import "tailwindcss";
 
 /*
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -907,8 +913,10 @@ summary:focus-visible,
   }
 }
 .sidebar-nav-item-active {
-  color: var(--nav-item-active-color) !important;
-  background-color: var(--nav-item-active-bg) !important;
+  color: var(--accent-selected-fg) !important;
+  background-color: var(--accent-selected-bg) !important;
+  border-left: 3px solid var(--accent-selected-bar) !important;
+  font-weight: 600 !important;
 }
 
 /* ── Collapsed tooltip bubble ────────────────────────────── */
@@ -1204,9 +1212,9 @@ summary:focus-visible,
 }
 
 .planner-topbar-phase-btn-active {
-  color: var(--sh-primary-light);
-  border-color: var(--sh-primary-glow);
-  background: var(--sh-primary-muted);
+  color: var(--accent-selected-fg);
+  border-color: var(--accent-selected-bar);
+  background: var(--accent-selected-bg);
 }
 
 .planner-topbar-reset-btn {
@@ -1435,6 +1443,7 @@ main[data-bleed="true"] {
   background: linear-gradient(135deg, var(--sh-primary) 0%, #9F7AEA 100%);
   color: #fff;
   box-shadow: 0 3px 12px var(--sh-primary-glow);
+  border-radius: 9999px;
 }
 @media (prefers-reduced-motion: no-preference) {
   .ui-btn-primary:hover:not(:disabled) {
@@ -1446,6 +1455,7 @@ main[data-bleed="true"] {
   background: transparent;
   border: 1px solid var(--sh-border);
   color: var(--sh-text-secondary);
+  border-radius: 8px;
 }
 @media (prefers-reduced-motion: no-preference) {
   .ui-btn-ghost:hover:not(:disabled) {
@@ -1457,6 +1467,7 @@ main[data-bleed="true"] {
   background: rgba(239, 68, 68, 0.12);
   color: #EF4444;
   border: 1px solid rgba(239, 68, 68, 0.20);
+  border-radius: 8px;
 }
 @media (prefers-reduced-motion: no-preference) {
   .ui-btn-danger:hover:not(:disabled) {
@@ -1467,6 +1478,7 @@ main[data-bleed="true"] {
   background: rgba(52, 211, 153, 0.12);
   color: #34D399;
   border: 1px solid rgba(52, 211, 153, 0.20);
+  border-radius: 8px;
 }
 @media (prefers-reduced-motion: no-preference) {
   .ui-btn-success:hover:not(:disabled) {
@@ -2534,8 +2546,9 @@ html {
   margin-top: 4px;
 }
 
-.dashboard-alert-rose,
-.dashboard-alert-peach {
+.dashboard-alert-info,
+.dashboard-alert-warn,
+.dashboard-alert-critical {
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -2543,13 +2556,19 @@ html {
   border-radius: 12px;
 }
 
-.dashboard-alert-rose {
-  background: var(--pastel-rose);
+.dashboard-alert-info {
+  background: var(--alert-info-bg);
 }
 
-.dashboard-alert-peach {
-  background: var(--pastel-peach);
+.dashboard-alert-warn {
+  background: var(--alert-warn-bg);
 }
+
+.dashboard-alert-critical {
+  background: var(--alert-critical-bg);
+}
+
+/* DEPRECATED — removed dashboard-alert-rose and dashboard-alert-peach */
 
 .dashboard-alert-icon {
   width: 28px;

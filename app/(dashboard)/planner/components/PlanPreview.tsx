@@ -943,7 +943,7 @@ export default function PlanPreview({
                                   event.stopPropagation()
                                   startSwap(sessionIndex)
                                 }}
-                                className={`text-xs min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center ${isSwapSource ? "text-pastel-lilac-text" : "text-text-muted hover:text-text-primary"} transition-colors`}
+                                className={`text-xs min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center ${isSwapSource ? "text-[--accent-selected-fg] font-semibold" : "text-text-muted hover:text-text-primary"} transition-colors`}
                                 title="Swap with another session"
                               >
                                 swap

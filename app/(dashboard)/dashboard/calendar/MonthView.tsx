@@ -434,7 +434,7 @@ export function MonthView({
                 style={{
                   borderColor: "var(--border-hairline)",
                   background: isToday
-                    ? "color-mix(in srgb, var(--pastel-butter) 28%, transparent)"
+                    ? "var(--accent-selected-bg)"
                     : "transparent",
                 }}
               >
@@ -442,9 +442,9 @@ export function MonthView({
                   <span
                     className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold leading-none"
                     style={{
-                      background: isToday ? "var(--pastel-butter)" : "transparent",
+                      background: isToday ? "var(--accent-selected-bg)" : "transparent",
                       color: isToday
-                        ? "var(--pastel-butter-text)"
+                        ? "var(--accent-selected-fg)"
                         : isSunday
                           ? "var(--pastel-rose-text)"
                           : isPast
@@ -566,8 +566,8 @@ export function MonthView({
                   <span
                     className="flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold leading-none"
                     style={{
-                      background: day.isToday ? "var(--pastel-butter)" : "var(--surface-page)",
-                      color: day.isToday ? "var(--pastel-butter-text)" : day.isPast ? "var(--text-muted)" : "var(--text-primary)",
+                        background: day.isToday ? "var(--accent-selected-bg)" : "var(--surface-page)",
+                        color: day.isToday ? "var(--accent-selected-fg)" : day.isPast ? "var(--text-muted)" : "var(--text-primary)",
                     }}
                   >
                     {day.dayNum}
@@ -576,7 +576,7 @@ export function MonthView({
                     {formatDayName(day.dateStr)}
                   </span>
                   {day.isToday && (
-                    <span className="chip-butter text-[10px]">Today</span>
+                    <span className="text-[10px] rounded-full px-2 py-0.5 font-medium" style={{ background: "var(--accent-selected-bg)", color: "var(--accent-selected-fg)" }}>Today</span>
                   )}
                 </button>
 
