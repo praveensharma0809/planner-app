@@ -40,7 +40,7 @@ const DayColumn = React.memo(function DayColumn({
       }}
     >
       <div
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2"
+        className="min-h-0 flex-1 space-y-[var(--gap-card)] overflow-y-auto p-2"
         style={{
           height: "100%",
         }}

@@ -127,7 +127,7 @@ const NavigationColumn = memo(function NavigationColumn({
 
   return (
     <section
-      className="w-full lg:w-[220px] lg:min-w-[208px] h-full shrink-0 rounded-2xl border border-border-hairline bg-surface-panel px-2 py-2 snap-start flex flex-col shadow-card"
+      className="w-full lg:w-[220px] lg:min-w-[208px] h-full shrink-0 surface-card px-2 py-2 snap-start flex flex-col"
     >
       <div className="px-1.5 pb-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">

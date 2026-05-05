@@ -463,6 +463,11 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - 2026-05-06 · F5.5 · DSP · PASS — MobileTabBar uses `<nav role="navigation" aria-label="Primary mobile">` with `aria-current="page"` on active tab and `aria-label` on each tab control; mobile drawer has focus trap (ported from Modal.tsx pattern) with Tab cycling within open drawer and Escape to close; previous focus restored on drawer close
 - 2026-05-06 · F5.6 · DSP · PASS — MobileTabBar respects `env(safe-area-inset-bottom)` via inline style; `.topbar-root` uses `padding-top: calc(0px + env(safe-area-inset-top, 0px))` without breaking non-notch layouts
 - 2026-05-06 · Gate F5 · DSP · PASS — all 200 tests pass (191 existing + 9 new MobileTabBar tests); TypeScript typecheck clean; mobile user on 375px can reach all primary routes via bottom tabs + secondary actions via hamburger drawer
+- 2026-05-06 · F6.1 · DSP · PASS — audited all card consumers across app/(dashboard)/** and app/components/**; identified 19 definite conversions + 6 judgment calls across 14 files; exhaustive grep for bg-surface-panel, bg-white, rounded+shadow+white combos
+- 2026-05-06 · F6.2 · DSP · PASS — replaced 24 card patterns with surface-card utility across schedule, subjects, planner, components/ui/Card.tsx, components/layout/SectionCard.tsx; mobile pane tab bg-white → bg-surface-card; all ad-hoc rounded-2xl border border-border-hairline bg-surface-panel shadow-card stacks converted
+- 2026-05-06 · F6.3 · DSP · PASS — added gap-[var(--gap-card)] / md:gap-[var(--gap-card-md)] / gap-[var(--gap-card-lg)] spacing to: Overview tile stacks, schedule day columns, subjects 3-column grid, planner 3-column grid, PlanPreview card siblings, settings tab panels/forms, PlannerWizardClient workspace rails, content-grid CSS rule; 16 spacing points updated across 7 files
+- 2026-05-06 · F6.4 · DSP · PASS — added hover:shadow-card-hover hover:bg-surface-card-hover transition to interactive PlanPreview day bucket drop targets; Card.tsx interactive variant already had hover affordance preserved; all static panels remain static
+- 2026-05-06 · Gate F6 · DSP · PASS — all 200 tests green; TypeScript typecheck clean; surface-card applied site-wide with consistent spacing tokens; hover only on interactive cards
 
 ---
 

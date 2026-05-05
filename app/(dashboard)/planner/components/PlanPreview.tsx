@@ -523,7 +523,7 @@ export default function PlanPreview({
   const warningCount = planReview.issues.filter((issue) => issue.level === "warning").length
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-[var(--gap-card)] md:gap-[var(--gap-card-md)]">
       <div className="rounded-2xl border border-border-hairline bg-surface-panel-muted p-3 shadow-card">
         <p className="text-xs uppercase tracking-widest text-text-muted font-medium">
           Preview Summary
@@ -536,7 +536,7 @@ export default function PlanPreview({
         </p>
       </div>
 
-      <div className="rounded-2xl border border-border-hairline bg-surface-panel p-4 space-y-3 shadow-card">
+      <div className="surface-card p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-text-secondary">
             <span className="chip-neutral">
@@ -600,7 +600,7 @@ export default function PlanPreview({
         </div>
       )}
 
-      <div className="rounded-2xl border border-border-hairline bg-surface-panel p-4 space-y-3 shadow-card">
+      <div className="surface-card p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <p className="text-xs uppercase tracking-widest text-text-secondary font-semibold">
@@ -739,7 +739,7 @@ export default function PlanPreview({
                 moveSession(draggedSessionIndex, bucket.date)
                 setDraggedSessionIndex(null)
               }}
-              className={`bg-surface-panel border rounded-2xl p-3 space-y-2 transition-colors shadow-card ${
+              className={`surface-card p-3 space-y-2 hover:shadow-card-hover hover:bg-surface-card-hover transition ${
                 isFlexDay ? "border-pastel-peach-text/20" : "border-border-hairline"
               } ${draggedSessionIndex != null ? "hover:border-pastel-sky-text/30" : ""}`}
             >

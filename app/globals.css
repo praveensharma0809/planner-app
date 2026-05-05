@@ -1741,7 +1741,13 @@ main[data-bleed="true"] {
 
 .content-grid {
   display: grid;
-  gap: 20px;
+  gap: var(--gap-card);
+}
+@media (min-width: 768px) {
+  .content-grid { gap: var(--gap-card-md); }
+}
+@media (min-width: 1024px) {
+  .content-grid { gap: var(--gap-card-lg); }
 }
 .content-grid-2  { grid-template-columns: repeat(2, 1fr); }
 .content-grid-3  { grid-template-columns: repeat(3, 1fr); }

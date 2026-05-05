@@ -75,7 +75,7 @@ export function Step2ConstraintsSection({
       </p>
 
       <div className="flex flex-col md:flex-row min-h-[520px] items-stretch gap-3 overflow-hidden">
-        <section className="w-full md:flex-1 md:min-w-0 rounded-2xl border border-border-hairline bg-surface-panel px-4 py-4 sm:px-5 sm:py-5 flex flex-col shadow-card">
+        <section className="w-full md:flex-1 md:min-w-0 surface-card px-4 py-4 sm:px-5 sm:py-5 flex flex-col">
           {constraintsLoading ? (
             <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-border-hairline p-4 text-center text-sm text-text-muted">
               Loading constraints...
@@ -289,7 +289,7 @@ export function Step2ConstraintsSection({
           )}
         </section>
 
-        <section className="w-full md:flex-1 md:min-w-0 h-full rounded-2xl border border-border-hairline bg-surface-panel px-4 py-4 sm:px-5 sm:py-5 flex flex-col shadow-card">
+        <section className="w-full md:flex-1 md:min-w-0 h-full surface-card px-4 py-4 sm:px-5 sm:py-5 flex flex-col">
           {constraintsLoading ? (
             <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-border-hairline p-4 text-center text-sm text-text-muted">
               Loading controls...

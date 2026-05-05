@@ -2168,7 +2168,7 @@ export function SubjectsDataTable({
                   onClick={() => setMobilePane(pane)}
                   className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition-colors min-h-[44px] ${
                     mobilePane === pane
-                      ? "bg-white shadow-[var(--shadow-card)] text-text-primary"
+                      ? "bg-surface-card shadow-[var(--shadow-card)] text-text-primary"
                       : "text-text-secondary hover:text-text-primary"
                   }`}
                 >
@@ -2220,7 +2220,7 @@ export function SubjectsDataTable({
             </div>
           </div>
 
-          <div className="grid h-[520px] min-h-[520px] gap-3 overflow-hidden grid-cols-1 md:grid-cols-[45%_1fr] md:grid-rows-[1fr_1fr] lg:grid-cols-[208px_208px_1fr] lg:grid-rows-[1fr]">
+          <div className="grid h-[520px] min-h-[520px] gap-[var(--gap-card)] md:gap-[var(--gap-card-md)] overflow-hidden grid-cols-1 md:grid-cols-[45%_1fr] md:grid-rows-[1fr_1fr] lg:grid-cols-[208px_208px_1fr] lg:grid-rows-[1fr]">
             {/* Subjects pane */}
             <div className={`${mobilePane === "subjects" ? "flex" : "hidden"} md:flex flex-col min-h-0`}>
               <NavigationColumn
@@ -2326,7 +2326,7 @@ export function SubjectsDataTable({
             {/* Tasks pane */}
             <div className={`${mobilePane === "tasks" ? "flex" : "hidden"} md:flex flex-col min-h-0 md:row-span-2 lg:row-span-1`}>
               <section
-                className="h-full flex-1 rounded-2xl border border-border-hairline bg-surface-panel px-4 py-4 sm:px-5 sm:py-5 shadow-card overflow-hidden flex flex-col"
+                className="h-full flex-1 surface-card px-4 py-4 sm:px-5 sm:py-5 overflow-hidden flex flex-col"
               >
                 {selectedSubject && selectedChapter ? (
                   <div className="flex h-full min-h-0 flex-col">
@@ -2425,7 +2425,7 @@ export function SubjectsDataTable({
                       </section>
                     ) : null}
 
-                    <section className="mt-3 min-h-0 flex-1 rounded-xl border border-border-hairline bg-surface-panel p-2 flex flex-col">
+                    <section className="mt-3 min-h-0 flex-1 rounded-xl border border-border-hairline bg-surface-card p-2 flex flex-col">
                       <div className="mb-2 flex items-center justify-between gap-2 px-1">
                         <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
                           Tasks Overview

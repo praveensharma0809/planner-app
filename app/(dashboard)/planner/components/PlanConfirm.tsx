@@ -110,7 +110,7 @@ export default function PlanConfirm({
           { label: "Topics", value: uniqueTopics },
           { label: "Total Time", value: formatMinutes(totalMinutes) },
         ].map(({ label, value }) => (
-          <div key={label} className="bg-surface-panel border border-border-hairline rounded-2xl p-3 text-center shadow-card">
+          <div key={label} className="surface-card p-3 text-center">
             <div className="text-[10px] text-text-muted uppercase tracking-wider mb-1">{label}</div>
             <div className="text-xl font-bold text-text-primary">{value}</div>
           </div>

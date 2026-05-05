@@ -1022,7 +1022,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       />
 
       <div
-        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border-hairline bg-surface-panel p-3 sm:p-4 shadow-card"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden surface-card p-3 sm:p-4"
       >
         {displaySubjects.length === 0 && (
           <div className="mb-3 rounded-xl border border-border-hairline bg-surface-panel-muted p-4">
@@ -1047,7 +1047,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                   onClick={() => setMobilePane(pane)}
                   className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition-colors min-h-[44px] ${
                     mobilePane === pane
-                      ? "bg-white shadow-[var(--shadow-card)] text-text-primary"
+                      ? "bg-surface-card shadow-[var(--shadow-card)] text-text-primary"
                       : "text-text-secondary hover:text-text-primary"
                   }`}
                 >
@@ -1057,7 +1057,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
             </div>
           </div>
 
-          <div className="flex h-full min-h-0 flex-1 flex-col gap-3 md:flex-row overflow-hidden">
+           <div className="flex h-full min-h-0 flex-1 flex-col gap-[var(--gap-card)] md:gap-[var(--gap-card-md)] md:flex-row overflow-hidden">
             {/* Subjects pane */}
             <div className={`${mobilePane === "subjects" ? "flex" : "hidden"} md:flex md:w-[45%] lg:w-[220px] flex-col min-h-0`}>
               <NavigationColumn
@@ -1154,7 +1154,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
             {/* Tasks pane */}
             <div className={`${mobilePane === "tasks" ? "flex" : "hidden"} md:flex flex-1 flex-col min-h-0`}>
               <section
-                className="h-full flex-1 rounded-2xl border border-border-hairline bg-surface-panel px-4 py-4 sm:px-5 sm:py-5 shadow-card overflow-hidden flex flex-col"
+                className="h-full flex-1 surface-card px-4 py-4 sm:px-5 sm:py-5 overflow-hidden flex flex-col"
               >
                 {selectedSubject && selectedChapter ? (
                   <div className="flex h-full min-h-0 flex-col">

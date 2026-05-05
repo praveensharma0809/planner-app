@@ -745,7 +745,7 @@ export default function PlannerWizardClient({
     <div className="page-root fade-in flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto pb-24 md:pb-0">
       <div className="panel mt-3 p-4 sm:p-5">
         {/* Step indicator */}
-        <div className="mb-4 flex flex-col gap-3">
+        <div className="mb-4 flex flex-col gap-[var(--gap-card)]">
           <div className="flex flex-wrap items-start justify-between gap-3">
             {/* Desktop step indicator */}
             <div className="hidden md:flex ui-tabs-list">
@@ -824,7 +824,7 @@ export default function PlannerWizardClient({
         </div>
 
         {phase === 1 ? (
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 space-y-[var(--gap-card)]">
             <SubjectsDataTable
               initialSubjects={initialSubjects}
               initialTasksByChapter={initialTasksByChapter}
@@ -886,7 +886,7 @@ export default function PlannerWizardClient({
         ) : phase === 3 ? (
           <div className="mt-4">
             {feasibility ? (
-              <div className="space-y-5">
+              <div className="space-y-[var(--gap-card-md)]">
                 <PlanConfirm
                   sessions={sessions}
                   feasibility={feasibility}

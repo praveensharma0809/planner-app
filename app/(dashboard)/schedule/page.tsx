@@ -574,7 +574,7 @@ export default function SchedulePage() {
     <div className="page-root animate-fade-in flex h-full min-h-0 flex-col overflow-hidden">
       {isLoadingWeek ? (
         <section
-          className="flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-border-hairline bg-surface-panel"
+          className="flex min-h-0 flex-1 items-center justify-center surface-card"
         >
           <p className="text-sm text-text-muted">
             Loading week schedule...
@@ -711,7 +711,7 @@ function WeeklyCalendarGrid({
 
   return (
     <section
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border-hairline bg-surface-panel"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden surface-card"
     >
       <DndContext
         collisionDetection={collisionDetectionStrategy}

@@ -35,7 +35,7 @@ export function SettingsContent({ profile }: Props) {
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="page-root flex flex-col gap-6 pb-8 pt-6 sm:pt-8">
+        <div className="page-root flex flex-col gap-[var(--gap-card-lg)] pb-8 pt-6 sm:pt-8">
           <header className="space-y-1">
             <h1 className="text-2xl md:text-3xl xl:text-4xl font-medium tracking-tight text-[var(--text-primary)]">
               Settings
@@ -72,13 +72,13 @@ function ProfileTab({ profile }: Props) {
 
 function PreferencesTab() {
   return (
-    <section className="panel p-5 sm:p-6 space-y-5">
+    <section className="panel p-5 sm:p-6 space-y-[var(--gap-card-md)]">
       <header className="space-y-1">
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">Preferences</h2>
         <p className="text-sm text-[var(--text-secondary)]">Customize your experience.</p>
       </header>
 
-      <div className="space-y-4">
+      <div className="space-y-[var(--gap-card)]">
         <Checkbox
           id="notifications-toggle"
           label="Email notifications"
@@ -96,7 +96,7 @@ function PreferencesTab() {
         <p className="text-sm text-[var(--text-secondary)] mb-4">
           Go through the onboarding tutorial to learn how to use PrepVeda, or read the welcome message from our founder.
         </p>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-[var(--gap-card)]">
           <a
             href="/onboarding"
             className="inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-full border border-[var(--border-subtle)] bg-white px-4 text-sm font-medium text-[var(--text-primary)] transition-all hover:bg-[var(--surface-hover)]"
@@ -112,7 +112,7 @@ function PreferencesTab() {
 
 function BillingTab() {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-[var(--gap-card)]">
       <section className="panel p-5 sm:p-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>

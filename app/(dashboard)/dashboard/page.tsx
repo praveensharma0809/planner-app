@@ -237,7 +237,7 @@ export default async function DashboardPage() {
       />
 
       <ContentGrid layout="main-aside">
-        <div className="space-y-4 md:space-y-5">
+        <div className="flex flex-col gap-[var(--gap-card)] md:gap-[var(--gap-card-md)]">
           {/* Today's Progress Card */}
           <SectionCard className="dashboard-hero-card">
             <div className="dashboard-hero-content">
@@ -409,7 +409,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-4 md:space-y-5">
+        <div className="flex flex-col gap-[var(--gap-card)] md:gap-[var(--gap-card-md)]">
           {/* Alerts */}
           <SectionCard
             title={

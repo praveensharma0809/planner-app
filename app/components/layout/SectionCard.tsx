@@ -10,7 +10,7 @@ interface SectionCardProps {
 
 export function SectionCard({ title, action, children, className = "", noPadding }: SectionCardProps) {
   return (
-    <div className={`bg-surface-panel rounded-card border border-border-hairline shadow-none overflow-hidden ${className}`}>
+    <div className={`surface-card overflow-hidden ${className}`}>
       {(title || action) && (
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-border-hairline">
           {title && <h3 className="text-sm font-semibold text-text-primary">{title}</h3>}
