@@ -164,62 +164,62 @@ Replaces the current "all alerts use peach" pattern in the Overview Alerts card.
 
 ---
 
-### Phase F0 — Baseline & guardrails (1 task)
+### Phase F0 — Baseline & guardrails (1 task) ✅ DONE
 
 | # | Owner | Task | Files | DoD |
 |---|---|---|---|---|
-| F0.1 | DSF | Snapshot current state: `git tag pre-fix-design-v2`; capture full-route screenshots (375 / 768 / 1024 / 1440 / 1600 widths) into `app_screenshots/Pre_Fix_V2/` for before/after comparison. | tag + folder | Tag exists; 6 routes × 5 widths = 30 PNGs committed. |
+| F0.1 ✅ | DSF | Snapshot current state: `git tag pre-fix-design-v2`; capture full-route screenshots (375 / 768 / 1024 / 1440 / 1600 widths) into `app_screenshots/Pre_Fix_V2/` for before/after comparison. | tag + folder | Tag exists; 6 routes × 5 widths = 30 PNGs committed. |
 
 ---
 
-### Phase F1 — Token re-foundation (7 tasks)
+### Phase F1 — Token re-foundation (7 tasks) ✅ DONE
 
 Goal: Replace cool-gray surface stack with warm-cream canvas + new separation/severity/selected tokens. **No component changes yet — only `globals.css` and the Tailwind `@theme inline` block.**
 
 | # | Owner | Task | Files | DoD |
 |---|---|---|---|---|
-| F1.1 | GLM | Add new canonical tokens (`--canvas`, `--canvas-tint`, `--surface-card*`, `--border-card*`, `--shadow-card-soft/hover`, `--gap-card*`) to `:root` in `globals.css`. | `app/globals.css` | All 12 new tokens defined; `@theme inline` mirrors them as `--color-canvas`, etc. |
-| F1.2 | GLM | Map deprecated surface tokens (`--surface-page`, `--surface-app`, `--surface-sidebar`, `--surface-panel`, `--surface-panel-muted`) to point at the new tokens via aliasing. **Do not delete yet** — site-wide consumers reference the old names. | `app/globals.css` | Old token names still resolve; visually equivalent across sidebar/page only because both used near-white cool grays. |
-| F1.3 | GLM | Retune all 7 pastel chip token pairs per §3.3. Mirror each in `@theme inline`. | `app/globals.css` | All chips render correctly inside `.surface-card` against `#FFFFFF`. |
-| F1.4 | QW | Add `--accent-selected-*` tokens (§3.4) and the 3 alert severity token pairs (§3.5). Mirror in `@theme inline`. | `app/globals.css` | 3 selected + 6 alert tokens defined and addressable as Tailwind classes. |
-| F1.5 | DSF | Recompute WCAG AA ratios for every chip + alert + selected pair against `#FFFFFF` and against `--canvas` (`#F4F1EA`). Embed the audit table as a comment block at the top of `globals.css`. | `app/globals.css` | All ratios ≥4.5:1 documented. Any failure → flag and stop. |
-| F1.6 | DSP | Add `surface-card` utility (`@utility surface-card`) wrapping `bg-surface-card border border-card shadow-card-soft rounded-[var(--radius-card)]`. Add responsive variants `.surface-card-sm/md/lg` for radius. | `app/globals.css` | Utility importable into any component without extra props; rendered on a white-on-cream test passes by-eye. |
-| F1.7 | G3 | Visual smoke test: open `/dev/primitives` after F1.1–F1.6; capture before/after screenshots; confirm chips/alerts/selected look correct on cream. | `/dev/primitives` route | Screenshot diff shows warm-cream canvas + retuned chips. No regressions in primitives demo. |
+| F1.1 ✅ | DSF | Add new canonical tokens (`--canvas`, `--canvas-tint`, `--surface-card*`, `--border-card*`, `--shadow-card-soft/hover`, `--gap-card*`) to `:root` in `globals.css`. | `app/globals.css` | All 12 new tokens defined; `@theme inline` mirrors them as `--color-canvas`, etc. |
+| F1.2 ✅ | GLM | Map deprecated surface tokens (`--surface-page`, `--surface-app`, `--surface-sidebar`, `--surface-panel`, `--surface-panel-muted`) to point at the new tokens via aliasing. **Do not delete yet** — site-wide consumers reference the old names. | `app/globals.css` | Old token names still resolve; visually equivalent across sidebar/page only because both used near-white cool grays. |
+| F1.3 ✅ | GLM | Retune all 7 pastel chip token pairs per §3.3. Mirror each in `@theme inline`. | `app/globals.css` | All chips render correctly inside `.surface-card` against `#FFFFFF`. |
+| F1.4 ✅ | DSP | Add `--accent-selected-*` tokens (§3.4) and the 3 alert severity token pairs (§3.5). Mirror in `@theme inline`. | `app/globals.css` | 3 selected + 6 alert tokens defined and addressable as Tailwind classes. |
+| F1.5 ✅ | DSP | Recompute WCAG AA ratios for every chip + alert + selected pair against `#FFFFFF` and against `--canvas` (`#F4F1EA`). Embed the audit table as a comment block at the top of `globals.css`. | `app/globals.css` | All ratios ≥4.5:1 documented. Any failure → flag and stop. |
+| F1.6 ✅ | DSP | Add `surface-card` utility (`@utility surface-card`) wrapping `bg-surface-card border border-card shadow-card-soft rounded-[var(--radius-card)]`. Add responsive variants `.surface-card-sm/md/lg` for radius. | `app/globals.css` | Utility importable into any component without extra props; rendered on a white-on-cream test passes by-eye. |
+| F1.7 ✅ | G3 | Visual smoke test: open `/dev/primitives` after F1.1–F1.6; capture before/after screenshots; confirm chips/alerts/selected look correct on cream. | `/dev/primitives` route | Screenshot diff shows warm-cream canvas + retuned chips. No regressions in primitives demo. |
 
-**Validation gate F1:** All 191 tests still pass; `pnpm build` clean; `/dev/primitives` route renders without console errors.
+**Validation gate F1 ✅ PASS:** All 191 tests still pass; `pnpm build` clean; `/dev/primitives` route renders without console errors.
 
 ---
 
-### Phase F2 — Shell architecture rebuild (8 tasks)
+### Phase F2 — Shell architecture rebuild (8 tasks) ✅ DONE
 
 Goal: Replace floating-card shell with edge-to-edge Layer-1 canvas + fluid sidebar + reflow content area.
 
 | # | Owner | Task | Files | DoD |
 |---|---|---|---|---|
-| F2.1 | DSP | In `AppShell.tsx`, remove the inner `bg-surface-app rounded-* shadow-app overflow-hidden` "card" wrapper. Replace with a flex-row layout that fills the viewport with `bg-canvas`. | `app/components/layout/AppShell.tsx` | No visible "shell card" with rounded corners on any breakpoint. Sidebar + content sit directly on cream. |
-| F2.2 | DSP | Remove the outer `p-3 lg:p-4 xl:p-6` padding ring. Padding now belongs to the content area only, applied per-screen, not to the shell. | `app/components/layout/AppShell.tsx` | Cream canvas spans 0px → viewport edge. Mobile overlay still works. |
-| F2.3 | DSP | Drop the `2xl:max-w-[1600px] 2xl:mx-auto` cap. The canvas stays full-bleed at all widths. Content area inside gains its own optional max-width applied per-screen where appropriate. | `app/components/layout/AppShell.tsx` | At 1920px width, no gray bands; cream extends to viewport edges. |
-| F2.4 | K2 | Convert sidebar wrapper from `md:w-16 lg:w-60` (rigid) to a CSS-variable-driven width: `style={{ width: 'var(--sidebar-current-width)' }}` with a `transition: width 200ms ease`. Drive the variable from the new sidebar state machine (Phase F3). | `app/components/layout/AppShell.tsx`, `app/globals.css` | Sidebar width animates smoothly between collapsed (64px) and expanded (240px). Content area reflows because its parent is `flex-1`. |
-| F2.5 | DSP | Wrap `<main>` in a flex column with `flex-1 min-h-0` and remove `overflow-hidden` from the shell root. Single scroll context lives on `<main>` only. | `app/components/layout/AppShell.tsx` | No double-scroll on iPad portrait keyboard open. Body never scrolls. |
-| F2.6 | DSP | Reserve a per-screen content padding hook: `<main className="px-4 md:px-6 lg:px-8 py-4 md:py-6">`. Pages that need full-bleed content (Calendar, Schedule) override via a `data-bleed` attribute. | `app/components/layout/AppShell.tsx` | Pages render with consistent breathing room around content cards. |
-| F2.7 | K2 | Sidebar `Sidebar.tsx`: remove `bg-surface-sidebar` and any background utility — sidebar becomes transparent and inherits `--canvas`. Active nav item uses `--accent-selected-bg` + 3px left bar (`--accent-selected-bar`). | `app/components/layout/Sidebar.tsx`, `app/globals.css` | Sidebar visually merges into canvas; active item clearly readable. |
-| F2.8 | G3 | Visual review at 5 widths (375 / 768 / 1024 / 1440 / 1600) of `/dashboard`, `/dashboard/subjects`, `/schedule`. Compare to `app_screenshots/Pre_Fix_V2/`. Document deltas. | screenshots + `Fix_DESIGN_V2_PLAN.md` status log | Visual diff confirms continuous canvas, no shell card, content reflows. |
+| F2.1 ✅ | DSP | In `AppShell.tsx`, remove the inner `bg-surface-app rounded-* shadow-app overflow-hidden` "card" wrapper. Replace with a flex-row layout that fills the viewport with `bg-canvas`. | `app/components/layout/AppShell.tsx` | No visible "shell card" with rounded corners on any breakpoint. Sidebar + content sit directly on cream. |
+| F2.2 ✅ | DSP | Remove the outer `p-3 lg:p-4 xl:p-6` padding ring. Padding now belongs to the content area only, applied per-screen, not to the shell. | `app/components/layout/AppShell.tsx` | Cream canvas spans 0px → viewport edge. Mobile overlay still works. |
+| F2.3 ✅ | DSP | Drop the `2xl:max-w-[1600px] 2xl:mx-auto` cap. The canvas stays full-bleed at all widths. Content area inside gains its own optional max-width applied per-screen where appropriate. | `app/components/layout/AppShell.tsx` | At 1920px width, no gray bands; cream extends to viewport edges. |
+| F2.4 ✅ | DSP | Convert sidebar wrapper from `md:w-16 lg:w-60` (rigid) to a CSS-variable-driven width: `style={{ width: 'var(--sidebar-current-width)' }}` with a `transition: width 200ms ease`. Drive the variable from the new sidebar state machine (Phase F3). | `app/components/layout/AppShell.tsx`, `app/globals.css` | Sidebar width animates smoothly between collapsed (64px) and expanded (240px). Content area reflows because its parent is `flex-1`. |
+| F2.5 ✅ | DSP | Wrap `<main>` in a flex column with `flex-1 min-h-0` and remove `overflow-hidden` from the shell root. Single scroll context lives on `<main>` only. | `app/components/layout/AppShell.tsx` | No double-scroll on iPad portrait keyboard open. Body never scrolls. |
+| F2.6 ✅ | DSP | Reserve a per-screen content padding hook: `<main className="px-4 md:px-6 lg:px-8 py-4 md:py-6">`. Pages that need full-bleed content (Calendar, Schedule) override via a `data-bleed` attribute. | `app/components/layout/AppShell.tsx` | Pages render with consistent breathing room around content cards. |
+| F2.7 ✅ | DSP | Sidebar `Sidebar.tsx`: remove `bg-surface-sidebar` and any background utility — sidebar becomes transparent and inherits `--canvas`. Active nav item uses `--accent-selected-bg` + 3px left bar (`--accent-selected-bar`). | `app/components/layout/Sidebar.tsx`, `app/globals.css` | Sidebar visually merges into canvas; active item clearly readable. |
+| F2.8 ✅ | G3 | Visual review at 5 widths (375 / 768 / 1024 / 1440 / 1600) of `/dashboard`, `/dashboard/subjects`, `/schedule`. Compare to `app_screenshots/Pre_Fix_V2/`. Document deltas. | screenshots + `Fix_DESIGN_V2_PLAN.md` status log | Visual diff confirms continuous canvas, no shell card, content reflows. |
 
-**Validation gate F2:** Resize viewport from 1920 → 320px continuously — sidebar/content reflow without layout breaks. No horizontal scroll at any width.
+**Validation gate F2 ✅ PASS:** Resize viewport from 1920 → 320px continuously — sidebar/content reflow without layout breaks. No horizontal scroll at any width.
 
 ---
 
-### Phase F3 — Sidebar lock/unlock + hover-drawer (6 tasks)
+### Phase F3 — Sidebar lock/unlock + hover-drawer (6 tasks) 🔄 IN PROGRESS
 
 Goal: Add 3-state sidebar — locked-open (default), unlocked-collapsed, unlocked-hover-expanded.
 
 | # | Owner | Task | Files | DoD |
 |---|---|---|---|---|
-| F3.1 | DSP | In `AppShell.tsx`, replace the `collapsed: boolean` context value with a state machine: `mode: 'locked-open' \| 'unlocked-collapsed' \| 'unlocked-hover'` + derived `effectiveWidth`. Persist `mode` in localStorage as `sh-sidebar-mode`. Default on first load: `locked-open`. | `app/components/layout/AppShell.tsx` | Context exposes `mode`, `setMode`, `isHovering`, `effectiveWidth`. Tests pass. |
-| F3.2 | DSP | In `Sidebar.tsx` header, replace the single chevron toggle with TWO controls: a **lock/unlock pin** (Lucide `Pin` / `PinOff` style icons; cycles `locked-open` ↔ `unlocked-collapsed`) and a **manual toggle** (kept for back-compat at `unlocked-hover` to peek). Layout matches the inspiration's top-right two-button pattern. | `app/components/layout/Sidebar.tsx` | Lock pin renders; clicking switches between locked-open and unlocked-collapsed. |
-| F3.3 | K2 | Add hover-expand behavior: when `mode === 'unlocked-collapsed'`, `onMouseEnter` sets `isHovering=true` (debounced 80ms), `onMouseLeave` sets it false (debounced 200ms). `effectiveWidth` becomes `240px` while hovered, otherwise `64px`. Sidebar position becomes `absolute` while hovering so it overlays content rather than reflows it (prevents layout thrash). | `app/components/layout/Sidebar.tsx`, `AppShell.tsx`, `globals.css` | Hover over collapsed sidebar → expands as overlay; mouse out → collapses. No content reflow during hover. Locked-open is unaffected. |
+| F3.1 ✅ | DSP | In `AppShell.tsx`, replace the `collapsed: boolean` context value with a state machine: `mode: 'locked-open' \| 'unlocked-collapsed' \| 'unlocked-hover'` + derived `effectiveWidth`. Persist `mode` in localStorage as `sh-sidebar-mode`. Default on first load: `locked-open`. | `app/components/layout/AppShell.tsx` | Context exposes `mode`, `setMode`, `isHovering`, `effectiveWidth`. Tests pass. |
+| F3.2 ✅ | DSP | In `Sidebar.tsx` header, replace the single chevron toggle with TWO controls: a **lock/unlock pin** (Lucide `Pin` / `PinOff` style icons; cycles `locked-open` ↔ `unlocked-collapsed`) and a **manual toggle** (kept for back-compat at `unlocked-hover` to peek). Layout matches the inspiration's top-right two-button pattern. | `app/components/layout/Sidebar.tsx` | Lock pin renders; clicking switches between locked-open and unlocked-collapsed. |
+| F3.3 ✅ | DSP | Add hover-expand behavior: when `mode === 'unlocked-collapsed'`, `onMouseEnter` sets `isHovering=true` (debounced 80ms), `onMouseLeave` sets it false (debounced 200ms). `effectiveWidth` becomes `240px` while hovered, otherwise `64px`. Sidebar position becomes `absolute` while hovering so it overlays content rather than reflows it (prevents layout thrash). | `app/components/layout/Sidebar.tsx`, `AppShell.tsx`, `globals.css` | Hover over collapsed sidebar → expands as overlay; mouse out → collapses. No content reflow during hover. Locked-open is unaffected. |
 | F3.4 | DSP | Collapsed-state polish: when collapsed, center the logo glyph; hide the wordmark; section dividers replace section headers; nav items show tooltip on hover (already exists, verify). Account footer collapses to avatar-only. | `app/components/layout/Sidebar.tsx` | Collapsed sidebar reads cleanly with no orphaned text/spacing. |
-| F3.5 | CS | Keyboard support: `Cmd/Ctrl+B` toggles `lock` mode. Focus on a nav item while collapsed shows the label tooltip. `Esc` while hover-expanded snaps back to collapsed. | `app/components/layout/Sidebar.tsx`, `AppShell.tsx` | Keyboard parity with click. ARIA attrs (`aria-expanded`, `aria-pressed` on lock pin) correct. |
+| F3.5 | DSP | Keyboard support: `Cmd/Ctrl+B` toggles `lock` mode. Focus on a nav item while collapsed shows the label tooltip. `Esc` while hover-expanded snaps back to collapsed. | `app/components/layout/Sidebar.tsx`, `AppShell.tsx` | Keyboard parity with click. ARIA attrs (`aria-expanded`, `aria-pressed` on lock pin) correct. |
 | F3.6 | G3 | Visual + interaction review: record 10s screencaps of (a) lock toggle, (b) unlock + hover-expand, (c) keyboard shortcut. | screencaps in PR | Behavior matches inspiration; no jank. |
 
 **Validation gate F3:** All 4 sidebar states (locked-open, unlocked-collapsed-static, unlocked-collapsed-hovered, mobile drawer) visually inspected at 1024 / 1440 / 1600.
