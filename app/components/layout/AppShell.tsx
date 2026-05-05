@@ -123,18 +123,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             aria-hidden="true"
           />
 
-          {/* Sidebar — width per §3.1 matrix:
-              Mobile (<md): off-canvas drawer (hidden from flex layout)
-              Tablet portrait (md): 64px icon rail
-              Tablet landscape+ (lg): 240px full sidebar */}
-          <div className="hidden md:flex md:w-16 lg:w-60 flex-shrink-0">
+          {/* Sidebar — CSS-variable-driven width, animated via F3 state machine */}
+          <div
+            className="hidden md:flex flex-shrink-0"
+            style={{ width: collapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-current-width)', transition: 'width 200ms ease' }}
+          >
             <Sidebar className="app-shell--flex-child" />
           </div>
 
           {/* ── Main content area ── */}
-          <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+          <div className="flex flex-col flex-1 min-w-0 min-h-0">
             <Topbar />
-            <main className="flex-1 overflow-y-auto">
+            <main className="flex-1 overflow-y-auto px-4 md:px-6 lg:px-8 py-4 md:py-6">
               {children}
             </main>
           </div>

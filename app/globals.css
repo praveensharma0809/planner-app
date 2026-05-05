@@ -734,6 +734,7 @@ summary:focus-visible,
   /* ── Layout dimensions ── */
   --sidebar-width:           240px;
   --sidebar-collapsed-width: 64px;
+  --sidebar-current-width:   240px;
   --topbar-height:           64px;
 
   /* ── Primary palette (light) ── */
@@ -749,7 +750,7 @@ summary:focus-visible,
   --sh-danger:  #EF4444;
 
   /* ── Sidebar surface ── */
-  --sidebar-bg:           #FFFFFF;
+  --sidebar-bg:           var(--canvas);
   --sidebar-border-color: rgba(0, 0, 0, 0.07);
 
   /* ── Sidebar section labels ── */
@@ -1364,6 +1365,11 @@ summary:focus-visible,
     z-index: auto !important;
     flex-shrink: 0;
   }
+}
+
+/* ── Full-bleed content override ──────────────────── */
+main[data-bleed="true"] {
+  padding: 0 !important;
 }
 
 /* ══════════════════════════════════════════════════════════════

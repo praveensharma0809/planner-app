@@ -28,7 +28,7 @@ function Icon({ children }: { children: ReactNode }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -125,7 +125,7 @@ type NavSection = {
 const NAV_SECTIONS: NavSection[] = [
   {
     id: "main",
-    label: "Main",
+    label: "Main menu",
     items: [
       { href: "/dashboard",          label: "Overview",  icon: <OverviewIcon />,  exact: true },
       { href: "/dashboard/subjects", label: "Subjects",  icon: <SubjectsIcon /> },
@@ -157,7 +157,10 @@ function NavItemRow({
   onClick?: () => void
 }) {
   const baseClass =
-    "group relative flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-[13.5px] font-medium transition-all duration-150 select-none"
+    "group relative flex items-center gap-3 w-full px-3 py-2.5 rounded-full text-[13.5px] font-medium transition-all duration-150 select-none"
+
+  const inactiveClass = "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+  const activeClass = "text-[--accent-selected-fg] bg-[--accent-selected-bg] border-l-[3px] border-l-[--accent-selected-bar] font-semibold"
 
   if (item.comingSoon) {
     return (
@@ -172,7 +175,6 @@ function NavItemRow({
             soon
           </span>
         )}
-        {/* Collapsed tooltip */}
         {collapsed && (
           <span className="sidebar-tooltip pointer-events-none">
             {item.label}
@@ -188,15 +190,13 @@ function NavItemRow({
       href={item.href}
       onClick={onClick}
       aria-current={active ? "page" : undefined}
-      className={`${baseClass} sidebar-nav-item ${active ? "sidebar-nav-item-active" : ""}`}
+      className={`${baseClass} ${active ? activeClass : inactiveClass}`}
     >
       {item.icon}
       {!collapsed && <span className="truncate">{item.label}</span>}
-      {/* Active indicator dot */}
       {active && !collapsed && (
         <span className="ml-auto h-1.5 w-1.5 rounded-full bg-current opacity-70" aria-hidden="true" />
       )}
-      {/* Collapsed tooltip */}
       {collapsed && (
         <span className="sidebar-tooltip pointer-events-none">{item.label}</span>
       )}
@@ -257,7 +257,6 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
   return (
     <div className="sidebar-footer">
       <div className="flex items-center gap-3 px-3 py-3 min-w-0">
-        {/* Avatar */}
         <div className="sidebar-avatar" aria-hidden="true">
           {initial}
         </div>
@@ -286,7 +285,6 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
         )}
       </div>
 
-      {/* Collapsed: show sign-out below avatar */}
       {collapsed && (
         <div className="flex justify-center pb-3">
           <button
@@ -306,7 +304,7 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
 
 // ─── Sidebar ──────────────────────────────────────────────────
 
-export function Sidebar() {
+export function Sidebar({ className, style }: { className?: string; style?: React.CSSProperties }) {
   const { collapsed, mobileOpen, toggleCollapse, closeMobile } = useSidebar()
   const pathname = usePathname()
 
@@ -319,10 +317,12 @@ export function Sidebar() {
         "sidebar-root",
         collapsed ? "sidebar-collapsed" : "",
         mobileOpen ? "sidebar-mobile-open" : "",
+        className ?? "",
       ]
         .filter(Boolean)
         .join(" ")}
       aria-label="Primary navigation"
+      style={style}
     >
       {/* ── Header: logo + collapse toggle ── */}
       <div className="sidebar-header">
@@ -340,12 +340,12 @@ export function Sidebar() {
           )}
         </Link>
 
-        {/* Desktop collapse toggle */}
+        {/* Collapse toggle — visible at tablet portrait+ */}
         <button
           onClick={toggleCollapse}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-expanded={!collapsed}
-          className="sidebar-collapse-btn hidden lg:flex"
+          className="sidebar-collapse-btn hidden md:flex"
         >
           {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
         </button>
@@ -361,14 +361,12 @@ export function Sidebar() {
             key={section.id}
             className={`px-2 ${sectionIndex > 0 ? "mt-2" : ""}`}
           >
-            {/* Section label (expanded) */}
             {!collapsed && (
               <p className="sidebar-section-label px-3 pb-1.5 pt-1 text-[10.5px] font-semibold tracking-widest uppercase">
                 {section.label}
               </p>
             )}
 
-            {/* Section divider (collapsed) */}
             {collapsed && sectionIndex > 0 && (
               <div className="sidebar-section-divider mx-3 my-2 h-px" />
             )}
@@ -388,9 +386,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* ── Footer: user info + sign out ── */}
       <SidebarFooter collapsed={collapsed} />
     </aside>
   )
 }
-
