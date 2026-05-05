@@ -197,8 +197,8 @@ export function SubjectsDataTable({
   onSelectedTaskIdsChange,
 }: Props) {
   const { addToast } = useToast()
-  const { collapsed } = useSidebar()
-  const sidebarExpanded = !collapsed
+  const { mode } = useSidebar()
+  const sidebarExpanded = mode === "locked-open"
   const [subjects, setSubjects] = useState<SubjectNavItem[]>(initialSubjects)
   const [tasksByChapter, setTasksByChapter] =
     useState<Record<string, TopicTaskItem[]>>(initialTasksByChapter)
@@ -240,6 +240,18 @@ export function SubjectsDataTable({
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
   const [manualOrderChapterIds, setManualOrderChapterIds] = useState<Set<string>>(new Set())
   const [reorderBusy, setReorderBusy] = useState<{ type: "tasks"; ids: string[] } | { type: "subjects" } | { type: "chapters" } | null>(null)
+
+  const [mobilePane, setMobilePane] = useState<"subjects" | "chapters" | "tasks">("subjects")
+
+  const handleSelectSubject = useCallback((id: string) => {
+    setSelectedSubjectId(id)
+    setMobilePane("chapters")
+  }, [])
+
+  const handleSelectChapter = useCallback((id: string) => {
+    setSelectedChapterId(id)
+    setMobilePane("tasks")
+  }, [])
 
   const [importBusy, setImportBusy] = useState<"all" | "undone" | "reset" | null>(null)
   const [intakeImportMode, setIntakeImportMode] = useState<IntakeImportMode>(initialImportMode)
@@ -2134,14 +2146,11 @@ export function SubjectsDataTable({
 
       <div className="px-0.5 sm:px-0">
         {displaySubjects.length === 0 && (
-          <div
-            className="mb-3 rounded-xl border p-4"
-            style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
-          >
-            <p className="text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+          <div className="mb-3 rounded-xl border border-border-hairline bg-surface-panel-muted p-4">
+            <p className="text-base font-medium text-text-primary">
               {showArchived ? "No archived subjects." : "No active subjects."}
             </p>
-            <p className="mt-1 text-sm" style={{ color: "var(--sh-text-muted)" }}>
+            <p className="mt-1 text-sm text-text-muted">
               {showArchived
                 ? "Archive a subject to see it in this view."
                 : "Create your first subject to start building your structure."}
@@ -2149,15 +2158,28 @@ export function SubjectsDataTable({
           </div>
         )}
 
-          <p className="mb-3 text-xs font-medium sm:hidden" style={{ color: "var(--sh-text-muted)" }}>
-            Swipe horizontally between Subjects, Chapters, and the overview panel.
-          </p>
+          {/* Mobile pane tabs */}
+          <div className="mb-3 md:hidden">
+            <div className="flex rounded-full bg-surface-page p-1 gap-1">
+              {(["subjects", "chapters", "tasks"] as const).map((pane) => (
+                <button
+                  key={pane}
+                  type="button"
+                  onClick={() => setMobilePane(pane)}
+                  className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition-colors min-h-[44px] ${
+                    mobilePane === pane
+                      ? "bg-white shadow-[var(--shadow-card)] text-text-primary"
+                      : "text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  {pane.charAt(0).toUpperCase() + pane.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="mb-3 flex items-center gap-2 overflow-x-auto">
-            <p
-              className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em]"
-              style={{ color: "var(--sh-text-muted)" }}
-            >
+            <p className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">
               STEP-1
             </p>
 
@@ -2198,441 +2220,417 @@ export function SubjectsDataTable({
             </div>
           </div>
 
-          <div className="flex h-[520px] min-h-[520px] items-stretch gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
-            <NavigationColumn
-              title="Subjects"
-              items={subjectColumnItems}
-              activeId={selectedSubjectId}
-              emptyMessage="No subjects available."
-              onSelect={setSelectedSubjectId}
-              reorderEnabled={!showArchived && reorderBusy?.type !== "subjects" && importBusy === null}
-              onReorder={(orderedIds) => {
-                void handleReorderSubjects(orderedIds)
-              }}
-              footer={
-                <>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="w-full justify-center"
-                    onClick={openCreateSubject}
-                    disabled={isMutating || showArchived}
-                  >
-                    Add Subject
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-center"
-                    onClick={() => {
-                      openDependencyManager("subject")
-                    }}
-                    disabled={isMutating || showArchived || !selectedSubject || selectedSubject.chapters.length === 0}
-                  >
-                    Set Dependencies
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-center"
-                    onClick={() => setShowArchived((value) => !value)}
-                    disabled={isMutating}
-                  >
-                    {showArchived
-                      ? "Show Active Subjects"
-                      : `Archived Subjects (${archivedSubjects.length})`}
-                  </Button>
-                </>
-              }
-            />
-
-            <NavigationColumn
-              title="Chapters"
-              items={chapterColumnItems}
-              activeId={selectedChapterId}
-              emptyMessage="No chapters in this subject."
-              onSelect={setSelectedChapterId}
-              reorderEnabled={!showArchived && !!selectedSubject && reorderBusy?.type !== "chapters"}
-              onReorder={(orderedIds) => {
-                void handleReorderChapters(orderedIds)
-              }}
-              footer={
-                <>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="w-full justify-center"
-                    onClick={openCreateChapter}
-                    disabled={isMutating || !selectedSubject || showArchived}
-                  >
-                    Add Chapter
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-center"
-                    onClick={() => {
-                      openDependencyManager("chapter")
-                    }}
-                    disabled={isMutating || showArchived || !selectedChapter}
-                  >
-                    Set Dependencies
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-center"
-                    onClick={() => {
-                      void handleOpenArchivedChaptersModal()
-                    }}
-                    disabled={isMutating || showArchived || !selectedSubject || archivedChapterLoading}
-                  >
-                    {archivedChapterLoading
-                      ? "Loading Archived Chapters..."
-                      : `Archived Chapters (${archivedChapterRows.length})`}
-                  </Button>
-                </>
-              }
-            />
-
-            <section
-              className="min-w-[340px] h-full flex-1 rounded-xl border px-4 py-4 sm:px-5 sm:py-5 snap-start flex flex-col overflow-hidden"
-              style={{
-                borderColor: "var(--sh-border)",
-                background: "var(--sh-card)",
-              }}
-            >
-              {selectedSubject && selectedChapter ? (
-                <div className="flex h-full min-h-0 flex-col">
-                  <div className="mt-3 flex flex-wrap items-start gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h2
-                        className="text-2xl font-bold tracking-tight"
-                        style={{ color: "var(--sh-text-primary)" }}
-                      >
-                        {selectedDetailTitle}
-                      </h2>
-                    </div>
-
-                    <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={openTaskComposer}
-                        disabled={isMutating || showArchived}
-                      >
-                        Add Task
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (isManageOpen) {
-                            closeManageMode()
-                          } else {
-                            setIsManageOpen(true)
-                          }
-                        }}
-                        disabled={isMutating || showArchived || chapterTasks.length === 0}
-                      >
-                        {isManageOpen ? "Done" : "Manage"}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {isManageOpen ? (
-                    <section
-                      className="mt-2 h-[64px] rounded-lg border p-2 flex flex-col overflow-hidden"
-                      style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
+          <div className="grid h-[520px] min-h-[520px] gap-3 overflow-hidden grid-cols-1 md:grid-cols-[45%_1fr] md:grid-rows-[1fr_1fr] lg:grid-cols-[208px_208px_1fr] lg:grid-rows-[1fr]">
+            {/* Subjects pane */}
+            <div className={`${mobilePane === "subjects" ? "flex" : "hidden"} md:flex flex-col min-h-0`}>
+              <NavigationColumn
+                title="Subjects"
+                items={subjectColumnItems}
+                activeId={selectedSubjectId}
+                emptyMessage="No subjects available."
+                onSelect={handleSelectSubject}
+                reorderEnabled={!showArchived && reorderBusy?.type !== "subjects" && importBusy === null}
+                onReorder={(orderedIds) => {
+                  void handleReorderSubjects(orderedIds)
+                }}
+                footer={
+                  <>
+                    <Button
+                      variant="primary"
+                      size="md"
+                      className="w-full justify-center min-h-[44px] md:min-h-0"
+                      onClick={openCreateSubject}
+                      disabled={isMutating || showArchived}
                     >
-                      <div className="min-h-0 flex flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap">
+                      Add Subject
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-center min-h-[44px] md:min-h-0"
+                      onClick={() => {
+                        openDependencyManager("subject")
+                      }}
+                      disabled={isMutating || showArchived || !selectedSubject || selectedSubject.chapters.length === 0}
+                    >
+                      Set Dependencies
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-center min-h-[44px] md:min-h-0"
+                      onClick={() => setShowArchived((value) => !value)}
+                      disabled={isMutating}
+                    >
+                      {showArchived
+                        ? "Show Active Subjects"
+                        : `Archived Subjects (${archivedSubjects.length})`}
+                    </Button>
+                  </>
+                }
+              />
+            </div>
+
+            {/* Chapters pane */}
+            <div className={`${mobilePane === "chapters" ? "flex" : "hidden"} md:flex flex-col min-h-0`}>
+              <NavigationColumn
+                title="Chapters"
+                items={chapterColumnItems}
+                activeId={selectedChapterId}
+                emptyMessage="No chapters in this subject."
+                onSelect={handleSelectChapter}
+                reorderEnabled={!showArchived && !!selectedSubject && reorderBusy?.type !== "chapters"}
+                onReorder={(orderedIds) => {
+                  void handleReorderChapters(orderedIds)
+                }}
+                footer={
+                  <>
+                    <Button
+                      variant="primary"
+                      size="md"
+                      className="w-full justify-center min-h-[44px] md:min-h-0"
+                      onClick={openCreateChapter}
+                      disabled={isMutating || !selectedSubject || showArchived}
+                    >
+                      Add Chapter
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-center min-h-[44px] md:min-h-0"
+                      onClick={() => {
+                        openDependencyManager("chapter")
+                      }}
+                      disabled={isMutating || showArchived || !selectedChapter}
+                    >
+                      Set Dependencies
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-center min-h-[44px] md:min-h-0"
+                      onClick={() => {
+                        void handleOpenArchivedChaptersModal()
+                      }}
+                      disabled={isMutating || showArchived || !selectedSubject || archivedChapterLoading}
+                    >
+                      {archivedChapterLoading
+                        ? "Loading Archived Chapters..."
+                        : `Archived Chapters (${archivedChapterRows.length})`}
+                    </Button>
+                  </>
+                }
+              />
+            </div>
+
+            {/* Tasks pane */}
+            <div className={`${mobilePane === "tasks" ? "flex" : "hidden"} md:flex flex-col min-h-0 md:row-span-2 lg:row-span-1`}>
+              <section
+                className="h-full flex-1 rounded-2xl border border-border-hairline bg-surface-panel px-4 py-4 sm:px-5 sm:py-5 shadow-card overflow-hidden flex flex-col"
+              >
+                {selectedSubject && selectedChapter ? (
+                  <div className="flex h-full min-h-0 flex-col">
+                    <div className="mt-3 flex flex-wrap items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-2xl font-medium tracking-tight text-text-primary">
+                          {selectedDetailTitle}
+                        </h2>
+                      </div>
+
+                      <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
+                        <Button
+                          variant="primary"
+                          size="md"
+                          onClick={openTaskComposer}
+                          disabled={isMutating || showArchived}
+                        >
+                          Add Task
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="shrink-0"
-                          onClick={selectAllVisibleTasks}
-                          disabled={isMutating || visibleTasks.length === 0}
-                        >
-                          Select All
-                        </Button>
-
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="shrink-0"
-                          onClick={() => setSelectedTaskIds(new Set())}
-                          disabled={isMutating || selectedTaskIds.size === 0}
-                        >
-                          Clear
-                        </Button>
-
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          className="shrink-0"
                           onClick={() => {
-                            void handleDeleteSelectedTasks()
+                            if (isManageOpen) {
+                              closeManageMode()
+                            } else {
+                              setIsManageOpen(true)
+                            }
                           }}
-                          disabled={isMutating || selectedVisibleTaskIds.length === 0 || deletingSelectedTasks}
+                          disabled={isMutating || showArchived || chapterTasks.length === 0}
                         >
-                          {deletingSelectedTasks ? "Deleting..." : "Delete Selected"}
+                          {isManageOpen ? "Done" : "Manage"}
                         </Button>
+                      </div>
+                    </div>
 
-                        <div className="ml-2 flex items-center gap-1.5 shrink-0">
-                          <input
-                            type="number"
-                            min={MIN_SESSION_LENGTH_MINUTES}
-                            max={MAX_SESSION_LENGTH_MINUTES}
-                            value={bulkDurationInput}
-                            onChange={(event) => setBulkDurationInput(event.target.value)}
-                            className="ui-input h-8 w-[90px]"
-                            placeholder="Time"
-                          />
+                    {isManageOpen ? (
+                      <section className="mt-2 h-[64px] rounded-xl border border-border-hairline bg-surface-panel-muted p-2 flex flex-col overflow-hidden">
+                        <div className="min-h-0 flex flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={selectAllVisibleTasks}
+                            disabled={isMutating || visibleTasks.length === 0}
+                          >
+                            Select All
+                          </Button>
 
                           <Button
                             variant="ghost"
                             size="sm"
                             className="shrink-0"
-                            onClick={() => {
-                              void handleApplySelectedTaskDuration()
-                            }}
-                            disabled={isMutating || selectedVisibleTaskIds.length === 0 || bulkDurationSaving}
+                            onClick={() => setSelectedTaskIds(new Set())}
+                            disabled={isMutating || selectedTaskIds.size === 0}
                           >
-                            {bulkDurationSaving ? "Applying..." : "Apply"}
+                            Clear
                           </Button>
-                        </div>
-                      </div>
-                    </section>
-                  ) : null}
 
-                  <section
-                    className="mt-3 min-h-0 flex-1 rounded-lg border p-2 flex flex-col"
-                    style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.01)" }}
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2 px-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--sh-text-muted)" }}>
-                        Tasks Overview
-                      </p>
-                      <div className="flex items-center gap-4 text-sm" style={{ color: "var(--sh-text-secondary)" }}>
-                        <span>
-                          Showing {visibleTasks.length} task{visibleTasks.length === 1 ? "" : "s"}
-                        </span>
-                        <span>
-                          {completedCount}/{chapterTasks.length} completed
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-                      <div className="space-y-2">
-                      {visibleTasks.length === 0 && (
-                        <div
-                          className="rounded-lg border border-dashed px-4 py-6 text-center text-sm"
-                          style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-                        >
-                          No tasks available.
-                        </div>
-                      )}
-
-                      {visibleTasks.length > 0 && completedCount === chapterTasks.length && (
-                        <div
-                          className="rounded-lg border border-dashed px-4 py-3 text-center text-xs"
-                          style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-                        >
-                          All tasks completed.
-                        </div>
-                      )}
-
-                      {visibleTasks.length > 0 && !isManageOpen && (
-                        <DndContext
-                          sensors={sensors}
-                          collisionDetection={closestCenter}
-                          onDragEnd={handleTasksDragEnd}
-                        >
-                          <SortableContext
-                            items={visibleTasks.map((task) => task.id)}
-                            strategy={rectSortingStrategy}
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => {
+                              void handleDeleteSelectedTasks()
+                            }}
+                            disabled={isMutating || selectedVisibleTaskIds.length === 0 || deletingSelectedTasks}
                           >
+                            {deletingSelectedTasks ? "Deleting..." : "Delete Selected"}
+                          </Button>
+
+                          <div className="ml-2 flex items-center gap-1.5 shrink-0">
+                            <input
+                              type="number"
+                              min={MIN_SESSION_LENGTH_MINUTES}
+                              max={MAX_SESSION_LENGTH_MINUTES}
+                              value={bulkDurationInput}
+                              onChange={(event) => setBulkDurationInput(event.target.value)}
+                              className="ui-input h-8 w-[90px]"
+                              placeholder="Time"
+                            />
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() => {
+                                void handleApplySelectedTaskDuration()
+                              }}
+                              disabled={isMutating || selectedVisibleTaskIds.length === 0 || bulkDurationSaving}
+                            >
+                              {bulkDurationSaving ? "Applying..." : "Apply"}
+                            </Button>
+                          </div>
+                        </div>
+                      </section>
+                    ) : null}
+
+                    <section className="mt-3 min-h-0 flex-1 rounded-xl border border-border-hairline bg-surface-panel p-2 flex flex-col">
+                      <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+                          Tasks Overview
+                        </p>
+                        <div className="flex items-center gap-4 text-sm text-text-secondary">
+                          <span>
+                            Showing {visibleTasks.length} task{visibleTasks.length === 1 ? "" : "s"}
+                          </span>
+                          <span>
+                            {completedCount}/{chapterTasks.length} completed
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                        <div className="space-y-2">
+                        {visibleTasks.length === 0 && (
+                          <div className="rounded-xl border border-dashed border-border-hairline px-4 py-6 text-center text-sm text-text-muted">
+                            No tasks available.
+                          </div>
+                        )}
+
+                        {visibleTasks.length > 0 && completedCount === chapterTasks.length && (
+                          <div className="rounded-xl border border-dashed border-border-hairline px-4 py-3 text-center text-xs text-text-muted">
+                            All tasks completed.
+                          </div>
+                        )}
+
+                        {visibleTasks.length > 0 && !isManageOpen && (
+                          <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleTasksDragEnd}
+                          >
+                            <SortableContext
+                              items={visibleTasks.map((task) => task.id)}
+                              strategy={rectSortingStrategy}
+                            >
+                              <div className="mb-1 grid grid-cols-1 gap-2 xl:grid-cols-2">
+                                <div className="flex justify-end pr-[76px]">
+                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                                    Duration
+                                  </span>
+                                </div>
+                                <div className="hidden xl:flex justify-end pr-[76px]">
+                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                                    Duration
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="mb-1 grid grid-cols-1 gap-2 xl:grid-cols-2">
+                                <div className="flex justify-end pr-[76px]">
+                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                                    Duration
+                                  </span>
+                                </div>
+                                <div className="hidden xl:flex justify-end pr-[76px]">
+                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                                    Duration
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+                                {visibleTasks.map((task) => (
+                                  <DraggableTaskRow
+                                    key={task.id}
+                                    task={task}
+                                    isPending={pendingTaskIds.has(task.id)}
+                                    isDurationSaving={taskDurationSavingIds.has(task.id)}
+                                    isReordering={reorderBusy?.type === "tasks" && reorderBusy.ids.includes(task.id)}
+                                    canEdit={!showArchived && !isMutating}
+                                    durationDraft={taskDurationDrafts[task.id] ?? String(task.durationMinutes)}
+                                    onToggle={(nextCompleted) => handleToggleTask(task.id, nextCompleted)}
+                                    onDurationDraftChange={(value) => setTaskDurationDraft(task.id, value)}
+                                    onDurationSave={() => {
+                                      void handleSaveTaskDuration(task.id)
+                                    }}
+                                    onEdit={() => openEditTask(task.id, task.title)}
+                                    onDelete={() => void handleDeleteTask(task.id, task.title)}
+                                  />
+                                ))}
+                              </div>
+                            </SortableContext>
+                          </DndContext>
+                        )}
+
+                        {visibleTasks.length > 0 && isManageOpen && (
+                          <>
                             <div className="mb-1 grid grid-cols-1 gap-2 xl:grid-cols-2">
                               <div className="flex justify-end pr-[76px]">
-                                <span
-                                  className="text-[10px] font-semibold uppercase tracking-wide"
-                                  style={{ color: "var(--sh-text-muted)" }}
-                                >
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
                                   Duration
                                 </span>
                               </div>
                               <div className="hidden xl:flex justify-end pr-[76px]">
-                                <span
-                                  className="text-[10px] font-semibold uppercase tracking-wide"
-                                  style={{ color: "var(--sh-text-muted)" }}
-                                >
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
                                   Duration
                                 </span>
                               </div>
                             </div>
                             <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
-                              {visibleTasks.map((task) => (
-                                <DraggableTaskRow
+                            {visibleTasks.map((task) => {
+                              const isPending = pendingTaskIds.has(task.id)
+                              const isDurationSaving = taskDurationSavingIds.has(task.id)
+
+                              return (
+                                <div
                                   key={task.id}
-                                  task={task}
-                                  isPending={pendingTaskIds.has(task.id)}
-                                  isDurationSaving={taskDurationSavingIds.has(task.id)}
-                                  isReordering={reorderBusy?.type === "tasks" && reorderBusy.ids.includes(task.id)}
-                                  canEdit={!showArchived && !isMutating}
-                                  durationDraft={taskDurationDrafts[task.id] ?? String(task.durationMinutes)}
-                                  onToggle={(nextCompleted) => handleToggleTask(task.id, nextCompleted)}
-                                  onDurationDraftChange={(value) => setTaskDurationDraft(task.id, value)}
-                                  onDurationSave={() => {
-                                    void handleSaveTaskDuration(task.id)
-                                  }}
-                                  onEdit={() => openEditTask(task.id, task.title)}
-                                  onDelete={() => void handleDeleteTask(task.id, task.title)}
-                                />
-                              ))}
-                            </div>
-                          </SortableContext>
-                        </DndContext>
-                      )}
-
-                      {visibleTasks.length > 0 && isManageOpen && (
-                        <>
-                          <div className="mb-1 grid grid-cols-1 gap-2 xl:grid-cols-2">
-                            <div className="flex justify-end pr-[76px]">
-                              <span
-                                className="text-[10px] font-semibold uppercase tracking-wide"
-                                style={{ color: "var(--sh-text-muted)" }}
-                              >
-                                Duration
-                              </span>
-                            </div>
-                            <div className="hidden xl:flex justify-end pr-[76px]">
-                              <span
-                                className="text-[10px] font-semibold uppercase tracking-wide"
-                                style={{ color: "var(--sh-text-muted)" }}
-                              >
-                                Duration
-                              </span>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
-                          {visibleTasks.map((task) => {
-                            const isPending = pendingTaskIds.has(task.id)
-                            const isDurationSaving = taskDurationSavingIds.has(task.id)
-
-                            return (
-                              <div
-                                key={task.id}
-                                className="group rounded-lg border px-2 py-1.5 transition-colors"
-                                style={{
-                                  borderColor: "var(--sh-border)",
-                                  background: task.completed
-                                    ? "rgba(52, 211, 153, 0.08)"
-                                    : "rgba(255, 255, 255, 0.02)",
-                                }}
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedTaskIds.has(task.id)}
-                                    onChange={() => toggleTaskSelection(task.id)}
-                                    className="h-4 w-4 rounded border"
-                                    aria-label="Select task"
-                                    disabled={isMutating}
-                                  />
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleTask(task.id, !task.completed)}
-                                    disabled={isMutating || isPending || showArchived || isManageOpen}
-                                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors disabled:opacity-50"
-                                    style={{
-                                      borderColor: task.completed
-                                        ? "var(--sh-success)"
-                                        : "var(--sh-border)",
-                                      background: task.completed ? "var(--sh-success)" : "transparent",
-                                    }}
-                                    aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
-                                  >
-                                    {task.completed && (
-                                      <svg
-                                        className="h-3 w-3 text-white"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2.2"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-                                      </svg>
-                                    )}
-                                  </button>
-
-                                  <div className="min-w-0 flex-1 flex items-center gap-2">
-                                    <p
-                                      className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through opacity-60" : ""} ${sidebarExpanded ? "truncate" : "truncate"}`}
-                                      style={{ color: "var(--sh-text-primary)" }}
-                                      title={task.title}
-                                    >
-                                      {task.title}
-                                    </p>
-
+                                  className={`group rounded-xl px-2 py-2 transition-colors ${task.completed ? "bg-pastel-mint/40" : "hover:bg-surface-hover"}`}
+                                >
+                                  <div className="flex items-center gap-2">
                                     <input
-                                      type="number"
-                                      min={MIN_SESSION_LENGTH_MINUTES}
-                                      max={MAX_SESSION_LENGTH_MINUTES}
-                                      value={taskDurationDrafts[task.id] ?? String(task.durationMinutes)}
-                                      onChange={(event) => setTaskDurationDraft(task.id, event.target.value)}
-                                      onBlur={() => {
-                                        void handleSaveTaskDuration(task.id)
-                                      }}
-                                      onKeyDown={(event) => {
-                                        if (event.key === "Enter") {
-                                          event.preventDefault()
-                                          void handleSaveTaskDuration(task.id)
-                                        }
-                                      }}
-                                      disabled={isMutating || isDurationSaving || showArchived}
-                                      className="ui-input h-7 text-xs text-center"
-                                      style={{ width: "3.8rem" }}
-                                      title="Task duration (minutes)"
+                                      type="checkbox"
+                                      checked={selectedTaskIds.has(task.id)}
+                                      onChange={() => toggleTaskSelection(task.id)}
+                                      className="h-4 w-4 rounded border border-border-subtle"
+                                      aria-label="Select task"
+                                      disabled={isMutating}
                                     />
-                                  </div>
 
-                                  <div className="flex shrink-0 items-center gap-1">
-                                    <RowActionButton
-                                      label="Edit task title"
-                                      onClick={() => openEditTask(task.id, task.title)}
-                                      disabled={isMutating || isPending || isDurationSaving || showArchived}
-                                    />
-                                    <RowActionButton
-                                      label="Delete task"
-                                      onClick={() => {
-                                        void handleDeleteTask(task.id, task.title)
-                                      }}
-                                      danger
-                                      disabled={isMutating || isPending || isDurationSaving || showArchived}
-                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleTask(task.id, !task.completed)}
+                                      disabled={isMutating || isPending || showArchived || isManageOpen}
+                                      className={`flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-[5px] transition-colors disabled:opacity-50 md:min-h-0 md:min-w-0 ${task.completed ? "border-2 border-black bg-black" : "border-2 border-border-subtle hover:border-text-primary bg-transparent"}`}
+                                      aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
+                                    >
+                                      <span className="flex h-[18px] w-[18px] items-center justify-center">
+                                        {task.completed && (
+                                          <svg
+                                            className="h-3 w-3 text-white"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2.2"
+                                            viewBox="0 0 24 24"
+                                          >
+                                            <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                                          </svg>
+                                        )}
+                                      </span>
+                                    </button>
+
+                                    <div className="min-w-0 flex-1 flex items-center gap-2">
+                                      <p
+                                        className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through text-text-muted" : "text-text-primary"} truncate`}
+                                        title={task.title}
+                                      >
+                                        {task.title}
+                                      </p>
+
+                                      <input
+                                        type="number"
+                                        min={MIN_SESSION_LENGTH_MINUTES}
+                                        max={MAX_SESSION_LENGTH_MINUTES}
+                                        value={taskDurationDrafts[task.id] ?? String(task.durationMinutes)}
+                                        onChange={(event) => setTaskDurationDraft(task.id, event.target.value)}
+                                        onBlur={() => {
+                                          void handleSaveTaskDuration(task.id)
+                                        }}
+                                        onKeyDown={(event) => {
+                                          if (event.key === "Enter") {
+                                            event.preventDefault()
+                                            void handleSaveTaskDuration(task.id)
+                                          }
+                                        }}
+                                        disabled={isMutating || isDurationSaving || showArchived}
+                                        className="ui-input h-7 text-xs text-center"
+                                        style={{ width: "3.8rem" }}
+                                        title="Task duration (minutes)"
+                                      />
+                                    </div>
+
+                                    <div className="flex shrink-0 items-center gap-1">
+                                      <RowActionButton
+                                        label="Edit task title"
+                                        onClick={() => openEditTask(task.id, task.title)}
+                                        disabled={isMutating || isPending || isDurationSaving || showArchived}
+                                      />
+                                      <RowActionButton
+                                        label="Delete task"
+                                        onClick={() => {
+                                          void handleDeleteTask(task.id, task.title)
+                                        }}
+                                        danger
+                                        disabled={isMutating || isPending || isDurationSaving || showArchived}
+                                      />
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            )
-                          })}
-                          </div>
-                        </>
-                      )}
+                              )
+                            })}
+                            </div>
+                          </>
+                        )}
+                        </div>
                       </div>
-                    </div>
-                  </section>
-                </div>
-              ) : (
-                <div
-                  className="flex h-full min-h-[180px] items-center justify-center rounded-lg border border-dashed text-sm"
-                  style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-                >
-                  Select a subject and chapter to view details.
-                </div>
-              )}
-            </section>
+                    </section>
+                  </div>
+                ) : (
+                  <div className="flex h-full min-h-[180px] items-center justify-center rounded-xl border border-dashed border-border-hairline text-sm text-text-muted">
+                    Select a subject and chapter to view details.
+                  </div>
+                )}
+              </section>
+            </div>
           </div>
 
           <Step2ConstraintsSection

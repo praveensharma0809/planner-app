@@ -443,6 +443,9 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - 2026-05-05 · F2.5 · DSP · PASS
 - 2026-05-05 · F2.6 · DSP · PASS
 - 2026-05-05 · F2.7 · DSP · PASS
+- 2026-05-05 · F3.1 · DSP · PASS — 3-state mode machine with SidebarMode type, effectiveWidth derivation, localStorage persistence (sh-sidebar-mode), context exposes mode/setMode/isHovering/setIsHovering/effectiveWidth, --sidebar-current-width CSS var wired on shell wrapper
+- 2026-05-05 · F3.2 · DSP · PASS — Pin/PinOff lock toggle (cycles locked-open ↔ unlocked-collapsed) positioned top-right; chevron manual collapse (only when locked-open); both 28px icon-only buttons using existing .sidebar-collapse-btn styling
+- 2026-05-05 · F3.3 · DSP · PASS — hover-expand debounce (80ms enter / 200ms leave); absolute overlay with z-10 when hovering; effectiveWidth 240px hover / 64px otherwise in unlocked mode; locked-open unaffected
 
 ---
 

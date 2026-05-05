@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react"
@@ -21,22 +22,36 @@ const Topbar = dynamic(
   { ssr: false }
 )
 
+// ─── Sidebar mode type ─────────────────────────────────────
+
+export type SidebarMode = "locked-open" | "unlocked-collapsed" | "unlocked-hover"
+
 // ─── Context ──────────────────────────────────────────────────
 
 interface SidebarContextValue {
-  /** Whether the sidebar is in icon-only (collapsed) mode on desktop */
-  collapsed: boolean
+  /** Persistent sidebar mode; persisted to localStorage as sh-sidebar-mode */
+  mode: SidebarMode
+  /** Setter for sidebar mode; persists locked-open / unlocked-collapsed to localStorage */
+  setMode: (m: SidebarMode) => void
+  /** Whether the sidebar is currently in hover-expanded state (derived: mode === "unlocked-hover") */
+  isHovering: boolean
+  /** Transitions mode between unlocked-collapsed ↔ unlocked-hover */
+  setIsHovering: (v: boolean) => void
+  /** Derived effective sidebar width in px (240 or 64) */
+  effectiveWidth: number
   /** Whether the mobile sidebar overlay is open */
   mobileOpen: boolean
-  toggleCollapse: () => void
   toggleMobile: () => void
   closeMobile: () => void
 }
 
 export const SidebarContext = createContext<SidebarContextValue>({
-  collapsed: false,
+  mode: "locked-open",
+  setMode: () => { },
+  isHovering: false,
+  setIsHovering: () => { },
+  effectiveWidth: 240,
   mobileOpen: false,
-  toggleCollapse: () => { },
   toggleMobile: () => { },
   closeMobile: () => { },
 })
@@ -53,34 +68,58 @@ export function useSidebar() {
  * Single-layer edge-to-edge canvas model (Fix Design v2, Phase F2):
  *
  *   Layer 1 (Canvas)      — bg-canvas (#F4F1EA), full-bleed viewport
- *     ├── Sidebar         — transparent, inherits canvas
+ *     ├── Sidebar         — transparent, inherits canvas,
+ *     │                     width driven by 3-state machine (F3)
  *     └── Main content    — Topbar + scrollable content area
  *
- * Responsive:
- *   - Mobile (<768px):     sidebar off-canvas drawer
- *   - Tablet portrait:     sidebar 64px icon rail
- *   - Tablet landscape+:   sidebar 240px full sidebar
+ * Sidebar 3-state machine (Phase F3):
+ *   - locked-open:         240px, in-flow (default)
+ *   - unlocked-collapsed:  64px, in-flow, hover-expand enabled
+ *   - unlocked-hover:      240px absolute overlay (transient)
  */
 export function AppShell({ children }: { children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [mode, setModeState] = useState<SidebarMode>("locked-open")
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  // Restore persisted mode from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCollapsed(localStorage.getItem("sh-sidebar-collapsed") === "true")
+      const stored = localStorage.getItem("sh-sidebar-mode")
+      if (stored === "unlocked-collapsed") {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setModeState("unlocked-collapsed")
+      }
+      // Default remains "locked-open" if nothing stored or invalid value
     }
   }, [])
 
-  const toggleCollapse = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev
-      if (typeof window !== "undefined") {
-        localStorage.setItem("sh-sidebar-collapsed", String(next))
+  // setMode: persists locked-open / unlocked-collapsed to localStorage;
+  // unlocked-hover is transient and never persisted.
+  const setMode = useCallback((next: SidebarMode) => {
+    setModeState(next)
+    if (typeof window !== "undefined") {
+      if (next === "locked-open" || next === "unlocked-collapsed") {
+        localStorage.setItem("sh-sidebar-mode", next)
       }
-      return next
-    })
+    }
   }, [])
+
+  // Derived values
+  const isHovering = useMemo(() => mode === "unlocked-hover", [mode])
+
+  const setIsHovering = useCallback((v: boolean) => {
+    if (v) {
+      setModeState((prev) => (prev === "unlocked-collapsed" ? "unlocked-hover" : prev))
+    } else {
+      setModeState((prev) => (prev === "unlocked-hover" ? "unlocked-collapsed" : prev))
+    }
+  }, [])
+
+  const effectiveWidth = useMemo(() => {
+    if (mode === "locked-open") return 240
+    if (mode === "unlocked-hover") return 240
+    return 64
+  }, [mode])
 
   const toggleMobile = useCallback(() => setMobileOpen((prev) => !prev), [])
   const closeMobile = useCallback(() => setMobileOpen(false), [])
@@ -105,28 +144,42 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Sidebar overlays content when in unlocked-hover mode
+  const sidebarOverlaying = mode === "unlocked-hover"
+
   return (
-    <SidebarContext.Provider value={{ collapsed, mobileOpen, toggleCollapse, toggleMobile, closeMobile }}>
+    <SidebarContext.Provider
+      value={{ mode, setMode, isHovering, setIsHovering, effectiveWidth, mobileOpen, toggleMobile, closeMobile }}
+    >
       <ScheduleTopbarProvider>
         {/* ══════ Layer 1: Edge-to-edge cream canvas ══════ */}
-        <div className="bg-canvas min-h-screen flex">
+        <div
+          className="bg-canvas min-h-screen flex"
+          style={{ ["--sidebar-current-width" as string]: `${effectiveWidth}px` }}
+        >
           {/* Ambient gradient background */}
           <div className="mesh-bg" aria-hidden="true" />
 
           {/* Mobile overlay — covers content behind open sidebar */}
           <div
-            className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden transition-opacity duration-300 ${mobileOpen
+            className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden transition-opacity duration-300 ${
+              mobileOpen
                 ? "opacity-100 pointer-events-auto"
                 : "opacity-0 pointer-events-none"
-              }`}
+            }`}
             onClick={closeMobile}
             aria-hidden="true"
           />
 
           {/* Sidebar — CSS-variable-driven width, animated via F3 state machine */}
           <div
-            className="hidden md:flex flex-shrink-0"
-            style={{ width: collapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-current-width)', transition: 'width 200ms ease' }}
+            className={`hidden md:flex flex-shrink-0 ${
+              sidebarOverlaying ? "absolute left-0 z-10" : ""
+            }`}
+            style={{
+              width: `${effectiveWidth}px`,
+              transition: "width 200ms ease",
+            }}
           >
             <Sidebar className="app-shell--flex-child" />
           </div>

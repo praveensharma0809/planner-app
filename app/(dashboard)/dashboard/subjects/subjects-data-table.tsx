@@ -105,8 +105,8 @@ const CLOSED_DIALOG_STATE: NameDialogState = {
 export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Props) {
   const router = useRouter()
   const { addToast } = useToast()
-  const { collapsed } = useSidebar()
-  const sidebarExpanded = !collapsed
+  const { mode } = useSidebar()
+  const sidebarExpanded = mode === "locked-open"
   const [, startBackgroundRefresh] = useTransition()
   const refreshInBackground = useCallback(() => {
     startBackgroundRefresh(() => {
@@ -151,6 +151,18 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
   const [manualOrderChapterIds, setManualOrderChapterIds] = useState<Set<string>>(new Set())
   const [reorderingTaskIds, setReorderingTaskIds] = useState<string[]>([])
+
+  const [mobilePane, setMobilePane] = useState<"subjects" | "chapters" | "tasks">("subjects")
+
+  const handleSelectSubject = useCallback((id: string) => {
+    setSelectedSubjectId(id)
+    setMobilePane("chapters")
+  }, [])
+
+  const handleSelectChapter = useCallback((id: string) => {
+    setSelectedChapterId(id)
+    setMobilePane("tasks")
+  }, [])
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1010,23 +1022,14 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       />
 
       <div
-        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border p-3 sm:p-4"
-        style={{
-          borderColor: "var(--sh-border)",
-          background:
-            "linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",
-          boxShadow: "var(--sh-shadow-sm)",
-        }}
+        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border-hairline bg-surface-panel p-3 sm:p-4 shadow-card"
       >
         {displaySubjects.length === 0 && (
-          <div
-            className="mb-3 rounded-xl border p-4"
-            style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.02)" }}
-          >
-            <p className="text-base font-semibold" style={{ color: "var(--sh-text-primary)" }}>
+          <div className="mb-3 rounded-xl border border-border-hairline bg-surface-panel-muted p-4">
+            <p className="text-base font-medium text-text-primary">
               {showArchived ? "No archived subjects." : "No subjects yet."}
             </p>
-            <p className="mt-1 text-sm" style={{ color: "var(--sh-text-muted)" }}>
+            <p className="mt-1 text-sm text-text-muted">
               {showArchived
                 ? "Archive a subject to see it in this view."
                 : "Create your first subject to start building your structure."}
@@ -1034,326 +1037,319 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
           </div>
         )}
 
-          <p className="mb-3 text-xs font-medium sm:hidden" style={{ color: "var(--sh-text-muted)" }}>
-            Swipe horizontally between Subjects, Chapters, and the overview panel.
-          </p>
+          {/* Mobile pane tabs */}
+          <div className="mb-3 md:hidden">
+            <div className="flex rounded-full bg-surface-page p-1 gap-1">
+              {(["subjects", "chapters", "tasks"] as const).map((pane) => (
+                <button
+                  key={pane}
+                  type="button"
+                  onClick={() => setMobilePane(pane)}
+                  className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition-colors min-h-[44px] ${
+                    mobilePane === pane
+                      ? "bg-white shadow-[var(--shadow-card)] text-text-primary"
+                      : "text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  {pane.charAt(0).toUpperCase() + pane.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <div
-            className="flex h-full min-h-0 flex-1 items-stretch gap-3 overflow-x-auto pb-1 snap-x snap-mandatory"
-          >
-            <NavigationColumn
-              title="Subjects"
-              items={subjectColumnItems}
-              activeId={selectedSubjectId}
-              emptyMessage="No subjects available."
-              onSelect={setSelectedSubjectId}
-              onReorder={showArchived ? undefined : handleReorderSubjects}
-              sensors={sensors}
-              footer={
-                <>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="w-full justify-center"
-                    onClick={openCreateSubject}
-                    disabled={showArchived}
-                  >
-                    Add Subject
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-center"
-                    onClick={handleArchiveSelected}
-                    disabled={!selectedSubject || pendingSubjectId === selectedSubject.id}
-                  >
-                    {selectedSubject?.archived ? "Restore Subject" : "Archive Subject"}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-center"
-                    onClick={() => setShowArchived((value) => !value)}
-                  >
-                    {showArchived
-                      ? "Show Active Subjects"
-                      : `Archived Subjects (${archivedSubjects.length})`}
-                  </Button>
-                </>
-              }
-            />
-
-            <NavigationColumn
-              title="Chapters"
-              items={chapterColumnItems}
-              activeId={selectedChapterId}
-              emptyMessage="No chapters in this subject."
-              onSelect={setSelectedChapterId}
-              onReorder={showArchived || showArchivedChapters ? undefined : handleReorderChapters}
-              sensors={sensors}
-              footer={
-                <>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="w-full justify-center"
-                    onClick={openCreateChapter}
-                    disabled={!selectedSubject || showArchived || showArchivedChapters}
-                  >
-                    Add Chapter
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-center"
-                    onClick={selectedChapter?.archived ? handleUnarchiveChapter : handleArchiveChapter}
-                    disabled={!selectedChapter || pendingChapterId === selectedChapter.id}
-                  >
-                    {selectedChapter?.archived ? "Restore Chapter" : "Archive Chapter"}
-                  </Button>
-                  {!showArchived && (
+          <div className="flex h-full min-h-0 flex-1 flex-col gap-3 md:flex-row overflow-hidden">
+            {/* Subjects pane */}
+            <div className={`${mobilePane === "subjects" ? "flex" : "hidden"} md:flex md:w-[45%] lg:w-[220px] flex-col min-h-0`}>
+              <NavigationColumn
+                title="Subjects"
+                items={subjectColumnItems}
+                activeId={selectedSubjectId}
+                emptyMessage="No subjects available."
+                onSelect={handleSelectSubject}
+                onReorder={showArchived ? undefined : handleReorderSubjects}
+                sensors={sensors}
+                footer={
+                  <>
+                    <Button
+                      variant="primary"
+                      size="md"
+                      className="w-full justify-center min-h-[44px] md:min-h-0"
+                      onClick={openCreateSubject}
+                      disabled={showArchived}
+                    >
+                      Add Subject
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full justify-center"
-                      onClick={() => setShowArchivedChapters((value) => !value)}
-                      disabled={!selectedSubject || (archivedChapterCount === 0 && !showArchivedChapters)}
+                      className="w-full justify-center min-h-[44px] md:min-h-0"
+                      onClick={handleArchiveSelected}
+                      disabled={!selectedSubject || pendingSubjectId === selectedSubject.id}
                     >
-                      {showArchivedChapters
-                        ? "Show Active Chapters"
-                        : `Archived Chapters (${archivedChapterCount})`}
+                      {selectedSubject?.archived ? "Restore Subject" : "Archive Subject"}
                     </Button>
-                  )}
-                </>
-              }
-            />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-center min-h-[44px] md:min-h-0"
+                      onClick={() => setShowArchived((value) => !value)}
+                    >
+                      {showArchived
+                        ? "Show Active Subjects"
+                        : `Archived Subjects (${archivedSubjects.length})`}
+                    </Button>
+                  </>
+                }
+              />
+            </div>
 
-            <section
-              className="min-w-[340px] h-full flex-1 rounded-xl border px-4 py-4 sm:px-5 sm:py-5 snap-start"
-              style={{
-                borderColor: "var(--sh-border)",
-                background: "var(--sh-card)",
-              }}
-            >
-              {selectedSubject && selectedChapter ? (
-                <div className="flex h-full min-h-0 flex-col">
-                  <nav
-                    className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-wide"
-                    style={{ color: "var(--sh-text-muted)" }}
-                  >
-                    <span>{selectedSubject.name}</span>
-                    <span>{">"}</span>
-                    <span>{selectedChapter.name}</span>
-                  </nav>
-
-                  <div className="mt-3 flex flex-wrap items-start gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h2
-                        className="text-2xl font-bold tracking-tight"
-                        style={{ color: "var(--sh-text-primary)" }}
-                      >
-                        {selectedDetailTitle}
-                      </h2>
-                      <p className="mt-1 text-sm" style={{ color: "var(--sh-text-secondary)" }}>
-                        {completedCount}/{chapterTasks.length} tasks completed
-                      </p>
-                      <p className="mt-1 text-xs" style={{ color: "var(--sh-text-muted)" }}>
-                        Add tasks and bulk-create series from this overview panel.
-                      </p>
-                    </div>
-
-                    <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={openTaskComposer}
-                        disabled={showArchived || showArchivedChapters}
-                      >
-                        Add Task
-                      </Button>
+            {/* Chapters pane */}
+            <div className={`${mobilePane === "chapters" ? "flex" : "hidden"} md:flex md:w-[45%] lg:w-[220px] flex-col min-h-0`}>
+              <NavigationColumn
+                title="Chapters"
+                items={chapterColumnItems}
+                activeId={selectedChapterId}
+                emptyMessage="No chapters in this subject."
+                onSelect={handleSelectChapter}
+                onReorder={showArchived || showArchivedChapters ? undefined : handleReorderChapters}
+                sensors={sensors}
+                footer={
+                  <>
+                    <Button
+                      variant="primary"
+                      size="md"
+                      className="w-full justify-center min-h-[44px] md:min-h-0"
+                      onClick={openCreateChapter}
+                      disabled={!selectedSubject || showArchived || showArchivedChapters}
+                    >
+                      Add Chapter
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-center min-h-[44px] md:min-h-0"
+                      onClick={selectedChapter?.archived ? handleUnarchiveChapter : handleArchiveChapter}
+                      disabled={!selectedChapter || pendingChapterId === selectedChapter.id}
+                    >
+                      {selectedChapter?.archived ? "Restore Chapter" : "Archive Chapter"}
+                    </Button>
+                    {!showArchived && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setManageMode((value) => !value)}
-                        disabled={showArchived || showArchivedChapters || chapterTasks.length === 0}
+                        className="w-full justify-center min-h-[44px] md:min-h-0"
+                        onClick={() => setShowArchivedChapters((value) => !value)}
+                        disabled={!selectedSubject || (archivedChapterCount === 0 && !showArchivedChapters)}
                       >
-                        {manageMode ? "Done" : "Manage"}
+                        {showArchivedChapters
+                          ? "Show Active Chapters"
+                          : `Archived Chapters (${archivedChapterCount})`}
                       </Button>
-                    </div>
-                  </div>
+                    )}
+                  </>
+                }
+              />
+            </div>
 
-                  {manageMode && (
-                    <section
-                      className="mt-2 rounded-lg border p-2.5"
-                      style={{ borderColor: "var(--sh-border)", background: "rgba(255,255,255,0.015)" }}
-                    >
-                      <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-xs font-semibold" style={{ color: "var(--sh-text-secondary)" }}>
-                            {selectedTaskIds.size} selected
-                          </span>
+            {/* Tasks pane */}
+            <div className={`${mobilePane === "tasks" ? "flex" : "hidden"} md:flex flex-1 flex-col min-h-0`}>
+              <section
+                className="h-full flex-1 rounded-2xl border border-border-hairline bg-surface-panel px-4 py-4 sm:px-5 sm:py-5 shadow-card overflow-hidden flex flex-col"
+              >
+                {selectedSubject && selectedChapter ? (
+                  <div className="flex h-full min-h-0 flex-col">
+                    <nav className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-text-muted">
+                      <span>{selectedSubject.name}</span>
+                      <span>{" > "}</span>
+                      <span>{selectedChapter.name}</span>
+                    </nav>
 
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={toggleSelectVisibleTasks}
-                            disabled={visibleTasks.length === 0}
-                          >
-                            {allVisibleSelected ? "Unselect Visible" : "Select Visible"}
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedTaskIds(new Set())}
-                            disabled={selectedTaskIds.size === 0}
-                          >
-                            Clear
-                          </Button>
-
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => {
-                              void handleDeleteSelectedTasks()
-                            }}
-                            disabled={selectedTaskIds.size === 0 || deletingSelectedTasks}
-                          >
-                            {deletingSelectedTasks ? "Deleting..." : "Delete Selected"}
-                          </Button>
+                    <div className="mt-3 flex flex-wrap items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-2xl font-medium tracking-tight text-text-primary">
+                          {selectedDetailTitle}
+                        </h2>
+                        <p className="mt-1 text-sm text-text-secondary">
+                          {completedCount}/{chapterTasks.length} tasks completed
+                        </p>
+                        <p className="mt-1 text-xs text-text-muted">
+                          Add tasks and bulk-create series from this overview panel.
+                        </p>
                       </div>
-                    </section>
-                  )}
 
-                  <div className="mt-3 min-h-[55%] flex-1 overflow-y-auto pr-1">
-                    <div className="space-y-2">
-                      {visibleTasks.length === 0 && (
-                        <div
-                          className="rounded-lg border border-dashed px-4 py-6 text-center text-sm"
-                          style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
+                      <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
+                        <Button
+                          variant="primary"
+                          size="md"
+                          onClick={openTaskComposer}
+                          disabled={showArchived || showArchivedChapters}
                         >
-                          No tasks in this view yet.
+                          Add Task
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setManageMode((value) => !value)}
+                          disabled={showArchived || showArchivedChapters || chapterTasks.length === 0}
+                        >
+                          {manageMode ? "Done" : "Manage"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {manageMode && (
+                      <section className="mt-2 rounded-xl border border-border-hairline bg-surface-panel-muted p-2.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs font-semibold text-text-secondary">
+                              {selectedTaskIds.size} selected
+                            </span>
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={toggleSelectVisibleTasks}
+                              disabled={visibleTasks.length === 0}
+                            >
+                              {allVisibleSelected ? "Unselect Visible" : "Select Visible"}
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedTaskIds(new Set())}
+                              disabled={selectedTaskIds.size === 0}
+                            >
+                              Clear
+                            </Button>
+
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => {
+                                void handleDeleteSelectedTasks()
+                              }}
+                              disabled={selectedTaskIds.size === 0 || deletingSelectedTasks}
+                            >
+                              {deletingSelectedTasks ? "Deleting..." : "Delete Selected"}
+                            </Button>
                         </div>
-                      )}
+                      </section>
+                    )}
 
-                      {visibleTasks.length > 0 && !manageMode && (
-                        <DndContext
-                          sensors={sensors}
-                          collisionDetection={closestCenter}
-                          onDragEnd={handleTasksDragEnd}
-                        >
-                          <SortableContext
-                            items={visibleTasks.map((task) => task.id)}
-                            strategy={rectSortingStrategy}
+                    <div className="mt-3 min-h-[55%] flex-1 overflow-y-auto pr-1">
+                      <div className="space-y-2">
+                        {visibleTasks.length === 0 && (
+                          <div className="rounded-xl border border-dashed border-border-hairline px-4 py-6 text-center text-sm text-text-muted">
+                            No tasks in this view yet.
+                          </div>
+                        )}
+
+                        {visibleTasks.length > 0 && !manageMode && (
+                          <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleTasksDragEnd}
                           >
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                              {visibleTasks.map((task) => (
-                                <DraggableTaskRow
-                                  key={task.id}
-                                  task={task}
-                                  isPending={pendingTaskIds.has(task.id)}
-                                  isReordering={reorderingTaskIds.includes(task.id)}
-                                  showFullTitle={sidebarExpanded}
-                                  canEdit={!showArchived}
-                                  onToggle={(nextCompleted) => handleToggleTask(task.id, nextCompleted)}
-                                  onEdit={() => openEditTask(task.id, task.title)}
-                                  onDelete={() => void handleDeleteTask(task.id, task.title)}
-                                />
-                              ))}
-                            </div>
-                          </SortableContext>
-                        </DndContext>
-                      )}
-
-                      {visibleTasks.length > 0 && manageMode && (
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          {visibleTasks.map((task) => {
-                            const isPending = pendingTaskIds.has(task.id)
-
-                            return (
-                              <div
-                                key={task.id}
-                                className="group rounded-lg border px-2.5 py-1.5 transition-colors"
-                                style={{
-                                  borderColor: "var(--sh-border)",
-                                  background: task.completed
-                                    ? "rgba(52, 211, 153, 0.08)"
-                                    : "rgba(255, 255, 255, 0.02)",
-                                }}
-                              >
-                                <div className={`flex gap-1.5 ${sidebarExpanded ? "items-start" : "items-center"}`}>
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedTaskIds.has(task.id)}
-                                    onChange={() => toggleTaskSelection(task.id)}
-                                    className="h-4 w-4 rounded border"
-                                    aria-label="Select task"
+                            <SortableContext
+                              items={visibleTasks.map((task) => task.id)}
+                              strategy={rectSortingStrategy}
+                            >
+                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                {visibleTasks.map((task) => (
+                                  <DraggableTaskRow
+                                    key={task.id}
+                                    task={task}
+                                    isPending={pendingTaskIds.has(task.id)}
+                                    isReordering={reorderingTaskIds.includes(task.id)}
+                                    showFullTitle={sidebarExpanded}
+                                    canEdit={!showArchived}
+                                    onToggle={(nextCompleted) => handleToggleTask(task.id, nextCompleted)}
+                                    onEdit={() => openEditTask(task.id, task.title)}
+                                    onDelete={() => void handleDeleteTask(task.id, task.title)}
                                   />
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleTask(task.id, !task.completed)}
-                                    disabled={isPending || showArchived}
-                                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors disabled:opacity-50"
-                                    style={{
-                                      borderColor: task.completed
-                                        ? "var(--sh-success)"
-                                        : "var(--sh-border)",
-                                      background: task.completed ? "var(--sh-success)" : "transparent",
-                                    }}
-                                    aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
-                                  >
-                                    {task.completed && (
-                                      <svg
-                                        className="h-3 w-3 text-white"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2.2"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-                                      </svg>
-                                    )}
-                                  </button>
-
-                                  <p
-                                    className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through opacity-60" : ""} ${sidebarExpanded ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}
-                                    style={{ color: "var(--sh-text-primary)" }}
-                                    title={task.title}
-                                  >
-                                    {task.title}
-                                  </p>
-
-                                  <RowActionButton
-                                    label="Edit task title"
-                                    onClick={() => openEditTask(task.id, task.title)}
-                                    disabled={isPending || showArchived}
-                                  />
-                                  <RowActionButton
-                                    label="Delete task"
-                                    onClick={() => {
-                                      void handleDeleteTask(task.id, task.title)
-                                    }}
-                                    danger
-                                    disabled={isPending || showArchived}
-                                  />
-                                </div>
+                                ))}
                               </div>
-                            )
-                          })}
-                        </div>
-                      )}
+                            </SortableContext>
+                          </DndContext>
+                        )}
+
+                        {visibleTasks.length > 0 && manageMode && (
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            {visibleTasks.map((task) => {
+                              const isPending = pendingTaskIds.has(task.id)
+
+                              return (
+                                <div
+                                  key={task.id}
+                                  className={`group rounded-xl px-2.5 py-2 transition-colors ${task.completed ? "bg-pastel-mint/40" : "hover:bg-surface-hover"}`}
+                                >
+                                  <div className={`flex gap-2 ${sidebarExpanded ? "items-start" : "items-center"}`}>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedTaskIds.has(task.id)}
+                                      onChange={() => toggleTaskSelection(task.id)}
+                                      className="h-4 w-4 rounded border border-border-subtle"
+                                      aria-label="Select task"
+                                    />
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleTask(task.id, !task.completed)}
+                                      disabled={isPending || showArchived}
+                                      className={`flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-[5px] transition-colors disabled:opacity-50 md:min-h-0 md:min-w-0 ${task.completed ? "border-2 border-black bg-black" : "border-2 border-border-subtle hover:border-text-primary bg-transparent"}`}
+                                      aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
+                                    >
+                                      <span className="flex h-[18px] w-[18px] items-center justify-center">
+                                        {task.completed && (
+                                          <svg
+                                            className="h-3 w-3 text-white"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2.2"
+                                            viewBox="0 0 24 24"
+                                          >
+                                            <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                                          </svg>
+                                        )}
+                                      </span>
+                                    </button>
+
+                                    <p
+                                      className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through text-text-muted" : "text-text-primary"} ${sidebarExpanded ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}
+                                      title={task.title}
+                                    >
+                                      {task.title}
+                                    </p>
+
+                                    <RowActionButton
+                                      label="Edit task title"
+                                      onClick={() => openEditTask(task.id, task.title)}
+                                      disabled={isPending || showArchived}
+                                    />
+                                    <RowActionButton
+                                      label="Delete task"
+                                      onClick={() => {
+                                        void handleDeleteTask(task.id, task.title)
+                                      }}
+                                      danger
+                                      disabled={isPending || showArchived}
+                                    />
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div
-                  className="flex min-h-[180px] items-center justify-center rounded-lg border border-dashed text-sm"
-                  style={{ borderColor: "var(--sh-border)", color: "var(--sh-text-muted)" }}
-                >
-                  Select a subject and chapter to view details.
-                </div>
-              )}
-            </section>
+                ) : (
+                  <div className="flex min-h-[180px] items-center justify-center rounded-xl border border-dashed border-border-hairline text-sm text-text-muted">
+                    Select a subject and chapter to view details.
+                  </div>
+                )}
+              </section>
+            </div>
           </div>
         </div>
 

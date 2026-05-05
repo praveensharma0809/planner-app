@@ -3,9 +3,9 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { createBrowserClient } from "@supabase/ssr"
-import { useSidebar } from "./AppShell"
+import { useSidebar, type SidebarMode } from "./AppShell"
 
 function useSupabaseBrowserClient() {
   return useMemo(
@@ -103,6 +103,22 @@ const LogOutIcon = () => (
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
     <polyline points="16 17 21 12 16 7" />
     <line x1="21" y1="12" x2="9" y2="12" />
+  </Icon>
+)
+
+const PinIcon = () => (
+  <Icon>
+    <path d="M12 17v5" />
+    <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1z" />
+  </Icon>
+)
+
+const PinOffIcon = () => (
+  <Icon>
+    <line x1="2" y1="2" x2="22" y2="22" />
+    <path d="M12 17v5" />
+    <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16c0 .35.18.67.47.83L12 21l2-1" />
+    <path d="M15 10.76V7a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H9l4.5 5.5" />
   </Icon>
 )
 
@@ -305,17 +321,77 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
 // ─── Sidebar ──────────────────────────────────────────────────
 
 export function Sidebar({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  const { collapsed, mobileOpen, toggleCollapse, closeMobile } = useSidebar()
+  const { mode, setMode, setIsHovering, mobileOpen, closeMobile } = useSidebar()
   const pathname = usePathname()
+
+  // Debounce refs for hover-expand (F3.3)
+  const enterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (enterTimerRef.current) clearTimeout(enterTimerRef.current)
+      if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
+    }
+  }, [])
+
+  const handleMouseEnter = useCallback(() => {
+    // Only active when mode is unlocked-collapsed
+    if (mode !== "unlocked-collapsed") return
+    // Cancel any pending leave
+    if (leaveTimerRef.current) {
+      clearTimeout(leaveTimerRef.current)
+      leaveTimerRef.current = null
+    }
+    // Debounce 80ms before expanding
+    enterTimerRef.current = setTimeout(() => {
+      setIsHovering(true)
+    }, 80)
+  }, [mode, setIsHovering])
+
+  const handleMouseLeave = useCallback(() => {
+    // Only active when mode is unlocked-collapsed or unlocked-hover
+    if (mode !== "unlocked-collapsed" && mode !== "unlocked-hover") return
+    // Cancel any pending enter
+    if (enterTimerRef.current) {
+      clearTimeout(enterTimerRef.current)
+      enterTimerRef.current = null
+    }
+    // Debounce 200ms before collapsing
+    leaveTimerRef.current = setTimeout(() => {
+      setIsHovering(false)
+    }, 200)
+  }, [mode, setIsHovering])
+
+  // Sidebar is visually collapsed only in unlocked-collapsed mode.
+  // In unlocked-hover mode (expanded overlay) it renders full-width.
+  const isCollapsed = mode === "unlocked-collapsed"
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href)
+
+  // Pin handler: toggles between locked-open and unlocked-collapsed
+  const handlePinToggle = useCallback(() => {
+    if (mode === "locked-open" || mode === "unlocked-hover") {
+      setMode("unlocked-collapsed")
+    } else {
+      setMode("locked-open")
+    }
+  }, [mode, setMode])
+
+  // Manual collapse (chevron): only visible when locked-open
+  const handleManualCollapse = useCallback(() => {
+    setMode("unlocked-collapsed")
+  }, [setMode])
+
+  const isPinned = mode === "locked-open"
 
   return (
     <aside
       className={[
         "sidebar-root",
-        collapsed ? "sidebar-collapsed" : "",
+        isCollapsed ? "sidebar-collapsed" : "",
         mobileOpen ? "sidebar-mobile-open" : "",
         className ?? "",
       ]
@@ -323,8 +399,10 @@ export function Sidebar({ className, style }: { className?: string; style?: Reac
         .join(" ")}
       aria-label="Primary navigation"
       style={style}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
-      {/* ── Header: logo + collapse toggle ── */}
+      {/* ── Header: logo + controls ── */}
       <div className="sidebar-header">
         <Link
           href="/dashboard"
@@ -335,20 +413,35 @@ export function Sidebar({ className, style }: { className?: string; style?: Reac
           <div className="flex-shrink-0 w-[26px] h-[26px] rounded-md overflow-hidden grid place-items-center bg-transparent">
             <Image src="/logo.jpg" alt="PrepVeda Logo" width={26} height={26} className="w-full h-full object-cover" />
           </div>
-          {!collapsed && (
+          {!isCollapsed && (
             <span className="sidebar-logo-text">PrepVeda</span>
           )}
         </Link>
 
-        {/* Collapse toggle — visible at tablet portrait+ */}
-        <button
-          onClick={toggleCollapse}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-expanded={!collapsed}
-          className="sidebar-collapse-btn hidden md:flex"
-        >
-          {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-        </button>
+        {/* F3.2: Two-button controls — pin lock + collapse chevron */}
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          {/* Manual collapse toggle — only visible when locked-open */}
+          {isPinned && (
+            <button
+              onClick={handleManualCollapse}
+              aria-label="Collapse sidebar"
+              className="sidebar-collapse-btn hidden md:flex"
+            >
+              <ChevronLeftIcon />
+            </button>
+          )}
+
+          {/* Lock/unlock pin — toggles locked-open ↔ unlocked-collapsed */}
+          <button
+            onClick={handlePinToggle}
+            aria-label={isPinned ? "Unpin sidebar" : "Pin sidebar"}
+            aria-pressed={isPinned}
+            title={isPinned ? "Unpin sidebar" : "Pin sidebar"}
+            className="sidebar-collapse-btn hidden md:flex"
+          >
+            {isPinned ? <PinIcon /> : <PinOffIcon />}
+          </button>
+        </div>
       </div>
 
       {/* ── Navigation ── */}
@@ -361,13 +454,13 @@ export function Sidebar({ className, style }: { className?: string; style?: Reac
             key={section.id}
             className={`px-2 ${sectionIndex > 0 ? "mt-2" : ""}`}
           >
-            {!collapsed && (
+            {!isCollapsed && (
               <p className="sidebar-section-label px-3 pb-1.5 pt-1 text-[10.5px] font-semibold tracking-widest uppercase">
                 {section.label}
               </p>
             )}
 
-            {collapsed && sectionIndex > 0 && (
+            {isCollapsed && sectionIndex > 0 && (
               <div className="sidebar-section-divider mx-3 my-2 h-px" />
             )}
 
@@ -377,7 +470,7 @@ export function Sidebar({ className, style }: { className?: string; style?: Reac
                   key={item.href}
                   item={item}
                   active={isActive(item.href, item.exact)}
-                  collapsed={collapsed}
+                  collapsed={isCollapsed}
                   onClick={closeMobile}
                 />
               ))}
@@ -386,7 +479,7 @@ export function Sidebar({ className, style }: { className?: string; style?: Reac
         ))}
       </nav>
 
-      <SidebarFooter collapsed={collapsed} />
+      <SidebarFooter collapsed={isCollapsed} />
     </aside>
   )
 }
