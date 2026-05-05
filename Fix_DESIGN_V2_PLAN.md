@@ -416,6 +416,9 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 
 - 2026-05-05 · plan drafted · CO (this session) · awaiting kickoff
 - 2026-05-05 · F0.1 · G3/DSF · PASS
+- 2026-05-05 · F1.1 · DSP · PASS
+- 2026-05-05 · F1.2 · DSP · PASS
+- 2026-05-05 · F1.3 · DSP · PASS
 
 ---
 
