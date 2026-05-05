@@ -81,7 +81,7 @@ export function DraggableTaskRow({
         </button>
 
         <p
-          className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through text-text-muted" : "text-text-primary"} ${showFullTitle ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}
+          className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through text-text-muted" : "text-text-primary"} truncate`}
           title={task.title}
         >
           {task.title}

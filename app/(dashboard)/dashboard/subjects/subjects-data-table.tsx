@@ -1059,7 +1059,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
            <div className="flex h-full min-h-0 flex-1 flex-col gap-[var(--gap-card)] md:gap-[var(--gap-card-md)] md:flex-row overflow-hidden">
             {/* Subjects pane */}
-            <div className={`${mobilePane === "subjects" ? "flex" : "hidden"} md:flex md:w-[45%] lg:w-[220px] flex-col min-h-0`}>
+            <div className={`${mobilePane === "subjects" ? "flex" : "hidden"} md:flex md:w-[45%] lg:w-[220px] flex-col min-h-0 overflow-y-auto`}>
               <NavigationColumn
                 title="Subjects"
                 items={subjectColumnItems}
@@ -1104,7 +1104,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
             </div>
 
             {/* Chapters pane */}
-            <div className={`${mobilePane === "chapters" ? "flex" : "hidden"} md:flex md:w-[45%] lg:w-[220px] flex-col min-h-0`}>
+            <div className={`${mobilePane === "chapters" ? "flex" : "hidden"} md:flex md:w-[45%] lg:w-[220px] flex-col min-h-0 overflow-y-auto`}>
               <NavigationColumn
                 title="Chapters"
                 items={chapterColumnItems}
@@ -1236,7 +1236,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                       </section>
                     )}
 
-                    <div className="mt-3 min-h-[55%] flex-1 overflow-y-auto pr-1">
+                    <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
                       <div className="space-y-2">
                         {visibleTasks.length === 0 && (
                           <div className="rounded-xl border border-dashed border-border-hairline px-4 py-6 text-center text-sm text-text-muted">
@@ -1283,7 +1283,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                                   key={task.id}
                                   className={`group rounded-xl px-2.5 py-2 transition-colors ${task.completed ? "bg-pastel-mint/40" : "hover:bg-surface-hover"}`}
                                 >
-                                  <div className={`flex gap-2 ${sidebarExpanded ? "items-start" : "items-center"}`}>
+                                  <div className={`flex gap-2 min-w-0 ${sidebarExpanded ? "items-start" : "items-center"}`}>
                                     <input
                                       type="checkbox"
                                       checked={selectedTaskIds.has(task.id)}
@@ -1315,7 +1315,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                                     </button>
 
                                     <p
-                                      className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through text-text-muted" : "text-text-primary"} ${sidebarExpanded ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}
+                                      className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through text-text-muted" : "text-text-primary"} truncate`}
                                       title={task.title}
                                     >
                                       {task.title}

@@ -470,6 +470,11 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - 2026-05-06 · Gate F6 · DSP · PREMATURE — visual review F6.5 was not executed before this entry was logged; corrected below
 - 2026-05-05 · F6.5 · G3 · PASS — 30 screenshots captured (6 routes × 5 widths) saved to app_screenshots/Post_F6/. Review findings: (1) Dashboard 1440px: surface-card clearly separates progress + tasks + alerts/subjects panels from warm cream canvas ✅; (2) Dashboard 375px: MobileTabBar renders correctly with all 5 tabs, cards stack cleanly on cream ✅; (3) Settings 1024px: Profile form uses surface-card with visible white separation from canvas ✅; (4) Planner 1440px: 3-column subjects/chapters/tasks panels correctly surface-carded with gap tokens ✅; (5) Schedule 1024px: chip flex-wrap confirmed — chips wrap to 2 rows cleanly, no horizontal overflow ✅; (6) Subjects 1024px: 3-column card layout rendering but right column (task list) has text wrapping issue — task names clipped vertically (scope: F7 layout fix). No F6-specific regressions found.
 - 2026-05-05 · Gate F6 · G3 · PASS — visual review complete, 200/200 tests green, all surface-card separations confirmed. Subjects task-name wrapping noted as F7 scope item.
+- 2026-05-06 · F6.5-truncate · DSP · PASS — Subjects task names truncate with ellipsis in both DraggableTaskRow and manage mode; min-w-0 added to flex containers
+- 2026-05-06 · F7.1 · DSP · PASS — Overview fills viewport, Today's Tasks card grows flex-1, Alerts card sticky top-right on lg+
+- 2026-05-06 · F7.2 · DSP · PASS — Subjects 3-column layout fills viewport, each column independently scrolls, overflow-y-auto per pane
+- 2026-05-06 · F7.3 · DSP · PASS — Calendar >=lg grid fills viewport (no changes needed, verified), mobile agenda fills viewport
+- 2026-05-06 · F7.5 · DSP · PASS — Schedule day columns fill viewport, empty days show full-height dashed border + centered + icon, QuickAdd stays at column bottom
 
 ---
 

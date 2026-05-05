@@ -229,15 +229,16 @@ export default async function DashboardPage() {
   const riskSignalCount = alertItems.length
 
   return (
-    <div className="page-root animate-fade-in flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto">
+    <div className="page-root animate-fade-in flex h-full min-h-0 flex-col overflow-hidden">
       <PageHeader
         eyebrow={formatDate(today)}
         title={greeting}
         subtitle="Focus on what matters. Track your rhythm, your day's load, and what's pressing."
       />
 
-      <ContentGrid layout="main-aside">
-        <div className="flex flex-col gap-[var(--gap-card)] md:gap-[var(--gap-card-md)]">
+      <div className="min-h-0 flex-1">
+        <ContentGrid layout="main-aside" className="h-full min-h-0">
+        <div className="flex flex-col min-h-0 flex-1 gap-[var(--gap-card)] md:gap-[var(--gap-card-md)]">
           {/* Today's Progress Card */}
           <SectionCard className="dashboard-hero-card">
             <div className="dashboard-hero-content">
@@ -336,7 +337,7 @@ export default async function DashboardPage() {
                   )}
 
                   {visiblePendingTasks.length > 0 && (
-                    <div className="max-h-[320px] overflow-y-auto -mx-1 px-1">
+                    <div className="min-h-0 flex-1 overflow-y-auto -mx-1 px-1">
                       {visiblePendingTasks.map((task) => (
                         <div
                           key={task.id}
@@ -412,6 +413,7 @@ export default async function DashboardPage() {
         <div className="flex flex-col gap-[var(--gap-card)] md:gap-[var(--gap-card-md)]">
           {/* Alerts */}
           <SectionCard
+            className="lg:sticky lg:top-4"
             title={
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" strokeWidth="1.5" viewBox="0 0 24 24" stroke="currentColor">
@@ -535,7 +537,8 @@ export default async function DashboardPage() {
             )}
           </SectionCard>
         </div>
-      </ContentGrid>
+        </ContentGrid>
+      </div>
     </div>
   )
 }
