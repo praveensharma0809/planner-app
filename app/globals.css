@@ -1,5 +1,37 @@
 ﻿@import "tailwindcss";
 
+/*
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  F1.5 — WCAG AA Contrast Ratio Audit (Design V2 warm-cream palette)         ║
+║  Reference: WCAG 2.1 AA = 4.5:1 for normal text, 3:1 for large text         ║
+║  Card bg: #FFFFFF (L=1.000)    Canvas bg: #F4F1EA (L=0.881)                 ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  Pair            FG        BG        FG/BG(self)  FG/White  FG/Cream  Note  ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  chip-mint       #0E5E58   #D7F0E6     6.34:1      7.61:1    6.74:1   PASS  ║
+║  chip-sky        #1A5BB0   #E1ECF7     5.54:1      6.63:1    5.88:1   PASS  ║
+║  chip-lilac      #5B1E8F   #EFE4F7     8.44:1     10.36:1    9.18:1   PASS  ║
+║  chip-peach      #7A3F12   #F8DCC2     6.28:1      8.24:1    7.31:1   PASS  ║
+║  chip-butter     #665007   #F4E9B8     6.33:1      7.73:1    6.86:1   PASS  ║
+║  chip-rose       #8C0F32   #F5DCE5     7.29:1      9.42:1    8.35:1   PASS  ║
+║  chip-neutral    #3A352B   #EDEAE1    10.13:1     12.18:1   10.80:1   PASS  ║
+║  alert-info      #1A5BB0   #E1ECF7     5.54:1      6.63:1    5.88:1   PASS  ║
+║  alert-warn      #665007   #F4E9B8     6.33:1      7.73:1    6.86:1   PASS  ║
+║  alert-critical  #8C0F32   #F5DCE5     7.29:1      9.42:1    8.35:1   PASS  ║
+║  selected        #2A2418   #EBE2D2    11.98:1     15.40:1   13.65:1   PASS  ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  BG/White separation (light BGs on white card — intentionally low):          ║
+║    chip/mint:1.20  sky:1.20  lilac:1.23  peach:1.31  butter:1.22           ║
+║    rose:1.29       neutral:1.20  selected:1.29  — all non-failing (non-text)║
+║  BG/Cream separation (light BGs on cream canvas — intentionally low):        ║
+║    chip/mint:1.06  sky:1.06  lilac:1.09  peach:1.16  butter:1.08           ║
+║    rose:1.15       neutral:1.07  selected:1.14  — all non-failing (non-text)║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  VERDICT: All 11 FG/BG pairs pass WCAG AA (≥4.5:1). No failures.            ║
+║  FG readability against both #FFFFFF and #F4F1EA exceeds 4.5:1 everywhere.   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+*/
+
 :root {
   --background: #f0f2f5;
   --foreground: #1a1a2e;
@@ -85,6 +117,19 @@
   --pastel-neutral: #EDEAE1;
   --pastel-neutral-text: #3A352B;
 
+  /* Active/selected state (§3.4) — warm sand, sits on cream */
+  --accent-selected-bg: #EBE2D2;
+  --accent-selected-fg: #2A2418;
+  --accent-selected-bar: #C8A064;
+
+  /* Alert severity (§3.5) — info=sky, warn=butter, critical=rose */
+  --alert-info-bg: #E1ECF7;
+  --alert-info-fg: #1A5BB0;
+  --alert-warn-bg: #F4E9B8;
+  --alert-warn-fg: #665007;
+  --alert-critical-bg: #F5DCE5;
+  --alert-critical-fg: #8C0F32;
+
   /* Action tokens */
   --action-primary-bg: #000000;
   --action-primary-fg: #FFFFFF;
@@ -148,6 +193,19 @@
   --color-pastel-rose-text: #8C0F32;
   --color-pastel-neutral: #EDEAE1;
   --color-pastel-neutral-text: #3A352B;
+
+  /* ── Design v2: Active/selected state ── */
+  --color-accent-selected-bg: var(--accent-selected-bg);
+  --color-accent-selected-fg: var(--accent-selected-fg);
+  --color-accent-selected-bar: var(--accent-selected-bar);
+
+  /* ── Design v2: Alert severity ── */
+  --color-alert-info-bg: var(--alert-info-bg);
+  --color-alert-info-fg: var(--alert-info-fg);
+  --color-alert-warn-bg: var(--alert-warn-bg);
+  --color-alert-warn-fg: var(--alert-warn-fg);
+  --color-alert-critical-bg: var(--alert-critical-bg);
+  --color-alert-critical-fg: var(--alert-critical-fg);
 
   /* ── Design v2: Action tokens ── */
   --color-action-primary-bg: #000000;
@@ -2531,4 +2589,29 @@ html {
   font-weight: 500;
   color: var(--text-secondary);
   flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DESIGN V2 — surface-card utility (§3.2, F1.6)
+   White content card with hairline border, soft shadow, radius.
+   Variants: surface-card-sm (12px), surface-card-md (20px),
+             surface-card-lg (24px). Defaults to var(--radius-card).
+   ══════════════════════════════════════════════════════════════ */
+@utility surface-card {
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-card);
+  box-shadow: var(--shadow-card-soft);
+  border-radius: var(--radius-card);
+}
+
+.surface-card-sm {
+  border-radius: var(--radius-card-sm);
+}
+
+.surface-card-md {
+  border-radius: var(--radius-card);
+}
+
+.surface-card-lg {
+  border-radius: 24px;
 }

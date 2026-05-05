@@ -419,6 +419,9 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - 2026-05-05 · F1.1 · DSP · PASS
 - 2026-05-05 · F1.2 · DSP · PASS
 - 2026-05-05 · F1.3 · DSP · PASS
+- 2026-05-05 · F1.4 · DSP · PASS
+- 2026-05-05 · F1.5 · DSP · PASS
+- 2026-05-05 · F1.6 · DSP · PASS
 
 ---
 
