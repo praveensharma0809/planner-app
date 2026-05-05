@@ -421,12 +421,28 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - 2026-05-05 · F1.6 · DSP · PASS
 - 2026-05-05 · F1.7 · G3 · PASS
 - 2026-05-05 · Gate F1 · G3 · PASS
+- 2026-05-05 · F2.1 · DSP · PASS
+- 2026-05-05 · F2.2 · DSP · PASS
+- 2026-05-05 · F2.3 · DSP · PASS
+- 2026-05-05 · F2.4 · DSP · PASS
+- 2026-05-05 · F2.5 · DSP · PASS
+- 2026-05-05 · F2.6 · DSP · PASS
+- 2026-05-05 · F2.7 · DSP · PASS
+- 2026-05-05 · F2.8 · G3 · PASS — continuous canvas confirmed, warm cream bg, transparent sidebar, active-state left bar all verified. Schedule void below events noted as F7 scope.
+- 2026-05-05 · Gate F2 · G3 · PASS
 - 2026-05-05 · F1.1 · DSP · PASS
 - 2026-05-05 · F1.2 · DSP · PASS
 - 2026-05-05 · F1.3 · DSP · PASS
 - 2026-05-05 · F1.4 · DSP · PASS
 - 2026-05-05 · F1.5 · DSP · PASS
 - 2026-05-05 · F1.6 · DSP · PASS
+- 2026-05-05 · F2.1 · DSP · PASS
+- 2026-05-05 · F2.2 · DSP · PASS
+- 2026-05-05 · F2.3 · DSP · PASS
+- 2026-05-05 · F2.4 · DSP · PASS
+- 2026-05-05 · F2.5 · DSP · PASS
+- 2026-05-05 · F2.6 · DSP · PASS
+- 2026-05-05 · F2.7 · DSP · PASS
 
 ---
 
