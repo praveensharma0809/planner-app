@@ -50,25 +50,21 @@ export function useSidebar() {
 /**
  * AppShell — the root layout wrapper for all authenticated pages.
  *
- * Structure:
- *   ├── Ambient mesh background
- *   ├── Mobile overlay (backdrop)
- *   ├── Sidebar (fixed left, collapsible)
- *   └── Shell body
- *       ├── Topbar (sticky top)
- *       └── <main> scrollable content area
+ * Single-layer edge-to-edge canvas model (Fix Design v2, Phase F2):
  *
- * Usage:
- *   <AppShell>
- *     {children}
- *   </AppShell>
+ *   Layer 1 (Canvas)      — bg-canvas (#F4F1EA), full-bleed viewport
+ *     ├── Sidebar         — transparent, inherits canvas
+ *     └── Main content    — Topbar + scrollable content area
+ *
+ * Responsive:
+ *   - Mobile (<768px):     sidebar off-canvas drawer
+ *   - Tablet portrait:     sidebar 64px icon rail
+ *   - Tablet landscape+:   sidebar 240px full sidebar
  */
 export function AppShell({ children }: { children: ReactNode }) {
-  // Persist collapsed state across route-change remounts
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Set collapsed state from localStorage after mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -89,56 +85,60 @@ export function AppShell({ children }: { children: ReactNode }) {
   const toggleMobile = useCallback(() => setMobileOpen((prev) => !prev), [])
   const closeMobile = useCallback(() => setMobileOpen(false), [])
 
-  // Close mobile sidebar on wider viewports
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(min-width: 1024px)");
+    if (typeof window === "undefined") return
+    const mq = window.matchMedia("(min-width: 768px)")
     const handler = (e: MediaQueryListEvent | MediaQueryList) => {
-      if ("matches" in e && e.matches) setMobileOpen(false);
-    };
+      if ("matches" in e && e.matches) setMobileOpen(false)
+    }
     if (mq.addEventListener) {
-      mq.addEventListener("change", handler);
+      mq.addEventListener("change", handler)
     } else {
-      // Fallback for older browsers
-      mq.addListener(handler);
+      mq.addListener(handler)
     }
     return () => {
       if (mq.removeEventListener) {
-        mq.removeEventListener("change", handler);
+        mq.removeEventListener("change", handler)
       } else {
-        mq.removeListener(handler);
+        mq.removeListener(handler)
       }
-    };
-  }, []);
+    }
+  }, [])
 
   return (
     <SidebarContext.Provider value={{ collapsed, mobileOpen, toggleCollapse, toggleMobile, closeMobile }}>
       <ScheduleTopbarProvider>
-        <div className="relative flex h-dvh min-h-0">
+        {/* ══════ Layer 1: Edge-to-edge cream canvas ══════ */}
+        <div className="bg-canvas min-h-screen flex">
           {/* Ambient gradient background */}
           <div className="mesh-bg" aria-hidden="true" />
 
           {/* Mobile overlay — covers content behind open sidebar */}
           <div
-            className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300 ${mobileOpen
-              ? "opacity-100 pointer-events-auto"
-              : "opacity-0 pointer-events-none"
+            className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden transition-opacity duration-300 ${mobileOpen
+                ? "opacity-100 pointer-events-auto"
+                : "opacity-0 pointer-events-none"
               }`}
             onClick={closeMobile}
             aria-hidden="true"
           />
 
-          {/* Sidebar */}
-          <Sidebar />
-
-          {/* Right body: topbar + scrollable main */}
-          <div
-            className={`flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden transition-[margin-left] duration-300 ease-in-out ${collapsed ? "lg:ml-[var(--sidebar-collapsed-width)]" : "lg:ml-[var(--sidebar-width)]"
-              }`}
-          >
-            <Topbar />
-            <main className="shell-main flex h-full min-h-0 w-full min-w-0 flex-col items-stretch overflow-hidden">{children}</main>
+          {/* Sidebar — width per §3.1 matrix:
+              Mobile (<md): off-canvas drawer (hidden from flex layout)
+              Tablet portrait (md): 64px icon rail
+              Tablet landscape+ (lg): 240px full sidebar */}
+          <div className="hidden md:flex md:w-16 lg:w-60 flex-shrink-0">
+            <Sidebar className="app-shell--flex-child" />
           </div>
+
+          {/* ── Main content area ── */}
+          <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+            <Topbar />
+            <main className="flex-1 overflow-y-auto">
+              {children}
+            </main>
+          </div>
+
           <GlobalFounderMessage />
         </div>
       </ScheduleTopbarProvider>
