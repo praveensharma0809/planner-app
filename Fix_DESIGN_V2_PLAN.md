@@ -480,7 +480,8 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - 2026-05-06 · F7.9 · DSP · PASS — Settings viewport-fill: tab panels use min-h-0 flex-1, Profile/Preferences/Billing fill available space, Save Changes button sticky bottom on <lg
 - 2026-05-05 · F7.4 · K2 · PASS — Calendar <lg agenda view: grid hidden below lg, list grouped by week with existing event chip component, empty month state preserved
 - 2026-05-05 · F7.6 · K2 · PASS — Schedule <lg single-column: replaced mobile day-tabs + tablet 3-day scroll with vertical day cards (surface-card, 320/360px height), desktop 7-column grid unchanged, pager controls remain at top via ScheduleTopbarControls
-
+- 2026-05-05 · F7.10 · G3 · PASS — Capture screenshots at 5 widths (375/768/1024/1440/1600) × 6 routes into app_screenshots/Post_F7/
+- 2026-05-05 · Gate F7 · G3 · PASS — Verified no screen has >10% vertical empty space below primary content.
 ---
 
 ## 8. Working agreements
