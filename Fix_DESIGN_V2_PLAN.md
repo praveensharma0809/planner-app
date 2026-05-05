@@ -486,7 +486,8 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - 2026-05-06 · F8.2 · DSP · PASS — Refactored Overview Alerts card in dashboard/page.tsx: each alert uses severity (info/warn/critical) mapped to --alert-info-bg/fg, --alert-warn-bg/fg, --alert-critical-bg/fg tokens. Replaced dashboard-alert-rose and dashboard-alert-peach CSS classes with dashboard-alert-info/dashboard-alert-warn/dashboard-alert-critical. Mappings: Overdue=critical, Heavy day=warn, Weekly pace=warn, Streak at risk=info.
 - 2026-05-06 · F8.3 · DSP · PASS — Button shape consistency: .ui-btn-primary → rounded-full (9999px pill), .ui-btn-ghost → rounded-lg (8px), .ui-btn-danger → rounded-lg (8px), .ui-btn-success → rounded-lg (8px). CSS comment with rule added at top of globals.css. Topbar + New Plan, Schedule + Add Event already use rounded-full.
 - 2026-05-06 · F8.4 · DSP · PASS — Sidebar active nav: .sidebar-nav-item-active CSS class updated to use bg-accent-selected-bg + border-left: 3px solid --accent-selected-bar + font-weight 600 (NavItemRow inline classes already used accent-selected tokens from F2.7).
-- 2026-05-06 · Gate F8 · DSP · PASS — All 200/200 tests pass. One consistent selected accent (warm sand) across all screens; 3-tier alert severity visual hierarchy; consistent button shapes. Zero lilac/peach/butter ad-hoc selected colors remain.
+- 2026-05-06 · F8.5 · G3 · PASS — Visual review: 30 screenshots (6 routes × 5 widths) in app_screenshots/Post_F8/. All 5 criteria pass: selected accent consistent, alert severities correct, button shapes consistent, sidebar active bar visible, no viewport-fill regressions.
+- 2026-05-06 · Gate F8 · G3 · PASS — All 200/200 tests pass. One consistent selected accent (warm sand) across all screens; 3-tier alert severity visual hierarchy; consistent button shapes. Zero lilac/peach/butter ad-hoc selected colors remain.
 ---
 
 ## 8. Working agreements
@@ -521,3 +522,6 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - Alert severities: info=sky, warn=butter, critical=rose.
 - OpenCode model share: ≥75% (target was 80%; tradeoff explained §5).
 - Validation: 11 gates, each with explicit pass criteria.
+
+F8.5 � G3 � PASS
+Gate F8 � G3 � PASS
