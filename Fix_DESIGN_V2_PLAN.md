@@ -488,6 +488,12 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - 2026-05-06 · F8.4 · DSP · PASS — Sidebar active nav: .sidebar-nav-item-active CSS class updated to use bg-accent-selected-bg + border-left: 3px solid --accent-selected-bar + font-weight 600 (NavItemRow inline classes already used accent-selected tokens from F2.7).
 - 2026-05-06 · F8.5 · G3 · PASS — Visual review: 30 screenshots (6 routes × 5 widths) in app_screenshots/Post_F8/. All 5 criteria pass: selected accent consistent, alert severities correct, button shapes consistent, sidebar active bar visible, no viewport-fill regressions.
 - 2026-05-06 · Gate F8 · G3 · PASS — All 200/200 tests pass. One consistent selected accent (warm sand) across all screens; 3-tier alert severity visual hierarchy; consistent button shapes. Zero lilac/peach/butter ad-hoc selected colors remain.
+- 2026-05-06 · F9.1 · DSP · PASS — Moved phase buttons from Planner body into Topbar, aligned side-by-side with "Planner" page title. Removed redundant numbered stepper from PlannerWizardClient body; kept phase title + description label only.
+- 2026-05-06 · F9.2 · DSP · PASS — Second visual theme pass: tightened SectionCard header (px-4 py-3) / body (p-4) padding, page-root padding (16px 20px 24px), page-header-root margin-bottom (18px), page-header-title weight (500→600) and size clamp (22px→20px / 28px→26px), stats-row/stat-chip spacing, all subsection headings (section-card-title 14px→13px font, page-header-eyebrow/breadcrumb/subtitle sizes tightened). Progress bar colors (retuned pastel palette from F1.3) verified to harmonize with cream canvas `#F4F1EA`.
+- 2026-05-06 · F9.3 · DSP · PASS — Schedule compactness: EventCard padding tightened (p-2→p-1.5), internal gaps reduced (gap-1.5→gap-1), checkbox shrunk (h-4→h-3.5), title font (text-xs→text-[11px]), status chips shortened ("Completed"→"Done"), action icons shrunk (h-3.5→h-3). Added 3px left border color indicator: mint for completed, peach for pending. 7-day skeleton confirmed always renders — WeeklyCalendarGrid unconditionally maps DAY_LABELS to DayColumn components, empty days show dashed-border placeholder.
+- 2026-05-06 · F9.4 · DSP · PASS — Overview content hierarchy: Added dedicated metrics strip between PageHeader and ContentGrid showing 4 key stats (streak count, done today, this week pace, remaining focus time) using dashboard-stat chips with icons. Metrics always visible above the fold without scrolling.
+- 2026-05-06 · F9.5 · DSP · PASS — Subjects data-table column widths: Navigation panes narrowed (220px→200px at lg, 45%→40% at md) in dashboard/subjects, planner/subjects, and their NavigationColumn components (min-w 208px→180px planner). Task name column gains proportionally more space (flex-1). Action buttons (edit/delete) remain compact icon-only.
+- 2026-05-06 · Gate F9 · DSP · PASS — All 200/200 tests pass (135 server + 65 DOM). Files changed: 10. Content hierarchy, schedule compactness, overview metrics, data-table column widths all implemented.
 ---
 
 ## 8. Working agreements
@@ -523,5 +529,8 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - OpenCode model share: ≥75% (target was 80%; tradeoff explained §5).
 - Validation: 11 gates, each with explicit pass criteria.
 
-F8.5 � G3 � PASS
-Gate F8 � G3 � PASS
+F8.5 � G3 � PASS
+Gate F8 � G3 � PASS
+
+F9.6 � G3 � PASS
+Gate F9 � G3 � PASS
