@@ -1,7 +1,8 @@
 ﻿"use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
+import Link from "next/link"
 import {
   useScheduleTopbar,
   type ScheduleTopbarState,
@@ -46,20 +47,20 @@ function MenuIcon() {
 
 // ─── Page title resolver ──────────────────────────────────────
 
-const ROUTE_TITLES: Array<{ pattern: RegExp; title: string }> = [
-  { pattern: /^\/dashboard$/,               title: "Overview"   },
-  { pattern: /^\/dashboard\/overview/,      title: "Overview"   },
-  { pattern: /^\/dashboard\/calendar/,      title: "Calendar"   },
-  { pattern: /^\/dashboard\/subjects/,      title: "Subjects"   },
-  { pattern: /^\/dashboard\/timetable/,     title: "Timetable"  },
-  { pattern: /^\/dashboard\/settings/,      title: "Settings"   },
-  { pattern: /^\/schedule/,                 title: "Schedule"   },
-  { pattern: /^\/planner/,                  title: "Planner"    },
-  { pattern: /^\/onboarding/,               title: "Onboarding" },
+const ROUTE_TITLES: Array<{ pattern: RegExp; title: string; breadcrumb?: Array<{ label: string; href?: string }> }> = [
+  { pattern: /^\/dashboard$/,               title: "Overview",   breadcrumb: [{ label: "Home" }] },
+  { pattern: /^\/dashboard\/overview/,      title: "Overview",   breadcrumb: [{ label: "Home" }] },
+  { pattern: /^\/dashboard\/calendar/,      title: "Calendar",   breadcrumb: [{ label: "Home", href: "/dashboard" }, { label: "Calendar" }] },
+  { pattern: /^\/dashboard\/subjects/,      title: "Subjects",   breadcrumb: [{ label: "Home", href: "/dashboard" }, { label: "Subjects" }] },
+  { pattern: /^\/dashboard\/timetable/,     title: "Timetable",  breadcrumb: [{ label: "Home", href: "/dashboard" }, { label: "Timetable" }] },
+  { pattern: /^\/dashboard\/settings/,      title: "Settings",   breadcrumb: [{ label: "Home", href: "/dashboard" }, { label: "Settings" }] },
+  { pattern: /^\/schedule/,                 title: "Schedule",   breadcrumb: [{ label: "Home", href: "/dashboard" }, { label: "Schedule" }] },
+  { pattern: /^\/planner/,                  title: "Planner",    breadcrumb: [{ label: "Home", href: "/dashboard" }, { label: "Planner" }] },
+  { pattern: /^\/onboarding/,               title: "Onboarding", breadcrumb: [{ label: "Home", href: "/dashboard" }, { label: "Onboarding" }] },
 ]
 
-function resolvePageTitle(pathname: string): string {
-  return ROUTE_TITLES.find(({ pattern }) => pattern.test(pathname))?.title ?? "PrepVeda"
+function resolveBreadcrumb(pathname: string): Array<{ label: string; href?: string }> {
+  return ROUTE_TITLES.find(({ pattern }) => pattern.test(pathname))?.breadcrumb ?? [{ label: "Home" }]
 }
 
 // ─── Topbar ───────────────────────────────────────────────────
@@ -75,21 +76,10 @@ export function Topbar() {
   const { toggleMobile } = useSidebar()
   const { state: scheduleTopbar } = useScheduleTopbar()
   const pathname = usePathname()
-  const pageTitle = resolvePageTitle(pathname)
-  const hideTopbarOnRoute =
-    pathname.startsWith("/dashboard/calendar") || pathname.startsWith("/dashboard/subjects")
+  const breadcrumb = resolveBreadcrumb(pathname)
   const isPlannerRoute = pathname.startsWith("/planner")
   const isScheduleRoute = pathname.startsWith("/schedule")
   const showScheduleControls = isScheduleRoute && scheduleTopbar.enabled
-  const hideMenuOnRoute =
-    pathname === "/dashboard" ||
-    pathname === "/dashboard/overview" ||
-    pathname.startsWith("/dashboard/calendar") ||
-    pathname.startsWith("/dashboard/subjects") ||
-    pathname === "/dashboard/schedule" ||
-    pathname.startsWith("/dashboard/schedule") ||
-    pathname === "/schedule" ||
-    pathname.startsWith("/schedule/")
 
   const [plannerProgress, setPlannerProgress] = useState<PlannerWizardProgress>(
     createDefaultWizardProgress()
@@ -122,11 +112,6 @@ export function Topbar() {
     }
   }, [isPlannerRoute])
 
-  const plannerTitleClass = useMemo(
-    () => (isPlannerRoute ? "topbar-page-title topbar-page-title-planner" : "topbar-page-title"),
-    [isPlannerRoute]
-  )
-
   function handlePlannerPhaseSelect(phaseId: number) {
     if (phaseId > plannerProgress.maxPhase) return
     saveWizardProgress({
@@ -139,31 +124,50 @@ export function Topbar() {
     window.dispatchEvent(new CustomEvent(PLANNER_WIZARD_RESET_EVENT))
   }
 
-  if (hideTopbarOnRoute) {
-    return null
-  }
-
   if (showScheduleControls && !isPlannerRoute) {
     return (
-      <header className="topbar-root topbar-root-schedule" role="banner">
-        <div className="schedule-topbar-head-row">
-          <div className="schedule-topbar-head-left">
-            {!hideMenuOnRoute && (
-              <button
-                onClick={toggleMobile}
-                className="topbar-icon-btn lg:hidden"
-                aria-label="Open navigation menu"
-              >
-                <MenuIcon />
-              </button>
-            )}
+      <header
+        className="topbar-root"
+        role="banner"
+        style={{ height: "auto", minHeight: "64px", padding: "10px 16px", gap: "8px", flexDirection: "column" }}
+      >
+        <div className="flex w-full items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={toggleMobile}
+              className="topbar-icon-btn lg:hidden"
+              aria-label="Open navigation menu"
+            >
+              <MenuIcon />
+            </button>
 
-            <h1 className="topbar-page-title schedule-topbar-title" title={scheduleTopbar.weekRangeTitle}>
-              {scheduleTopbar.weekRangeTitle}
-            </h1>
+            <div className="min-w-0">
+              {breadcrumb.length > 0 && (
+                <nav className="flex items-center gap-1.5 text-xs text-text-secondary mb-0.5" aria-label="Breadcrumb">
+                  {breadcrumb.map((item, i) => (
+                    <span key={i} className="flex items-center gap-1.5">
+                      {i > 0 && <span className="text-text-muted" aria-hidden="true">/</span>}
+                      {item.href ? (
+                        <Link href={item.href} className="hover:text-text-primary transition-colors">{item.label}</Link>
+                      ) : (
+                        <span className="text-text-primary">{item.label}</span>
+                      )}
+                    </span>
+                  ))}
+                </nav>
+              )}
+              <h1 className="text-base font-semibold text-text-primary truncate" title={scheduleTopbar.weekRangeTitle}>
+                {scheduleTopbar.weekRangeTitle}
+              </h1>
+            </div>
           </div>
 
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end gap-2 shrink-0">
+            {!pathname.startsWith("/planner") && (
+              <Link href="/planner" className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] md:min-h-0 md:h-9 px-4 text-xs font-semibold bg-black text-white hover:bg-[--action-primary-bg-hover] transition-all duration-150">
+                + New Plan
+              </Link>
+            )}
             <FlowTutorialButton
               title="Schedule & Calendar Tutorial"
               flowLabel="Schedule & Calendar Flow"
@@ -172,7 +176,6 @@ export function Topbar() {
               buttonSize="sm"
             />
           </div>
-
         </div>
 
         <ScheduleTopbarControls state={scheduleTopbar} />
@@ -183,23 +186,34 @@ export function Topbar() {
   return (
     <header className="topbar-root" role="banner">
       {/* Mobile hamburger */}
-      {!isPlannerRoute && !hideMenuOnRoute && (
-        <button
-          onClick={toggleMobile}
-          className="topbar-icon-btn lg:hidden"
-          aria-label="Open navigation menu"
-        >
-          <MenuIcon />
-        </button>
-      )}
+      <button
+        onClick={toggleMobile}
+        className="topbar-icon-btn lg:hidden"
+        aria-label="Open navigation menu"
+      >
+        <MenuIcon />
+      </button>
 
-      {/* Page title */}
-      <h1 className={`${plannerTitleClass} ${isPlannerRoute ? "truncate" : "flex-1 truncate"}`}>
-        {pageTitle}
-      </h1>
+      {/* Breadcrumb + planner phase nav */}
+      <div className={`flex-1 min-w-0 ${isPlannerRoute ? "flex items-center gap-2" : ""}`}>
+        <div className="min-w-0">
+          {!isPlannerRoute && breadcrumb.length > 0 && (
+            <nav className="flex items-center gap-1.5 text-xs text-[--text-secondary]" aria-label="Breadcrumb">
+              {breadcrumb.map((item, i) => (
+                <span key={i} className="flex items-center gap-1.5">
+                  {i > 0 && <span className="text-[--text-muted]" aria-hidden="true">/</span>}
+                  {item.href ? (
+                    <Link href={item.href} className="hover:text-[--text-primary] transition-colors">{item.label}</Link>
+                  ) : (
+                    <span className="text-[--text-primary]">{item.label}</span>
+                  )}
+                </span>
+              ))}
+            </nav>
+          )}
+        </div>
 
-      {isPlannerRoute && isMounted && (
-        <>
+        {isPlannerRoute && isMounted && (
           <nav className="planner-topbar-phase-nav" aria-label="Planner phases">
             {PLANNER_PHASES.map((phase) => {
               const isActive = phase.id === plannerProgress.phase
@@ -220,109 +234,121 @@ export function Topbar() {
               )
             })}
           </nav>
+        )}
+      </div>
 
-          <button
-            onClick={handlePlannerResetRequest}
-            className="planner-topbar-reset-btn"
-            type="button"
-          >
-            Reset
-          </button>
-
-          <FlowTutorialButton
-            title="Planner Tutorial"
-            flowLabel="Planner Flow"
-            slides={PLANNER_FLOW_SLIDES}
-            buttonVariant="ghost"
-            buttonSize="sm"
-          />
-        </>
+      {isPlannerRoute && isMounted && (
+        <button
+          onClick={handlePlannerResetRequest}
+          className="planner-topbar-reset-btn"
+          type="button"
+        >
+          Reset
+        </button>
       )}
 
+      {isPlannerRoute && (
+        <FlowTutorialButton
+          title="Planner Tutorial"
+          flowLabel="Planner Flow"
+          slides={PLANNER_FLOW_SLIDES}
+          buttonVariant="ghost"
+          buttonSize="sm"
+        />
+      )}
+
+      {/* New Plan CTA — shown on all non-planner routes */}
+      {!isPlannerRoute && (
+        <Link
+          href="/planner"
+          className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] md:min-h-0 md:h-9 px-4 text-xs font-semibold bg-[#1A1612] text-white hover:bg-[#2A2622] transition-all duration-150 flex-shrink-0"
+        >
+          + New Plan
+        </Link>
+      )}
     </header>
   )
 }
 
 function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
   return (
-    <div className="schedule-topbar-controls" aria-label="Schedule controls">
-      <div className="schedule-topbar-section schedule-topbar-section-nav" aria-label="Week and month navigation">
-        <div className="schedule-topbar-group schedule-topbar-group-nav">
-          <button type="button" className="schedule-topbar-btn" onClick={state.onPrevMonth} aria-label="Previous month">
-            Month-
-          </button>
-          <button type="button" className="schedule-topbar-btn" onClick={state.onPrevWeek} aria-label="Previous week">
-            Week-
-          </button>
-          <button
-            type="button"
-            className="schedule-topbar-btn"
-            onClick={state.onCurrentWeek}
-            aria-label="Current week"
-            disabled={state.isCurrentWeek}
-          >
-            Current
-          </button>
-          <button type="button" className="schedule-topbar-btn" onClick={state.onNextWeek} aria-label="Next week">
-            Week+
-          </button>
-          <button type="button" className="schedule-topbar-btn" onClick={state.onNextMonth} aria-label="Next month">
-            Month+
-          </button>
-        </div>
+        <div className="flex min-h-0 items-center gap-2 overflow-x-auto px-2 py-1.5 pr-4" aria-label="Schedule controls">
+      {/* Navigation — segmented pill */}
+      <div
+        className="flex shrink-0 items-center gap-0.5 rounded-full p-1"
+        style={{ background: "var(--surface-page)" }}
+        aria-label="Week and month navigation"
+      >
+        <NavPill onClick={state.onPrevMonth} aria-label="Previous month">Month-</NavPill>
+        <NavPill onClick={state.onPrevWeek} aria-label="Previous week">Week-</NavPill>
+        <NavPill onClick={state.onCurrentWeek} aria-label="Current week" disabled={state.isCurrentWeek}>Current</NavPill>
+        <NavPill onClick={state.onNextWeek} aria-label="Next week">Week+</NavPill>
+        <NavPill onClick={state.onNextMonth} aria-label="Next month">Month+</NavPill>
       </div>
 
-      <div className="schedule-topbar-section schedule-topbar-section-subjects">
-        <div className="schedule-topbar-chip-scroll" aria-label="Subject filters">
-          {state.chips.map((chip) => {
-            const isActive = chip.id === state.activeChipId
-            return (
-              <button
-                key={chip.id}
-                type="button"
-                onClick={() => state.onChipClick(chip.id)}
-                className={`schedule-topbar-chip ${isActive ? "schedule-topbar-chip-active" : ""}`}
-                aria-pressed={isActive}
-              >
-                {chip.label}
-              </button>
-            )
-          })}
-        </div>
+      {/* Subject chips */}
+      <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto flex-wrap lg:flex-nowrap" aria-label="Subject filters">
+        {state.chips.map((chip) => {
+          const isActive = chip.id === state.activeChipId
+          return (
+            <button
+              key={chip.id}
+              type="button"
+              onClick={() => state.onChipClick(chip.id)}
+              className={`shrink-0 transition min-h-[44px] md:min-h-0 ${isActive ? "chip-neutral" : "chip-neutral opacity-60 hover:opacity-100"}`}
+              aria-pressed={isActive}
+            >
+              {chip.label}
+            </button>
+          )
+        })}
       </div>
 
-      <div className="schedule-topbar-section schedule-topbar-section-actions" aria-label="Schedule actions">
-        <div className="schedule-topbar-group">
-          <select
-            value={state.statusFilter}
-            onChange={(event) => state.onStatusFilterChange(event.target.value as ScheduleTopbarState["statusFilter"])}
-            className="schedule-topbar-select"
-            aria-label="Filter by completion status"
-          >
-            <option value="all">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="completed">Completed</option>
-          </select>
+      {/* Actions */}
+      <div className="ml-auto flex shrink-0 items-center gap-1.5" aria-label="Schedule actions">
+        <select
+          value={state.statusFilter}
+          onChange={(event) => state.onStatusFilterChange(event.target.value as ScheduleTopbarState["statusFilter"])}
+          className="min-h-[44px] cursor-pointer rounded-full border border-border-subtle bg-surface-panel px-3 text-xs font-medium text-text-secondary outline-none transition hover:border-border-strong md:h-8 md:min-h-8 md:text-[11px]"
+          aria-label="Filter by completion status"
+        >
+          <option value="all">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="completed">Completed</option>
+        </select>
 
-          <button
-            type="button"
-            onClick={state.onImportPlanner}
-            disabled={state.isImportingPlanner}
-            className="schedule-topbar-btn"
-          >
-            {state.isImportingPlanner ? "Syncing" : "Import"}
-          </button>
+        <button
+          type="button"
+          onClick={state.onImportPlanner}
+          disabled={state.isImportingPlanner}
+          className="min-h-[44px] rounded-full border border-border-subtle bg-surface-panel px-3 text-xs font-medium text-text-secondary transition hover:bg-surface-hover disabled:opacity-50 md:h-8 md:min-h-8 md:text-[11px]"
+        >
+          {state.isImportingPlanner ? "Syncing" : "Import"}
+        </button>
 
-          <button
-            type="button"
-            onClick={state.onAddEvent}
-            className="schedule-topbar-btn schedule-topbar-btn-primary"
-          >
-            + Add Event
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={state.onAddEvent}
+          className="min-h-[44px] rounded-full bg-black px-4 text-xs font-semibold text-white transition hover:bg-[--action-primary-bg-hover] md:h-8 md:min-h-8 md:text-[11px]"
+        >
+          + Add Event
+        </button>
       </div>
     </div>
+  )
+}
+
+function NavPill({ children, onClick, disabled, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="relative z-10 min-h-[44px] rounded-full px-3 text-xs font-medium text-text-secondary transition hover:text-text-primary disabled:opacity-40 md:min-h-0 md:py-1 md:text-[11px]"
+      {...rest}
+    >
+      {children}
+    </button>
   )
 }
 
