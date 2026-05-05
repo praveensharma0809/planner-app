@@ -236,6 +236,40 @@ export default async function DashboardPage() {
         subtitle="Focus on what matters. Track your rhythm, your day's load, and what's pressing."
       />
 
+      {/* Key metrics strip — always visible above the fold */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <div className="dashboard-stat flex-1 min-w-[100px]">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <svg className="w-3.5 h-3.5" style={{ color: "var(--pastel-peach-text)" }} fill="none" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+            </svg>
+            <span className="dashboard-stat-value">{streakData?.streak_current ?? 0}</span>
+          </div>
+          <div className="dashboard-stat-label">Day streak</div>
+        </div>
+        <div className="dashboard-stat flex-1 min-w-[100px]">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <svg className="w-3.5 h-3.5" style={{ color: "var(--pastel-sky-text)" }} fill="none" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="dashboard-stat-value">{doneToday.length}/{todayTasks.length || "—"}</span>
+          </div>
+          <div className="dashboard-stat-label">Done today</div>
+        </div>
+        <div className="dashboard-stat flex-1 min-w-[100px]">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="dashboard-stat-value">{thisWeekDoneCount}/{thisWeekTotalCount || "—"}</span>
+          </div>
+          <div className="dashboard-stat-label">This week</div>
+        </div>
+        <div className="dashboard-stat flex-1 min-w-[100px]">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="dashboard-stat-value">{formatMinutes(remainingTodayMinutes)}</span>
+          </div>
+          <div className="dashboard-stat-label">Remaining</div>
+        </div>
+      </div>
+
       <div className="min-h-0 flex-1">
         <ContentGrid layout="main-aside" className="h-full min-h-0">
         <div className="flex flex-col min-h-0 flex-1 gap-[var(--gap-card)] md:gap-[var(--gap-card-md)]">

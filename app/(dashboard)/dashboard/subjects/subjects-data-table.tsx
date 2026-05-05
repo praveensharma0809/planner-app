@@ -1059,7 +1059,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
            <div className="flex h-full min-h-0 flex-1 flex-col gap-[var(--gap-card)] md:gap-[var(--gap-card-md)] md:flex-row overflow-hidden">
             {/* Subjects pane */}
-            <div className={`${mobilePane === "subjects" ? "flex" : "hidden"} md:flex md:w-[45%] lg:w-[220px] flex-col min-h-0 overflow-y-auto`}>
+            <div className={`${mobilePane === "subjects" ? "flex" : "hidden"} md:flex md:w-[40%] lg:w-[200px] flex-col min-h-0 overflow-y-auto`}>
               <NavigationColumn
                 title="Subjects"
                 items={subjectColumnItems}
@@ -1104,7 +1104,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
             </div>
 
             {/* Chapters pane */}
-            <div className={`${mobilePane === "chapters" ? "flex" : "hidden"} md:flex md:w-[45%] lg:w-[220px] flex-col min-h-0 overflow-y-auto`}>
+            <div className={`${mobilePane === "chapters" ? "flex" : "hidden"} md:flex md:w-[40%] lg:w-[200px] flex-col min-h-0 overflow-y-auto`}>
               <NavigationColumn
                 title="Chapters"
                 items={chapterColumnItems}

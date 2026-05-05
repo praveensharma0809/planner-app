@@ -43,21 +43,22 @@ export function EventCard({ event, registerElement, busy, onEdit, onDelete, onTo
       <div
         {...attributes}
         {...listeners}
-        className={`cursor-grab rounded-[6px] border p-2 text-xs transition duration-200 ${
+        className={`cursor-grab rounded-[6px] border p-1.5 text-xs transition duration-200 ${
           isDragging
             ? "scale-[1.02] cursor-grabbing shadow-[var(--shadow-pop)]"
             : "hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]"
         }`}
-        onPointerDownCapture={(event) => {
-          const target = event.target as HTMLElement
-          if (target.closest("button, input, select, textarea, a, [data-no-drag='true']")) {
-            event.stopPropagation()
-          }
+        style={{
+          ...palette.containerStyle,
+          borderLeftWidth: "3px",
+          borderLeftStyle: "solid",
+          borderLeftColor: event.completed
+            ? "var(--pastel-mint-text)"
+            : "var(--pastel-peach-text)",
         }}
-        style={palette.containerStyle}
       >
-        <div className="flex items-start gap-1.5">
-          <div className="min-w-0 flex flex-1 items-start gap-1.5">
+        <div className="flex items-start gap-1">
+          <div className="min-w-0 flex flex-1 items-start gap-1">
             <button
               type="button"
               onClick={(clickEvent) => {
@@ -66,7 +67,7 @@ export function EventCard({ event, registerElement, busy, onEdit, onDelete, onTo
               }}
               onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
               disabled={busy}
-              className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] disabled:opacity-50"
+              className="mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border text-[9px] disabled:opacity-50"
               style={{
                 borderColor: event.completed ? "var(--pastel-mint-text)" : "var(--border-subtle)",
                 background: event.completed ? "var(--pastel-mint)" : "transparent",
@@ -77,10 +78,10 @@ export function EventCard({ event, registerElement, busy, onEdit, onDelete, onTo
               {event.completed ? "\u2713" : ""}
             </button>
 
-            <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-1">
+            <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-0.5">
               <div className="min-w-0">
                 <p
-                  className="text-xs font-semibold leading-snug break-words"
+                  className="text-[11px] font-semibold leading-snug break-words"
                   title={event.title}
                   style={{
                     color: "var(--text-primary)",
@@ -91,9 +92,9 @@ export function EventCard({ event, registerElement, busy, onEdit, onDelete, onTo
                   {event.title}
                 </p>
 
-                <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                <div className="mt-0.5 flex items-center gap-1 text-[10px]">
                   <span className={`shrink-0 ${event.completed ? "chip-mint" : "chip-peach"}`}>
-                    {event.completed ? "Completed" : "Pending"}
+                    {event.completed ? "Done" : "Pending"}
                   </span>
                   <span className="shrink-0" style={{ color: "var(--text-muted)" }}>
                     {formatDuration(event.durationMinutes)}
@@ -101,7 +102,7 @@ export function EventCard({ event, registerElement, busy, onEdit, onDelete, onTo
                 </div>
               </div>
 
-              <div className="flex shrink-0 flex-col items-center gap-0.5 pt-0.5" onClick={(clickEvent) => clickEvent.stopPropagation()}>
+              <div className="flex shrink-0 flex-col items-center gap-0.5 pt-0" onClick={(clickEvent) => clickEvent.stopPropagation()}>
                 <button
                   type="button"
                   className="task-icon-edit-button"
@@ -113,7 +114,7 @@ export function EventCard({ event, registerElement, busy, onEdit, onDelete, onTo
                   aria-label="Edit task"
                   title="Edit"
                 >
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4z" />
                     <path strokeLinecap="round" strokeLinejoin="round" d="M14.5 5.5l3 3" />
                   </svg>
@@ -131,7 +132,7 @@ export function EventCard({ event, registerElement, busy, onEdit, onDelete, onTo
                   aria-label="Delete task"
                   title="Delete"
                 >
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18" />
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 6V4.8A1.8 1.8 0 0 1 9.8 3h4.4A1.8 1.8 0 0 1 16 4.8V6" />
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 6l-1 13a2 2 0 0 1-2 1.8H8a2 2 0 0 1-2-1.8L5 6" />

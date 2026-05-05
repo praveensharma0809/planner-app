@@ -744,49 +744,16 @@ export default function PlannerWizardClient({
   return (
     <div className="page-root fade-in flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto pb-24 md:pb-0">
       <div className="panel mt-3 p-4 sm:p-5 flex min-h-0 flex-1 flex-col">
-        {/* Step indicator */}
+        {/* Phase indicator + description */}
         <div className="mb-4 flex flex-col gap-[var(--gap-card)]">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            {/* Numbered stepper — desktop & mobile */}
-            <div className="flex items-center gap-1" role="tablist" aria-label="Planner phases">
-              {PLANNER_PHASES.map((p, i) => {
-                const isActive = p.id === phase
-                const isReachable = p.id <= maxPhase
-                const isLocked = !isReachable
-
-                return (
-                  <div key={p.id} className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => { if (isReachable) goToPhase(p.id) }}
-                      disabled={isLocked}
-                      role="tab"
-                      aria-selected={isActive}
-                      aria-label={`Phase ${p.id}: ${p.shortLabel}`}
-                      className={`flex items-center justify-center rounded-full text-xs font-bold transition-colors
-                        min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:h-7 md:w-7
-                        ${isActive
-                          ? "bg-[var(--accent-selected-bg)] text-text-primary"
-                          : isReachable
-                            ? "bg-surface-panel-muted text-text-secondary border border-border-hairline hover:bg-surface-hover"
-                            : "bg-surface-page text-text-muted opacity-40"
-                        }`}
-                    >
-                      {isLocked ? (
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <rect x="5" y="11" width="14" height="10" rx="2" />
-                          <path d="M8 11V7a4 4 0 018 0v4" />
-                        </svg>
-                      ) : (
-                        p.id
-                      )}
-                    </button>
-                    {i < PLANNER_PHASES.length - 1 && (
-                      <div className={`h-px w-4 md:w-6 ${isReachable && (p.id >= maxPhase) ? "bg-border-hairline" : isReachable ? "bg-text-secondary/30" : "bg-border-hairline"}`} />
-                    )}
-                  </div>
-                )
-              })}
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xs uppercase tracking-[0.14em] font-semibold text-text-muted">
+                {activePhase.title}
+              </h2>
+              <p className="text-xs text-text-secondary">
+                {activePhase.description}
+              </p>
             </div>
 
             <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5">
@@ -803,15 +770,6 @@ export default function PlannerWizardClient({
                 </>
               )}
             </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-[11px] uppercase tracking-[0.14em] font-semibold text-text-muted">
-              {activePhase.title}
-            </h2>
-            <p className="text-sm text-text-secondary">
-              {activePhase.description}
-            </p>
           </div>
         </div>
 

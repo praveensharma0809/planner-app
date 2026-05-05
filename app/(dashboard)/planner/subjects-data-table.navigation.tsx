@@ -169,7 +169,7 @@ export function NavigationColumn({
 
   return (
     <section
-      className="w-full lg:w-[208px] lg:min-w-[196px] h-full shrink-0 surface-card px-2 py-2 snap-start flex flex-col overflow-hidden"
+      className="w-full lg:w-[200px] lg:min-w-[180px] h-full shrink-0 surface-card px-2 py-2 snap-start flex flex-col overflow-hidden"
     >
       <div className="px-1.5 pb-2 shrink-0">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">

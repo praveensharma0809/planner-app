@@ -199,7 +199,7 @@ export function Topbar() {
       </button>
 
       {/* Breadcrumb + planner phase nav */}
-      <div className={`flex-1 min-w-0 ${isPlannerRoute ? "flex items-center gap-2" : ""}`}>
+      <div className={`flex-1 min-w-0 ${isPlannerRoute ? "flex items-center gap-3" : ""}`}>
         <div className="min-w-0">
           {!isPlannerRoute && breadcrumb.length > 0 && (
             <nav className="flex items-center gap-1.5 text-xs text-[--text-secondary]" aria-label="Breadcrumb">
@@ -215,10 +215,14 @@ export function Topbar() {
               ))}
             </nav>
           )}
+
+          {isPlannerRoute && (
+            <h1 className="text-base font-semibold text-[--text-primary] truncate">Planner</h1>
+          )}
         </div>
 
         {isPlannerRoute && isMounted && (
-          <nav className="planner-topbar-phase-nav" aria-label="Planner phases">
+          <nav className="planner-topbar-phase-nav" aria-label="Planner phases" style={{ marginLeft: 0, flex: "none" }}>
             {PLANNER_PHASES.map((phase) => {
               const isActive = phase.id === plannerProgress.phase
               const isReachable = phase.id <= plannerProgress.maxPhase
