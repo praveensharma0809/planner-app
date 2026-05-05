@@ -273,7 +273,7 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
   return (
     <div className="sidebar-footer">
       <div className="flex items-center gap-3 px-3 py-3 min-w-0">
-        <div className="sidebar-avatar" aria-hidden="true">
+        <div className="sidebar-avatar shrink-0" aria-hidden="true">
           {initial}
         </div>
 
@@ -299,21 +299,8 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
             </button>
           </>
         )}
-      </div>
 
-      {collapsed && (
-        <div className="flex justify-center pb-3">
-          <button
-            onClick={handleSignOut}
-            disabled={signingOut}
-            aria-label="Sign out"
-            title="Sign out"
-            className="sidebar-signout-btn rounded-lg p-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <LogOutIcon />
-          </button>
-        </div>
-      )}
+      </div>
     </div>
   )
 }

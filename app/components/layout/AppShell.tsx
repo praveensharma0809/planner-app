@@ -144,6 +144,28 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey
+
+      if (mod && e.key === "b") {
+        e.preventDefault()
+        setModeState((prev) =>
+          prev === "locked-open" ? "unlocked-collapsed" : "locked-open"
+        )
+      }
+
+      if (e.key === "Escape" && mode === "unlocked-hover") {
+        setModeState("unlocked-collapsed")
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [mode])
+
   // Sidebar overlays content when in unlocked-hover mode
   const sidebarOverlaying = mode === "unlocked-hover"
 
@@ -180,6 +202,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               width: `${effectiveWidth}px`,
               transition: "width 200ms ease",
             }}
+            aria-expanded={effectiveWidth === 240}
           >
             <Sidebar className="app-shell--flex-child" />
           </div>
