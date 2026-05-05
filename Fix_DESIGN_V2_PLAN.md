@@ -494,6 +494,12 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - 2026-05-06 · F9.4 · DSP · PASS — Overview content hierarchy: Added dedicated metrics strip between PageHeader and ContentGrid showing 4 key stats (streak count, done today, this week pace, remaining focus time) using dashboard-stat chips with icons. Metrics always visible above the fold without scrolling.
 - 2026-05-06 · F9.5 · DSP · PASS — Subjects data-table column widths: Navigation panes narrowed (220px→200px at lg, 45%→40% at md) in dashboard/subjects, planner/subjects, and their NavigationColumn components (min-w 208px→180px planner). Task name column gains proportionally more space (flex-1). Action buttons (edit/delete) remain compact icon-only.
 - 2026-05-06 · Gate F9 · DSP · PASS — All 200/200 tests pass (135 server + 65 DOM). Files changed: 10. Content hierarchy, schedule compactness, overview metrics, data-table column widths all implemented.
+- 2026-05-06 · F10.1 · DSP · PASS — Lighter row styling: reduced padding (p-1.5→p-1, px-2.5 py-2→px-2 py-1.5), thinner checkbox borders (border-2→border-[1.5px]), compact action buttons (p-1.5→p-1, h-3.5 w-3.5→h-3 w-3), narrower grid gaps (gap-2→gap-1.5, space-y-2→space-y-1.5) across dashboard/subjects and planner/subjects tables including both navigation columns, both task rows, and manage mode rows. Nav column padding tightened (px-2 py-2→px-1.5 py-1.5).
+- 2026-05-06 · F10.2 · DSP · PASS — Collapsible rows: added `children?: ColumnItem[]` to ColumnItem interface. Each subject row now has a chevron toggle to expand/collapse inline chapters. Building subjectColumnItems now includes chapter children. Added `expandedIds` state + `onToggleExpand` callback to NavigationColumn components in both dashboard and planner. Smooth max-height + opacity CSS transition (200ms ease-in-out, respects prefers-reduced-motion). Default: collapsed. Chapters shown with left border indentation beneath expanded subject.
+- 2026-05-06 · F10.3 · DSP · PASS — Empty states: redesigned all empty states with illustrated icons and CTAs. No subjects state: circular icon with + symbol + "Create your first subject" primary button. No tasks state: clipboard icon + instructional text. No selection state: list icon + guidance. All empty states use dashed border + bg-surface-panel-muted + rounded-2xl + centered flex layout. "All tasks completed" state in planner gets checkmark icon in pastel-mint.
+- 2026-05-06 · F10.4 · DSP · PASS — Sortable columns: added `SortDir` type (`asc`|`desc`|`none`) to shared.tsx. NavigationColumn header gains sort toggle button with double-chevron (both directions dimmed at 40% opacity when unsorted, single filled chevron when active). Three-state cycle: none→asc→desc→none. Subjects column sorted by name via `localeCompare`. Sort state (`subjectsSortDir`) + toggle callback passed to NavigationColumn in both dashboard and planner.
+- 2026-05-06 · F10.5 · DSP · PASS — Drag handles: replaced ⋮⋮ text with 3×3 grid grip SVG icon (h-3 w-3). Drag handles now `opacity-0 group-hover:opacity-60 hover:!opacity-100` — invisible by default, subtly visible on row hover, fully visible on direct hover. Added `touch-action: none` for proper touch support. Applied to navigation column drag handles in both dashboard and planner, plus task row drag handles in both tables.
+- 2026-05-06 · Gate F10 · DSP · PASS — All 200/200 tests pass (135 server + 65 DOM). TypeScript typecheck clean. Lint: no new issues. Files changed: 9 (shared.tsx, 2 navigation, 2 taskRows, 2 main tables, globals.css).
 ---
 
 ## 8. Working agreements
@@ -532,5 +538,5 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 F8.5 � G3 � PASS
 Gate F8 � G3 � PASS
 
-F9.6 � G3 � PASS
-Gate F9 � G3 � PASS
+F9.6 � G3 � PASS
+Gate F9 � G3 � PASS

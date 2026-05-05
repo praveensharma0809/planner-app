@@ -22,13 +22,13 @@ export const RowActionButton = memo(function RowActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center justify-center rounded-full p-1.5 transition-colors disabled:opacity-40 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 ${danger ? "text-text-muted hover:bg-pastel-rose hover:text-pastel-rose-text" : "text-text-muted hover:bg-surface-hover hover:text-text-primary"}`}
+      className={`flex items-center justify-center rounded-full p-1 transition-colors disabled:opacity-40 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 ${danger ? "text-text-muted hover:bg-pastel-rose hover:text-pastel-rose-text" : "text-text-muted hover:bg-surface-hover hover:text-text-primary"}`}
       aria-label={label}
       title={label}
     >
       {danger ? (
         <svg
-          className="h-3.5 w-3.5"
+          className="h-3 w-3"
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
@@ -40,7 +40,7 @@ export const RowActionButton = memo(function RowActionButton({
         </svg>
       ) : (
         <svg
-          className="h-3.5 w-3.5"
+          className="h-3 w-3"
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
@@ -60,7 +60,10 @@ export interface ColumnItem {
   hint?: string
   onEdit?: () => void
   onDelete?: () => void
+  children?: ColumnItem[]
 }
+
+export type SortDir = "asc" | "desc" | "none"
 
 interface NameModalProps {
   open: boolean

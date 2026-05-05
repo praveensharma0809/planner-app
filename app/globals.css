@@ -2644,3 +2644,42 @@ html {
 .surface-card-lg {
   border-radius: 24px;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   F10 — DATA-TABLE COLLAPSIBLE ROW ANIMATION
+   ══════════════════════════════════════════════════════════════ */
+
+/* Smooth expand/collapse for collapsible row children */
+.data-table-collapse-enter {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 200ms ease-in-out, opacity 200ms ease-in-out;
+}
+
+.data-table-collapse-enter-active {
+  max-height: 2000px;
+  opacity: 1;
+}
+
+.data-table-collapse-exit {
+  max-height: 2000px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 200ms ease-in-out, opacity 200ms ease-in-out;
+}
+
+.data-table-collapse-exit-active {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .data-table-collapse-enter,
+  .data-table-collapse-enter-active,
+  .data-table-collapse-exit,
+  .data-table-collapse-exit-active {
+    transition: none;
+  }
+}

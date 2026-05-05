@@ -33,6 +33,7 @@ import { Button } from "@/app/components/ui"
 import {
   RowActionButton,
   type ColumnItem,
+  type SortDir,
   NameModal,
 } from "@/app/components/subjects-data-table/shared"
 import {
@@ -153,6 +154,24 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   const [reorderingTaskIds, setReorderingTaskIds] = useState<string[]>([])
 
   const [mobilePane, setMobilePane] = useState<"subjects" | "chapters" | "tasks">("subjects")
+  const [expandedSubjectIds, setExpandedSubjectIds] = useState<Set<string>>(new Set())
+  const [subjectsSortDir, setSubjectsSortDir] = useState<SortDir>("none")
+
+  const handleToggleExpandSubject = useCallback((id: string) => {
+    setExpandedSubjectIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }, [])
+
+  const handleToggleSubjectsSort = useCallback(() => {
+    setSubjectsSortDir((prev) => (prev === "none" ? "asc" : prev === "asc" ? "desc" : "none"))
+  }, [])
 
   const handleSelectSubject = useCallback((id: string) => {
     setSelectedSubjectId(id)
@@ -330,18 +349,39 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
     [addToast, refreshInBackground, selectedSubject, subjects]
   )
 
-  const subjectColumnItems: ColumnItem[] = displaySubjects.map((subject) => ({
-    id: subject.id,
-    label: subject.name,
-    hint: `${subject.chapters.length} chapter${subject.chapters.length === 1 ? "" : "s"}`,
-    onEdit: showArchived ? undefined : () => openEditSubject(subject.id),
-    onDelete:
-      showArchived
+  const subjectColumnItems: ColumnItem[] = (() => {
+    const items: ColumnItem[] = displaySubjects.map((subject) => ({
+      id: subject.id,
+      label: subject.name,
+      hint: `${subject.chapters.length} chapter${subject.chapters.length === 1 ? "" : "s"}`,
+      children: (showArchived || showArchivedChapters)
         ? undefined
-        : () => {
-            void handleDeleteSubject(subject.id, subject.name)
-          },
-  }))
+        : subject.chapters.map((chapter) => ({
+            id: chapter.id,
+            label: chapter.name,
+            hint: `${(tasksByChapter[chapter.id] ?? []).length} task${(tasksByChapter[chapter.id] ?? []).length === 1 ? "" : "s"}`,
+            onEdit: () => openEditChapter(chapter.id, chapter.name),
+            onDelete: () => {
+              void handleDeleteChapter(chapter.id, chapter.name)
+            },
+          })),
+      onEdit: showArchived ? undefined : () => openEditSubject(subject.id),
+      onDelete:
+        showArchived
+          ? undefined
+          : () => {
+              void handleDeleteSubject(subject.id, subject.name)
+            },
+    }))
+
+    if (subjectsSortDir === "asc") {
+      items.sort((a, b) => a.label.localeCompare(b.label))
+    } else if (subjectsSortDir === "desc") {
+      items.sort((a, b) => b.label.localeCompare(a.label))
+    }
+
+    return items
+  })()
 
   const chapterColumnItems: ColumnItem[] = visibleChapters.map((chapter) => {
     const isReadOnly = showArchived || showArchivedChapters
@@ -1025,15 +1065,25 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         className="flex min-h-0 flex-1 flex-col overflow-hidden surface-card p-3 sm:p-4"
       >
         {displaySubjects.length === 0 && (
-          <div className="mb-3 rounded-xl border border-border-hairline bg-surface-panel-muted p-4">
-            <p className="text-base font-medium text-text-primary">
+          <div className="mb-3 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border-hairline bg-surface-panel-muted px-6 py-10 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[--accent-selected-bg]">
+              <svg className="h-5 w-5 text-[--accent-selected-fg]" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                <path d="M12 4v16m-8-8h16" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <p className="text-base font-semibold text-text-primary">
               {showArchived ? "No archived subjects." : "No subjects yet."}
             </p>
-            <p className="mt-1 text-sm text-text-muted">
+            <p className="mt-1 text-sm text-text-secondary">
               {showArchived
                 ? "Archive a subject to see it in this view."
                 : "Create your first subject to start building your structure."}
             </p>
+            {!showArchived && (
+              <Button variant="primary" size="md" className="mt-4" onClick={openCreateSubject}>
+                Create your first subject
+              </Button>
+            )}
           </div>
         )}
 
@@ -1068,6 +1118,11 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                 onSelect={handleSelectSubject}
                 onReorder={showArchived ? undefined : handleReorderSubjects}
                 sensors={sensors}
+                expandedIds={expandedSubjectIds}
+                onToggleExpand={handleToggleExpandSubject}
+                sortDir={subjectsSortDir}
+                onToggleSort={handleToggleSubjectsSort}
+                sortEnabled={true}
                 footer={
                   <>
                     <Button
@@ -1237,10 +1292,14 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                     )}
 
                     <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         {visibleTasks.length === 0 && (
-                          <div className="rounded-xl border border-dashed border-border-hairline px-4 py-6 text-center text-sm text-text-muted">
-                            No tasks in this view yet.
+                          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border-hairline px-4 py-8 text-center">
+                            <svg className="mb-2 h-8 w-8 text-text-muted" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            <p className="text-sm text-text-secondary">No tasks in this view yet.</p>
+                            <p className="mt-1 text-xs text-text-muted">Add your first task to get started.</p>
                           </div>
                         )}
 
@@ -1254,7 +1313,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                               items={visibleTasks.map((task) => task.id)}
                               strategy={rectSortingStrategy}
                             >
-                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                                 {visibleTasks.map((task) => (
                                   <DraggableTaskRow
                                     key={task.id}
@@ -1274,21 +1333,21 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                         )}
 
                         {visibleTasks.length > 0 && manageMode && (
-                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                             {visibleTasks.map((task) => {
                               const isPending = pendingTaskIds.has(task.id)
 
                               return (
                                 <div
                                   key={task.id}
-                                  className={`group rounded-xl px-2.5 py-2 transition-colors ${task.completed ? "bg-pastel-mint/40" : "hover:bg-surface-hover"}`}
+                                  className={`group rounded-lg px-2 py-1.5 transition-colors ${task.completed ? "bg-pastel-mint/40" : "hover:bg-surface-hover"}`}
                                 >
-                                  <div className={`flex gap-2 min-w-0 ${sidebarExpanded ? "items-start" : "items-center"}`}>
+                                  <div className={`flex gap-1.5 min-w-0 ${sidebarExpanded ? "items-start" : "items-center"}`}>
                                     <input
                                       type="checkbox"
                                       checked={selectedTaskIds.has(task.id)}
                                       onChange={() => toggleTaskSelection(task.id)}
-                                      className="h-4 w-4 rounded border border-border-subtle"
+                                      className="h-3.5 w-3.5 rounded border border-border-subtle"
                                       aria-label="Select task"
                                     />
 
@@ -1296,13 +1355,13 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                                       type="button"
                                       onClick={() => handleToggleTask(task.id, !task.completed)}
                                       disabled={isPending || showArchived}
-                                      className={`flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-[5px] transition-colors disabled:opacity-50 md:min-h-0 md:min-w-0 ${task.completed ? "border-2 border-black bg-black" : "border-2 border-border-subtle hover:border-text-primary bg-transparent"}`}
+                                      className={`flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-[4px] transition-colors disabled:opacity-50 md:min-h-0 md:min-w-0 ${task.completed ? "border-[1.5px] border-black bg-black" : "border-[1.5px] border-border-subtle hover:border-text-primary bg-transparent"}`}
                                       aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
                                     >
-                                      <span className="flex h-[18px] w-[18px] items-center justify-center">
+                                      <span className="flex h-[16px] w-[16px] items-center justify-center">
                                         {task.completed && (
                                           <svg
-                                            className="h-3 w-3 text-white"
+                                            className="h-2.5 w-2.5 text-white"
                                             fill="none"
                                             stroke="currentColor"
                                             strokeWidth="2.2"
@@ -1315,7 +1374,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                                     </button>
 
                                     <p
-                                      className={`min-w-0 flex-1 text-[13px] font-medium ${task.completed ? "line-through text-text-muted" : "text-text-primary"} truncate`}
+                                      className={`min-w-0 flex-1 text-[12.5px] font-medium ${task.completed ? "line-through text-text-muted" : "text-text-primary"} truncate`}
                                       title={task.title}
                                     >
                                       {task.title}
@@ -1344,8 +1403,11 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                     </div>
                   </div>
                 ) : (
-                  <div className="flex min-h-[180px] items-center justify-center rounded-xl border border-dashed border-border-hairline text-sm text-text-muted">
-                    Select a subject and chapter to view details.
+                  <div className="flex min-h-[180px] flex-col items-center justify-center rounded-xl border border-dashed border-border-hairline text-center">
+                    <svg className="mb-2 h-10 w-10 text-text-muted" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                      <path d="M4 6h16M4 10h16M4 14h16M4 18h16" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <p className="text-sm text-text-secondary">Select a subject and chapter to view details.</p>
                   </div>
                 )}
               </section>
