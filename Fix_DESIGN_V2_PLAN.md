@@ -548,3 +548,12 @@ Gate F9 · G3 · PASS
 
 F10.6 · G3 · PASS
 Gate F10 · G3 · PASS
+
+- 2026-05-06 · F12.1 · DSP · PASS — Deleted dead design-tokens.ts (never imported), removed orphaned --surface-sidebar/--color-surface-sidebar defs, replaced 61 deprecated token consumers across 20 files, removed deprecated alias definitions from :root and @theme blocks. Grep confirms zero hits for deprecated token names.
+- 2026-05-06 · F12.2 · DSP · PASS — Zero dark:* Tailwind selectors. Zero data-theme="dark" blocks. Zero ThemeProvider dark branches. App strictly light-only.
+- 2026-05-06 · F12.3 · DSP · PASS — 73 aria-labels, 14 roles verified. Modals have focus traps + Escape. Sidebar has Cmd/Ctrl+B + Escape. Data table interactions labeled. Text-secondary contrast corrected (#6B7280→#596577) for WCAG AA ≥4.5:1 on canvas.
+- 2026-05-06 · F12.4 · DSP · PASS — Responsive audit: 72 min-w-0 overflow-prevention sites, consistent md:/lg: breakpoints, 44px mobile touch targets with md: reset, safe-area handling, MobileTabBar hidden ≥md, all grid/agenda toggles at lg. No horizontal scroll.
+- 2026-05-06 · F12.5 · DSP · PASS — npm run test: 200/200 (135 server + 65 DOM). npm run lint: 0 errors, 31 pre-existing warnings. npm run build: compiled successfully, 16/16 pages, TypeScript clean.
+- 2026-05-06 · Gate F12 · DSP · PASS — All 5 F12 tasks complete. Dead CSS removed, dark mode verified absent, a11y confirmed, responsive verified, audit suite green.
+
+Fix_DESIGN_V2 complete — all 62 tasks done.

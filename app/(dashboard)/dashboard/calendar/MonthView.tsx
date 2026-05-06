@@ -329,7 +329,7 @@ export function MonthView({
 
               <div
                 className="flex items-center gap-1 rounded-full px-3 py-1.5"
-                style={{ background: "var(--surface-page)", border: "1px solid var(--border-hairline)" }}
+                style={{ background: "var(--canvas)", border: "1px solid var(--border-hairline)" }}
               >
                 <Link
                   href={`/dashboard/calendar?month=${prevMonth}`}
@@ -366,7 +366,7 @@ export function MonthView({
       {/* Calendar grid */}
       <div
         className="hidden lg:flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl"
-        style={{ border: "1px solid var(--border-hairline)", background: "var(--surface-panel)" }}
+        style={{ border: "1px solid var(--border-hairline)", background: "var(--surface-card)" }}
       >
         {/* Day-of-week header */}
         <div
@@ -566,7 +566,7 @@ export function MonthView({
                   <span
                     className="flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold leading-none"
                     style={{
-                        background: day.isToday ? "var(--accent-selected-bg)" : "var(--surface-page)",
+                        background: day.isToday ? "var(--accent-selected-bg)" : "var(--canvas)",
                         color: day.isToday ? "var(--accent-selected-fg)" : day.isPast ? "var(--text-muted)" : "var(--text-primary)",
                     }}
                   >
@@ -592,7 +592,7 @@ export function MonthView({
                         onClick={() => setSelectedDay(day.dateStr)}
                         className="w-full text-left rounded-xl p-3 transition-all active:scale-[0.98]"
                         style={{
-                          background: isDone ? "var(--surface-page)" : color.bg,
+                          background: isDone ? "var(--canvas)" : color.bg,
                           opacity: isDone ? 0.55 : 1,
                         }}
                       >
@@ -701,7 +701,7 @@ export function MonthView({
                       key={task.id}
                       className="rounded-xl p-2 transition-all"
                       style={{
-                        background: isDone ? "var(--surface-page)" : "var(--surface-panel)",
+                        background: isDone ? "var(--canvas)" : "var(--surface-card)",
                         border: "1px solid var(--border-hairline)",
                         opacity: isDone ? 0.6 : 1,
                       }}

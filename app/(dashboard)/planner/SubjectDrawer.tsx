@@ -273,7 +273,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
 
       {/* Responsive panel: bottom sheet on mobile, centered modal on desktop */}
       <div
-        className={`fixed z-50 flex max-h-[85vh] flex-col overflow-hidden bg-surface-panel shadow-[--shadow-app] transition-all duration-300 ease-out
+        className={`fixed z-50 flex max-h-[85vh] flex-col overflow-hidden bg-surface-card shadow-[--shadow-app] transition-all duration-300 ease-out
           inset-x-0 bottom-0 top-auto w-full rounded-t-3xl rounded-b-none border-x-0 border-b-0 border-t border-border-hairline
           md:inset-auto md:left-1/2 md:top-1/2 md:w-[calc(100%-2rem)] md:max-w-xl md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border
           ${open ? "translate-y-0 opacity-100 pointer-events-auto md:scale-100" : "translate-y-full opacity-0 pointer-events-none md:scale-95 md:translate-y-0"}`}
@@ -357,7 +357,7 @@ export function SubjectDrawer({ open, mode, subjectId, initialSubject = null, on
           </form>
         </div>
 
-        <div className="p-6 shrink-0 border-t border-border-hairline bg-surface-panel">
+        <div className="p-6 shrink-0 border-t border-border-hairline bg-surface-card">
           {mode === "create" ? (
             <button
               form="subject-form"

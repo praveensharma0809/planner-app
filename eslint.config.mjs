@@ -18,9 +18,15 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    files: ["scripts/**/*.{js,mjs,cjs}"],
+    files: ["scripts/**/*.{js,mjs,cjs}", "run-complete-workflow.mjs", "run-workflow-direct.js", "proxy.ts"],
     rules: {
       "no-console": "off",
+    },
+  },
+  {
+    files: ["run-workflow-direct.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
     },
   },
   // Override default ignores of eslint-config-next.

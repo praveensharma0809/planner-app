@@ -88,18 +88,12 @@
   --gap-card-md: 16px;
   --gap-card-lg: 20px;
 
-  /* DEPRECATED — kept as aliases for backward compat — site-wide consumers still reference these */
-  --surface-page: var(--canvas);
-  --surface-app: var(--canvas);
-  --surface-sidebar: var(--canvas);
-  --surface-panel: var(--surface-card);
-  --surface-panel-muted: var(--surface-card-muted);
   --surface-hover: #F3F4F6;
 
   /* Text tokens */
   --text-primary: #111827;
-  --text-secondary: #6B7280;
-  --text-muted: #9CA3AF;
+  --text-secondary: #596577;
+  --text-muted: #8D95A5;
   --text-on-dark: #FFFFFF;
 
   /* Border tokens */
@@ -165,18 +159,12 @@
   --shadow-card-soft: var(--shadow-card-soft);
   --shadow-card-hover: var(--shadow-card-hover);
 
-  /* ── Design v2: Deprecated surface aliases (keep for backward compat) ── */
-  --color-surface-page: var(--surface-page);
-  --color-surface-app: var(--surface-app);
-  --color-surface-sidebar: var(--surface-sidebar);
-  --color-surface-panel: var(--surface-panel);
-  --color-surface-panel-muted: var(--surface-panel-muted);
   --color-surface-hover: var(--surface-hover);
 
   /* ── Design v2: Text tokens ── */
   --color-text-primary: #111827;
-  --color-text-secondary: #6B7280;
-  --color-text-muted: #9CA3AF;
+  --color-text-secondary: #596577;
+  --color-text-muted: #8D95A5;
   --color-text-on-dark: #FFFFFF;
 
   /* ── Design v2: Border tokens ── */
@@ -238,7 +226,7 @@
 
 /* ── Design v2: Utility shortcuts ──────────────────────────── */
 @utility panel {
-  background-color: var(--surface-panel);
+  background-color: var(--surface-card);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
@@ -1674,7 +1662,7 @@ main[data-bleed="true"] {
   height: 6px;
   border-radius: 9999px;
   overflow: hidden;
-  background: var(--surface-page);
+  background: var(--canvas);
 }
 .ui-progress-bar {
   height: 100%;
@@ -1693,7 +1681,7 @@ main[data-bleed="true"] {
 .ui-input {
   width: 100%;
   height: 40px;
-  background: var(--surface-page);
+  background: var(--canvas);
   border: 1px solid var(--border-hairline);
   border-radius: 12px;
   padding: 0 12px;
@@ -1751,7 +1739,7 @@ main[data-bleed="true"] {
 }
 .ui-tabs-list {
   display: inline-flex;
-  background: var(--surface-page);
+  background: var(--canvas);
   border-radius: 9999px;
   padding: 4px;
   gap: 2px;
@@ -1771,7 +1759,7 @@ main[data-bleed="true"] {
   .ui-tabs-trigger:hover { color: var(--text-primary); }
 }
 .ui-tabs-trigger-active {
-  background: var(--surface-panel);
+  background: var(--surface-card);
   color: var(--text-primary);
   box-shadow: var(--shadow-card);
 }
@@ -2520,7 +2508,7 @@ html {
 .dashboard-stat {
   padding: 9px 10px;
   border-radius: 12px;
-  background: var(--surface-page);
+  background: var(--canvas);
   text-align: center;
   transition: background 0.15s ease;
 }
@@ -2552,7 +2540,7 @@ html {
   gap: 12px;
   padding: 12px 14px;
   border-radius: 12px;
-  background: var(--surface-panel);
+  background: var(--surface-card);
   transition: background 0.15s ease;
 }
 

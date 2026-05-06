@@ -502,7 +502,7 @@ export default function PlanPreview({
       ? "bg-pastel-butter/60 text-pastel-butter-text border-pastel-butter-text/20"
       : session.session_type === "practice"
         ? "bg-pastel-lilac/60 text-pastel-lilac-text border-pastel-lilac-text/20"
-        : "bg-surface-panel-muted text-text-primary border-border-hairline"
+        : "bg-surface-card-muted text-text-primary border-border-hairline"
 
     if (session.is_manual) return `${base} ring-1 ring-pastel-butter-text/30`
     if (session.is_pinned) return `${base} ring-1 ring-pastel-sky-text/30`
@@ -524,7 +524,7 @@ export default function PlanPreview({
 
   return (
     <div className="flex flex-col gap-[var(--gap-card)] md:gap-[var(--gap-card-md)]">
-      <div className="rounded-2xl border border-border-hairline bg-surface-panel-muted p-3 shadow-card">
+      <div className="rounded-2xl border border-border-hairline bg-surface-card-muted p-3 shadow-card">
         <p className="text-xs uppercase tracking-widest text-text-muted font-medium">
           Preview Summary
         </p>
@@ -565,7 +565,7 @@ export default function PlanPreview({
               type="button"
               onClick={() => onReoptimize(reservedSessions)}
               disabled={isReoptimizing || reservedSessions.length === 0}
-              className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-pastel-sky-text/30 bg-pastel-sky/20 text-pastel-sky-text hover:bg-pastel-sky/30 disabled:border-border-hairline disabled:bg-surface-panel-muted disabled:text-text-muted disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0"
+              className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-pastel-sky-text/30 bg-pastel-sky/20 text-pastel-sky-text hover:bg-pastel-sky/30 disabled:border-border-hairline disabled:bg-surface-card-muted disabled:text-text-muted disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0"
             >
               {isReoptimizing ? "Rebuilding..." : "Rebuild Around Locked Sessions"}
             </button>
@@ -630,7 +630,7 @@ export default function PlanPreview({
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-3">
+          <div className="rounded-xl border border-border-hairline bg-surface-card-muted p-3">
             <p className="text-[11px] uppercase tracking-wider text-text-muted font-semibold mb-2">
               How Built
             </p>
@@ -643,7 +643,7 @@ export default function PlanPreview({
             </div>
           </div>
 
-          <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-3">
+          <div className="rounded-xl border border-border-hairline bg-surface-card-muted p-3">
             <p className="text-[11px] uppercase tracking-wider text-text-muted font-semibold mb-2">
               Warnings
             </p>
@@ -678,7 +678,7 @@ export default function PlanPreview({
             </div>
           </div>
 
-          <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-3">
+          <div className="rounded-xl border border-border-hairline bg-surface-card-muted p-3">
             <p className="text-[11px] uppercase tracking-wider text-text-muted font-semibold mb-2">
               Suggested Fixes
             </p>
@@ -705,7 +705,7 @@ export default function PlanPreview({
             </div>
           </div>
 
-          <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-3">
+          <div className="rounded-xl border border-border-hairline bg-surface-card-muted p-3">
             <p className="text-[11px] uppercase tracking-wider text-text-muted font-semibold mb-2">
               Unplaced Sessions
             </p>
@@ -782,7 +782,7 @@ export default function PlanPreview({
                             topicId: nextTopicId,
                           } : current)
                         }}
-                        className="w-full rounded-input border border-border-subtle bg-surface-page px-3 py-2 text-sm text-text-primary outline-none focus:border-border-strong"
+                        className="w-full rounded-input border border-border-subtle bg-canvas px-3 py-2 text-sm text-text-primary outline-none focus:border-border-strong"
                       >
                         {subjects.map((subject) => (
                           <option key={subject.id} value={subject.id}>{subject.name}</option>
@@ -798,7 +798,7 @@ export default function PlanPreview({
                           ...current,
                           topicId: event.target.value,
                         } : current)}
-                        className="w-full rounded-input border border-border-subtle bg-surface-page px-3 py-2 text-sm text-text-primary outline-none focus:border-border-strong"
+                        className="w-full rounded-input border border-border-subtle bg-canvas px-3 py-2 text-sm text-text-primary outline-none focus:border-border-strong"
                       >
                         <option value="">Custom session (no topic link)</option>
                         {selectedSubjectTopics.map((topic) => (
@@ -818,7 +818,7 @@ export default function PlanPreview({
                           ...current,
                           durationMinutes: Math.max(15, parseInt(event.target.value) || 15),
                         } : current)}
-                        className="w-full rounded-input border border-border-subtle bg-surface-page px-3 py-2 text-sm text-text-primary outline-none focus:border-border-strong"
+                        className="w-full rounded-input border border-border-subtle bg-canvas px-3 py-2 text-sm text-text-primary outline-none focus:border-border-strong"
                       />
                     </label>
 
@@ -834,7 +834,7 @@ export default function PlanPreview({
                           note: event.target.value,
                         } : current)}
                         placeholder={manualDraft.topicId ? "Optional label" : "Optional custom session title"}
-                        className="w-full rounded-input border border-border-subtle bg-surface-page px-3 py-2 text-sm text-text-primary outline-none focus:border-border-strong placeholder:text-text-muted"
+                        className="w-full rounded-input border border-border-subtle bg-canvas px-3 py-2 text-sm text-text-primary outline-none focus:border-border-strong placeholder:text-text-muted"
                       />
                     </label>
                   </div>
@@ -850,7 +850,7 @@ export default function PlanPreview({
                     <button
                       type="button"
                       onClick={addManualSession}
-                      className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-pastel-butter-text/30 bg-pastel-butter/40 text-pastel-butter-text hover:bg-pastel-butter/50 disabled:border-border-hairline disabled:bg-surface-panel-muted disabled:text-text-muted disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0"
+                      className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-pastel-butter-text/30 bg-pastel-butter/40 text-pastel-butter-text hover:bg-pastel-butter/50 disabled:border-border-hairline disabled:bg-surface-card-muted disabled:text-text-muted disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0"
                     >
                       Add Session
                     </button>
@@ -862,9 +862,9 @@ export default function PlanPreview({
                 {bucket.subjectBuckets.map((subject) => (
                   <div
                     key={subject.subjectId}
-                    className="rounded-2xl border border-border-hairline bg-surface-panel-muted overflow-hidden"
+                    className="rounded-2xl border border-border-hairline bg-surface-card-muted overflow-hidden"
                   >
-                    <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-border-hairline bg-surface-panel">
+                    <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-border-hairline bg-surface-card">
                       <div className="text-xs font-semibold text-text-primary truncate min-w-0">
                         {subject.subjectLabel}
                       </div>

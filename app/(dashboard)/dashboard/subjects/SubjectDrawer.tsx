@@ -155,7 +155,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
       />
 
       <div
-        className="fixed inset-x-0 bottom-0 top-auto z-10 flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-3xl rounded-b-none border-x-0 border-b-0 border-t border-border-hairline bg-surface-panel shadow-[--shadow-app] md:inset-auto md:left-1/2 md:top-1/2 md:w-[calc(100%-2rem)] md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border"
+        className="fixed inset-x-0 bottom-0 top-auto z-10 flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-3xl rounded-b-none border-x-0 border-b-0 border-t border-border-hairline bg-surface-card shadow-[--shadow-app] md:inset-auto md:left-1/2 md:top-1/2 md:w-[calc(100%-2rem)] md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border"
         role="dialog"
         aria-modal="true"
         aria-label={mode === "create" ? "Add New Subject" : "Edit Subject"}
@@ -202,7 +202,7 @@ export function SubjectDrawer({ open, mode, subjectId, onClose, onSaved }: Props
           </form>
         </div>
 
-        <div className="flex items-center gap-2 p-6 border-t border-border-hairline bg-surface-panel">
+        <div className="flex items-center gap-2 p-6 border-t border-border-hairline bg-surface-card">
           <button
             form="subject-form"
             type="submit"

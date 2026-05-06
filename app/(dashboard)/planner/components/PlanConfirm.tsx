@@ -179,7 +179,7 @@ export default function PlanConfirm({
                 type="button"
                 onClick={() => setKeepMode(opt.value)}
                 className={`w-full text-left px-4 py-3 rounded-2xl border transition-all duration-200 ${
-                  isSelected ? colors[opt.tone] : `bg-surface-panel-muted ${inactiveColors[opt.tone]} text-text-muted`
+                  isSelected ? colors[opt.tone] : `bg-surface-card-muted ${inactiveColors[opt.tone]} text-text-muted`
                 }`}
               >
                 <div className={`text-sm font-semibold mb-0.5 ${isSelected ? "" : "text-text-primary"}`}>{opt.label}</div>
@@ -207,7 +207,7 @@ export default function PlanConfirm({
       </div>
 
       {/* What happens note */}
-      <div className="bg-surface-panel-muted border border-border-hairline rounded-2xl p-3 space-y-1 text-[11px] text-text-muted">
+      <div className="bg-surface-card-muted border border-border-hairline rounded-2xl p-3 space-y-1 text-[11px] text-text-muted">
         <div className="font-medium text-text-secondary mb-1.5">After committing:</div>
         <div>- Manually created tasks are always preserved.</div>
         <div>- A snapshot of this plan is saved for history.</div>

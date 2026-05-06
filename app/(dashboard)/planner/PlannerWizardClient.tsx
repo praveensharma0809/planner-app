@@ -784,7 +784,7 @@ export default function PlannerWizardClient({
               onSelectedTaskIdsChange={setSelectedIntakeTaskIds}
             />
 
-            <div className="rounded-2xl border border-border-hairline bg-surface-panel-muted p-3 sm:p-4">
+            <div className="rounded-2xl border border-border-hairline bg-surface-card-muted p-3 sm:p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs sm:text-sm text-text-secondary">
                   Continue when your structure includes at least one subject and one chapter.
@@ -818,7 +818,7 @@ export default function PlannerWizardClient({
                 isReoptimizing={isReoptimizing}
               />
             ) : (
-              <div className="rounded-2xl border border-border-hairline bg-surface-panel-muted p-6 text-center">
+              <div className="rounded-2xl border border-border-hairline bg-surface-card-muted p-6 text-center">
                 <p className="text-base font-semibold text-text-primary">
                   Generate the plan first
                 </p>
@@ -868,7 +868,7 @@ export default function PlannerWizardClient({
                 />
               </div>
             ) : (
-              <div className="rounded-2xl border border-border-hairline bg-surface-panel-muted p-6 text-center">
+              <div className="rounded-2xl border border-border-hairline bg-surface-card-muted p-6 text-center">
                 <p className="text-base font-semibold text-text-primary">
                   Preview required before commit
                 </p>
@@ -884,7 +884,7 @@ export default function PlannerWizardClient({
             )}
           </div>
         ) : (
-          <div className="mt-4 rounded-2xl border border-border-hairline bg-surface-panel-muted p-6 text-center">
+          <div className="mt-4 rounded-2xl border border-border-hairline bg-surface-card-muted p-6 text-center">
             <p className="text-[10px] uppercase tracking-widest text-text-muted">
               Phase {phase}
             </p>
@@ -905,7 +905,7 @@ export default function PlannerWizardClient({
       </div>
 
       {/* Mobile sticky bottom action bar */}
-      <div className="md:hidden fixed bottom-0 inset-x-0 bg-surface-panel px-4 py-3 border-t border-border-hairline z-10 flex items-center gap-3">
+      <div className="md:hidden fixed bottom-0 inset-x-0 bg-surface-card px-4 py-3 border-t border-border-hairline z-10 flex items-center gap-3">
         <Button
           variant="secondary"
           size="md"

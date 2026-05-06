@@ -186,7 +186,7 @@ export function QuickAddButton({ onClick }: QuickAddButtonProps) {
       onClick={onClick}
       className="flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-full transition hover:bg-[--surface-hover] md:h-8 md:min-h-8 md:min-w-8 md:w-8"
       style={{
-        background: "var(--surface-page)",
+        background: "var(--canvas)",
         border: "1px solid var(--border-subtle)",
         color: "var(--text-secondary)",
       }}

@@ -9,7 +9,7 @@
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden surface-card">
         <div className="grid grid-cols-7 border-b border-border-hairline">
           {Array.from({ length: 7 }).map((_, index) => (
-            <div key={index} className="h-11 border-r border-border-hairline bg-surface-page" />
+            <div key={index} className="h-11 border-r border-border-hairline bg-canvas" />
           ))}
         </div>
 

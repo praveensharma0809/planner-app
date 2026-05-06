@@ -97,7 +97,7 @@ export function TaskComposerModal({
               />
 
               {bulkPreview.length > 0 && (
-                <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-2.5">
+                <div className="rounded-xl border border-border-hairline bg-surface-card-muted p-2.5">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                     Preview
                   </p>

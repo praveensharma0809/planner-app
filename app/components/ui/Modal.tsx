@@ -116,7 +116,7 @@ export function Modal({
           md:inset-auto md:left-1/2 md:top-1/2 md:w-[calc(100%-2rem)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[28px]
           ${sizeClass[size]}`}
         style={{
-          background: "var(--surface-panel)",
+          background: "var(--surface-card)",
           boxShadow: "var(--shadow-app)",
         }}
       >

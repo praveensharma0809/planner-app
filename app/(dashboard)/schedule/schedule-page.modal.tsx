@@ -102,7 +102,7 @@ export function AddEventModal({
       />
 
       <div
-        className="fixed bottom-0 left-0 right-0 top-auto z-10 max-h-[85vh] w-full overflow-y-auto rounded-t-3xl rounded-b-none border border-border-hairline border-b-0 bg-surface-panel p-5 shadow-[var(--shadow-app)] md:left-1/2 md:top-1/2 md:max-h-[90vh] md:w-[calc(100%-2rem)] md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border-b"
+        className="fixed bottom-0 left-0 right-0 top-auto z-10 max-h-[85vh] w-full overflow-y-auto rounded-t-3xl rounded-b-none border border-border-hairline border-b-0 bg-surface-card p-5 shadow-[var(--shadow-app)] md:left-1/2 md:top-1/2 md:max-h-[90vh] md:w-[calc(100%-2rem)] md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border-b"
       >
         <h2 className="mb-4 text-lg font-semibold text-text-primary">
           {initialEvent ? "Edit Event" : "Add Event"}

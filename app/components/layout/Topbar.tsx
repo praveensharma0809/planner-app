@@ -320,7 +320,7 @@ function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
       {/* Navigation — segmented pill */}
       <div
         className="flex shrink-0 items-center gap-0.5 rounded-full p-1"
-        style={{ background: "var(--surface-page)" }}
+        style={{ background: "var(--canvas)" }}
         aria-label="Week and month navigation"
       >
         <NavPill onClick={state.onPrevMonth} aria-label="Previous month">Month-</NavPill>
@@ -353,7 +353,7 @@ function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
         <select
           value={state.statusFilter}
           onChange={(event) => state.onStatusFilterChange(event.target.value as ScheduleTopbarState["statusFilter"])}
-          className="min-h-[44px] cursor-pointer rounded-full border border-border-subtle bg-surface-panel px-3 text-xs font-medium text-text-secondary outline-none transition hover:border-border-strong md:h-7 md:min-h-7 md:text-[10px]"
+          className="min-h-[44px] cursor-pointer rounded-full border border-border-subtle bg-surface-card px-3 text-xs font-medium text-text-secondary outline-none transition hover:border-border-strong md:h-7 md:min-h-7 md:text-[10px]"
           aria-label="Filter by completion status"
         >
           <option value="all">All statuses</option>
@@ -365,7 +365,7 @@ function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
           type="button"
           onClick={state.onImportPlanner}
           disabled={state.isImportingPlanner}
-          className="min-h-[44px] rounded-full border border-border-subtle bg-surface-panel px-3 text-xs font-medium text-text-secondary transition hover:bg-surface-hover disabled:opacity-50 md:h-7 md:min-h-7 md:text-[10px]"
+          className="min-h-[44px] rounded-full border border-border-subtle bg-surface-card px-3 text-xs font-medium text-text-secondary transition hover:bg-surface-hover disabled:opacity-50 md:h-7 md:min-h-7 md:text-[10px]"
         >
           {state.isImportingPlanner ? "Syncing" : "Import"}
         </button>

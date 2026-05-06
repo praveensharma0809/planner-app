@@ -120,7 +120,7 @@ export function Step2ConstraintsSection({
                 </p>
               )}
 
-              <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-2.5">
+              <div className="rounded-xl border border-border-hairline bg-surface-card-muted p-2.5">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                   Set Particular Day Capacity
                 </p>
@@ -146,7 +146,7 @@ export function Step2ConstraintsSection({
                 </div>
               </div>
 
-              <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-2.5">
+              <div className="rounded-xl border border-border-hairline bg-surface-card-muted p-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                     Calendar (Custom Capacity)
@@ -207,7 +207,7 @@ export function Step2ConstraintsSection({
                                 ? "border-pastel-sky-text/40 bg-pastel-sky/30 text-pastel-sky-text"
                                 : hasCustom
                                   ? "border-pastel-sky-text/25 bg-pastel-sky/15 text-text-secondary"
-                                  : "border-border-hairline bg-surface-panel text-text-secondary hover:bg-surface-hover"
+                                  : "border-border-hairline bg-surface-card text-text-secondary hover:bg-surface-hover"
                             }`}
                             title={[
                               hasCustom ? `${constraintsDraft.custom_day_capacity[isoDate]} min capacity` : "No custom capacity",
@@ -266,7 +266,7 @@ export function Step2ConstraintsSection({
                       customCapacityEntries.map(([date, minutes]) => (
                         <div
                           key={date}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-border-hairline bg-surface-panel px-2 py-1"
+                          className="flex items-center justify-between gap-2 rounded-lg border border-border-hairline bg-surface-card px-2 py-1"
                         >
                           <p className="text-xs text-text-secondary">
                             {date} - {minutes} min
@@ -321,7 +321,7 @@ export function Step2ConstraintsSection({
                 />
               </div>
 
-              <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-3">
+              <div className="rounded-xl border border-border-hairline bg-surface-card-muted p-3">
                 <p className="text-[11px] text-text-muted">
                   Save Step-2 constraints before generating Phase-2 preview.
                 </p>

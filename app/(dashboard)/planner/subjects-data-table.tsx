@@ -2186,7 +2186,7 @@ export function SubjectsDataTable({
 
       <div className="px-0.5 sm:px-0">
         {displaySubjects.length === 0 && (
-          <div className="mb-3 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border-hairline bg-surface-panel-muted px-6 py-10 text-center">
+          <div className="mb-3 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border-hairline bg-surface-card-muted px-6 py-10 text-center">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[--accent-selected-bg]">
               <svg className="h-5 w-5 text-[--accent-selected-fg]" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                 <path d="M12 4v16m-8-8h16" strokeLinecap="round" strokeLinejoin="round" />
@@ -2210,7 +2210,7 @@ export function SubjectsDataTable({
 
           {/* Mobile pane tabs */}
           <div className="mb-3 md:hidden">
-            <div className="flex rounded-full bg-surface-page p-1 gap-1">
+            <div className="flex rounded-full bg-canvas p-1 gap-1">
               {(["subjects", "chapters", "tasks"] as const).map((pane) => (
                 <button
                   key={pane}
@@ -2419,7 +2419,7 @@ export function SubjectsDataTable({
                     </div>
 
                     {isManageOpen ? (
-                      <section className="mt-2 h-[64px] rounded-xl border border-border-hairline bg-surface-panel-muted p-2 flex flex-col overflow-hidden">
+                      <section className="mt-2 h-[64px] rounded-xl border border-border-hairline bg-surface-card-muted p-2 flex flex-col overflow-hidden">
                         <div className="min-h-0 flex flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap">
                           <Button
                             variant="ghost"

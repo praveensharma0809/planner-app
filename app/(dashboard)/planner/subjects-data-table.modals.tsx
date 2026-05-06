@@ -204,7 +204,7 @@ export function ArchivedChaptersModal({
               return (
                 <div
                   key={chapter.id}
-                  className="rounded-xl border border-border-hairline bg-surface-panel-muted p-2"
+                  className="rounded-xl border border-border-hairline bg-surface-card-muted p-2"
                 >
                   <div className="flex items-center gap-2">
                     <p
@@ -419,7 +419,7 @@ export function TaskComposerModal({
             </div>
 
             {bulkPreview.length > 0 && (
-              <div className="rounded-xl border border-border-hairline bg-surface-panel-muted p-2.5">
+              <div className="rounded-xl border border-border-hairline bg-surface-card-muted p-2.5">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                   Preview
                 </p>

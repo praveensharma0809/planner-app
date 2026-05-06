@@ -45,7 +45,7 @@ export function Tabs({ tabs, defaultTab, className = "", onTabChange }: TabsProp
     <div className={`ui-tabs-root ${className}`}>
       <div className="ui-tabs-list relative" role="tablist" ref={listRef}>
         <div
-          className="absolute top-1 bottom-1 rounded-full bg-surface-panel shadow-[var(--shadow-card)] transition-all duration-200 ease-out"
+          className="absolute top-1 bottom-1 rounded-full bg-surface-card shadow-[var(--shadow-card)] transition-all duration-200 ease-out"
           style={{ left: `${indicatorStyle.left}px`, width: `${indicatorStyle.width}px` }}
         />
         {tabs.map((tab) => (

@@ -1065,7 +1065,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
         className="flex min-h-0 flex-1 flex-col overflow-hidden surface-card p-3 sm:p-4"
       >
         {displaySubjects.length === 0 && (
-          <div className="mb-3 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border-hairline bg-surface-panel-muted px-6 py-10 text-center">
+          <div className="mb-3 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border-hairline bg-surface-card-muted px-6 py-10 text-center">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[--accent-selected-bg]">
               <svg className="h-5 w-5 text-[--accent-selected-fg]" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                 <path d="M12 4v16m-8-8h16" strokeLinecap="round" strokeLinejoin="round" />
@@ -1089,7 +1089,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
           {/* Mobile pane tabs */}
           <div className="mb-3 md:hidden">
-            <div className="flex rounded-full bg-surface-page p-1 gap-1">
+            <div className="flex rounded-full bg-canvas p-1 gap-1">
               {(["subjects", "chapters", "tasks"] as const).map((pane) => (
                 <button
                   key={pane}
@@ -1253,7 +1253,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                     </div>
 
                     {manageMode && (
-                      <section className="mt-2 rounded-xl border border-border-hairline bg-surface-panel-muted p-2.5">
+                      <section className="mt-2 rounded-xl border border-border-hairline bg-surface-card-muted p-2.5">
                         <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-xs font-semibold text-text-secondary">
                               {selectedTaskIds.size} selected
