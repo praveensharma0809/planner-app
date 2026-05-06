@@ -741,7 +741,7 @@ summary:focus-visible,
   --sidebar-width:           240px;
   --sidebar-collapsed-width: 64px;
   --sidebar-current-width:   240px;
-  --topbar-height:           64px;
+  --topbar-height:           56px;
 
   /* ── Primary palette (light) ── */
   --sh-primary:        #6C5CE7;
@@ -1002,12 +1002,12 @@ summary:focus-visible,
 }
 
 .topbar-root-schedule {
-  height: 92px;
-  display: grid;
-  grid-template-rows: 34px 36px;
+  min-height: var(--topbar-height);
+  display: flex;
+  flex-direction: column;
   align-items: stretch;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: 4px;
+  padding: 4px 14px;
 }
 
 .schedule-topbar-head-row {
@@ -1026,7 +1026,7 @@ summary:focus-visible,
 }
 
 .schedule-topbar-title {
-  font-size: 19px;
+  font-size: 15px;
   font-weight: 700;
   min-width: 0;
   text-overflow: ellipsis;
@@ -1050,7 +1050,7 @@ summary:focus-visible,
   height: 100%;
   display: flex;
   align-items: center;
-  padding: 4px 8px;
+  padding: 2px 6px;
 }
 
 .schedule-topbar-section-nav {
@@ -1114,14 +1114,14 @@ summary:focus-visible,
 .schedule-topbar-btn,
 .schedule-topbar-select,
 .schedule-topbar-chip {
-  height: 29px;
+  height: 24px;
   border-radius: 999px;
   border: 1px solid var(--sh-border);
   color: var(--sh-text-secondary);
   background: color-mix(in srgb, var(--sh-card) 92%, var(--foreground) 8%);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  padding: 0 9px;
+  padding: 0 8px;
   line-height: 1;
   white-space: nowrap;
   transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
@@ -1176,6 +1176,16 @@ summary:focus-visible,
   gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
+  flex-shrink: 1;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 480px) {
+  .planner-topbar-phase-nav {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
 }
 
 .planner-topbar-phase-nav::-webkit-scrollbar {
@@ -1183,14 +1193,14 @@ summary:focus-visible,
 }
 
 .planner-topbar-phase-btn {
-  height: 28px;
+  height: 26px;
   border-radius: 999px;
   border: 1px solid var(--sh-border);
   background: transparent;
   color: var(--sh-text-muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  padding: 0 10px;
+  padding: 0 8px;
   white-space: nowrap;
   transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
 }
@@ -1215,13 +1225,13 @@ summary:focus-visible,
 }
 
 .planner-topbar-reset-btn {
-  height: 28px;
+  height: 26px;
   border-radius: 999px;
   border: 1px solid var(--sh-border);
   color: var(--sh-text-secondary);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  padding: 0 11px;
+  padding: 0 9px;
   transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
 }
 
@@ -1249,16 +1259,146 @@ summary:focus-visible,
   background-color: var(--nav-item-hover-bg);
 }
 
+/* ── Breadcrumb (F11.1) ───────────────────────────────────── */
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.2;
+  margin-bottom: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.topbar-breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.topbar-breadcrumb-item:not(:last-child) {
+  flex-shrink: 1;
+  overflow: hidden;
+}
+
+.topbar-breadcrumb-link {
+  color: var(--sh-text-secondary);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+  display: block;
+  max-width: 100%;
+}
+
+.topbar-breadcrumb-link:hover {
+  color: var(--sh-text-primary);
+}
+
+.topbar-breadcrumb-current {
+  color: var(--sh-text-secondary);
+}
+
+.topbar-breadcrumb-last {
+  color: var(--sh-text-primary);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.topbar-breadcrumb-sep {
+  color: var(--sh-text-muted);
+  flex-shrink: 0;
+}
+
+@media (max-width: 767px) {
+  .topbar-breadcrumb {
+    font-size: 11px;
+    gap: 3px;
+  }
+
+  .topbar-breadcrumb-item {
+    gap: 3px;
+  }
+}
+
+@media (max-width: 400px) {
+  .topbar-breadcrumb {
+    font-size: 10px;
+    gap: 2px;
+  }
+
+  .topbar-breadcrumb-item {
+    gap: 2px;
+  }
+}
+
+/* ── New Plan button (F11.2) ──────────────────────────────── */
+.topbar-new-plan-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 14px;
+}
+
+@media (min-width: 768px) {
+  .topbar-new-plan-btn {
+    min-height: 0;
+    height: 32px;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 639px) {
+  .topbar-new-plan-btn {
+    min-height: 0;
+    height: 32px;
+    padding: 0 10px;
+  }
+}
+
+/* ── New Plan FAB at <sm (F11.2) ─────────────────────────── */
+.topbar-fab-wrapper {
+  position: fixed;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  right: 16px;
+  z-index: 50;
+}
+
+@media (min-width: 640px) {
+  .topbar-fab-wrapper {
+    display: none;
+  }
+}
+
+.topbar-fab-wrapper .topbar-new-plan-btn {
+  min-height: 48px;
+  min-width: 48px;
+  height: 48px;
+  width: 48px;
+  padding: 0;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
 @media (max-width: 900px) {
   .topbar-root-schedule {
-    height: 96px;
-    padding: 8px 10px;
-    grid-template-rows: 32px 40px;
-    gap: 6px;
+    min-height: var(--topbar-height);
+    padding: 4px 10px;
+    gap: 4px;
   }
 
   .schedule-topbar-title {
-    font-size: 16px;
+    font-size: 14px;
   }
 
   .schedule-topbar-controls {
@@ -1298,9 +1438,9 @@ summary:focus-visible,
   .schedule-topbar-btn,
   .schedule-topbar-select,
   .schedule-topbar-chip {
-    padding: 0 9px;
-    font-size: 10.5px;
-    height: 28px;
+    padding: 0 8px;
+    font-size: 10px;
+    height: 24px;
   }
 
   .schedule-topbar-group-nav {
@@ -1308,13 +1448,13 @@ summary:focus-visible,
   }
 
   .planner-topbar-phase-btn {
-    padding: 0 9px;
-    font-size: 10px;
+    padding: 0 7px;
+    font-size: 9px;
   }
 
   .planner-topbar-reset-btn {
-    padding: 0 9px;
-    font-size: 10px;
+    padding: 0 7px;
+    font-size: 9px;
   }
 }
 
@@ -1334,9 +1474,9 @@ summary:focus-visible,
   /* Planner wizard phase pills and Reset button in topbar */
   .planner-topbar-phase-btn,
   .planner-topbar-reset-btn {
-    min-height: 44px;
-    padding-left: 14px;
-    padding-right: 14px;
+    min-height: 36px;
+    padding-left: 10px;
+    padding-right: 10px;
   }
 
   /* Sidebar collapse toggle (also applies to iPad portrait via touch) */

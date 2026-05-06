@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import {
@@ -45,6 +45,25 @@ function MenuIcon() {
   )
 }
 
+function PlusIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  )
+}
+
 // ─── Page title resolver ──────────────────────────────────────
 
 const ROUTE_TITLES: Array<{ pattern: RegExp; title: string; breadcrumb?: Array<{ label: string; href?: string }> }> = [
@@ -85,6 +104,7 @@ export function Topbar() {
     createDefaultWizardProgress()
   )
   const [isMounted, setIsMounted] = useState(false)
+  const [isMobileFab, setIsMobileFab] = useState(false)
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -95,6 +115,13 @@ export function Topbar() {
     return () => {
       cancelAnimationFrame(frame)
     }
+  }, [])
+
+  useEffect(() => {
+    const check = () => setIsMobileFab(window.innerWidth < 640)
+    check()
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
   }, [])
 
   useEffect(() => {
@@ -124,165 +151,172 @@ export function Topbar() {
     window.dispatchEvent(new CustomEvent(PLANNER_WIZARD_RESET_EVENT))
   }
 
+  const newPlanButton = (
+    <Link
+      href="/planner"
+      className="topbar-new-plan-btn"
+      style={{ background: "#1A1612", color: "#FFFFFF" }}
+      aria-label="Create new plan"
+    >
+      <PlusIcon />
+      <span className="hidden sm:inline md:hidden">New</span>
+      <span className="hidden md:inline">+ New Plan</span>
+    </Link>
+  )
+
   if (showScheduleControls && !isPlannerRoute) {
     return (
-      <header
-        className="topbar-root"
-        role="banner"
-        style={{ height: "auto", minHeight: "64px", padding: "10px 16px", gap: "8px", flexDirection: "column" }}
-      >
-        <div className="flex w-full items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <button
-              onClick={toggleMobile}
-              className="topbar-icon-btn lg:hidden"
-              aria-label="Open navigation menu"
-            >
-              <MenuIcon />
-            </button>
+      <>
+        <header
+          className="topbar-root topbar-root-schedule"
+          role="banner"
+        >
+          <div className="schedule-topbar-head-row">
+            <div className="schedule-topbar-head-left">
+              <button
+                onClick={toggleMobile}
+                className="topbar-icon-btn lg:hidden"
+                aria-label="Open navigation menu"
+              >
+                <MenuIcon />
+              </button>
 
-            <div className="min-w-0">
-              {breadcrumb.length > 0 && (
-                <nav className="flex items-center gap-1.5 text-xs text-text-secondary mb-0.5" aria-label="Breadcrumb">
-                  {breadcrumb.map((item, i) => (
-                    <span key={i} className="flex items-center gap-1.5">
-                      {i > 0 && <span className="text-text-muted" aria-hidden="true">/</span>}
-                      {item.href ? (
-                        <Link href={item.href} className="hover:text-text-primary transition-colors">{item.label}</Link>
-                      ) : (
-                        <span className="text-text-primary">{item.label}</span>
-                      )}
-                    </span>
-                  ))}
-                </nav>
-              )}
-              <h1 className="text-base font-semibold text-text-primary truncate" title={scheduleTopbar.weekRangeTitle}>
-                {scheduleTopbar.weekRangeTitle}
-              </h1>
+              <div className="min-w-0">
+                {breadcrumb.length > 0 && (
+                  <BreadcrumbNav breadcrumb={breadcrumb} />
+                )}
+                <h1 className="schedule-topbar-title" title={scheduleTopbar.weekRangeTitle}>
+                  {scheduleTopbar.weekRangeTitle}
+                </h1>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 shrink-0">
+              {!isPlannerRoute && !isMobileFab && newPlanButton}
+              <FlowTutorialButton
+                title="Schedule & Calendar Tutorial"
+                flowLabel="Schedule & Calendar Flow"
+                slides={SCHEDULE_CALENDAR_FLOW_SLIDES}
+                buttonVariant="ghost"
+                buttonSize="sm"
+              />
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 shrink-0">
-            {!pathname.startsWith("/planner") && (
-              <Link
-                href="/planner"
-                className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] md:min-h-0 md:h-9 px-4 text-xs font-semibold transition-all duration-150"
-                style={{ background: "#1A1612", color: "#FFFFFF" }}
-              >
-                + New Plan
-              </Link>
-            )}
-            <FlowTutorialButton
-              title="Schedule & Calendar Tutorial"
-              flowLabel="Schedule & Calendar Flow"
-              slides={SCHEDULE_CALENDAR_FLOW_SLIDES}
-              buttonVariant="ghost"
-              buttonSize="sm"
-            />
-          </div>
-        </div>
-
-        <ScheduleTopbarControls state={scheduleTopbar} />
-      </header>
+          <ScheduleTopbarControls state={scheduleTopbar} />
+        </header>
+        {isMobileFab && !isPlannerRoute && (
+          <div className="topbar-fab-wrapper">{newPlanButton}</div>
+        )}
+      </>
     )
   }
 
   return (
-    <header className="topbar-root" role="banner">
-      {/* Mobile hamburger */}
-      <button
-        onClick={toggleMobile}
-        className="topbar-icon-btn lg:hidden"
-        aria-label="Open navigation menu"
-      >
-        <MenuIcon />
-      </button>
+    <>
+      <header className="topbar-root" role="banner">
+        <button
+          onClick={toggleMobile}
+          className="topbar-icon-btn lg:hidden"
+          aria-label="Open navigation menu"
+        >
+          <MenuIcon />
+        </button>
 
-      {/* Breadcrumb + planner phase nav */}
-      <div className={`flex-1 min-w-0 ${isPlannerRoute ? "flex items-center gap-3" : ""}`}>
-        <div className="min-w-0">
-          {!isPlannerRoute && breadcrumb.length > 0 && (
-            <nav className="flex items-center gap-1.5 text-xs text-[--text-secondary]" aria-label="Breadcrumb">
-              {breadcrumb.map((item, i) => (
-                <span key={i} className="flex items-center gap-1.5">
-                  {i > 0 && <span className="text-[--text-muted]" aria-hidden="true">/</span>}
-                  {item.href ? (
-                    <Link href={item.href} className="hover:text-[--text-primary] transition-colors">{item.label}</Link>
-                  ) : (
-                    <span className="text-[--text-primary]">{item.label}</span>
-                  )}
-                </span>
-              ))}
+        <div className={`flex-1 min-w-0 ${isPlannerRoute ? "flex items-center gap-3" : ""}`}>
+          <div className="min-w-0">
+            {!isPlannerRoute && breadcrumb.length > 0 && (
+              <BreadcrumbNav breadcrumb={breadcrumb} />
+            )}
+
+            {isPlannerRoute && (
+              <h1 className="text-base font-semibold text-[--text-primary] truncate">Planner</h1>
+            )}
+          </div>
+
+          {isPlannerRoute && isMounted && (
+            <nav className="planner-topbar-phase-nav" aria-label="Planner phases">
+              {PLANNER_PHASES.map((phase) => {
+                const isActive = phase.id === plannerProgress.phase
+                const isReachable = phase.id <= plannerProgress.maxPhase
+
+                return (
+                  <button
+                    key={phase.id}
+                    type="button"
+                    onClick={() => isReachable && handlePlannerPhaseSelect(phase.id)}
+                    disabled={!isReachable}
+                    className={`planner-topbar-phase-btn ${isActive ? "planner-topbar-phase-btn-active" : ""}`}
+                    aria-current={isActive ? "step" : undefined}
+                    title={phase.title}
+                  >
+                    <span className="font-bold mr-1">{phase.id}</span>
+                    {phase.shortLabel}
+                  </button>
+                )
+              })}
             </nav>
-          )}
-
-          {isPlannerRoute && (
-            <h1 className="text-base font-semibold text-[--text-primary] truncate">Planner</h1>
           )}
         </div>
 
         {isPlannerRoute && isMounted && (
-          <nav className="planner-topbar-phase-nav" aria-label="Planner phases" style={{ marginLeft: 0, flex: "none" }}>
-            {PLANNER_PHASES.map((phase) => {
-              const isActive = phase.id === plannerProgress.phase
-              const isReachable = phase.id <= plannerProgress.maxPhase
-
-              return (
-                <button
-                  key={phase.id}
-                  type="button"
-                  onClick={() => isReachable && handlePlannerPhaseSelect(phase.id)}
-                  disabled={!isReachable}
-                  className={`planner-topbar-phase-btn ${isActive ? "planner-topbar-phase-btn-active" : ""}`}
-                  aria-current={isActive ? "step" : undefined}
-                  title={phase.title}
-                >
-                  <span className="font-bold mr-1">{phase.id}</span>
-                  {phase.shortLabel}
-                </button>
-              )
-            })}
-          </nav>
+          <button
+            onClick={handlePlannerResetRequest}
+            className="planner-topbar-reset-btn"
+            type="button"
+          >
+            Reset
+          </button>
         )}
-      </div>
 
-      {isPlannerRoute && isMounted && (
-        <button
-          onClick={handlePlannerResetRequest}
-          className="planner-topbar-reset-btn"
-          type="button"
-        >
-          Reset
-        </button>
-      )}
+        {isPlannerRoute && (
+          <FlowTutorialButton
+            title="Planner Tutorial"
+            flowLabel="Planner Flow"
+            slides={PLANNER_FLOW_SLIDES}
+            buttonVariant="ghost"
+            buttonSize="sm"
+          />
+        )}
 
-      {isPlannerRoute && (
-        <FlowTutorialButton
-          title="Planner Tutorial"
-          flowLabel="Planner Flow"
-          slides={PLANNER_FLOW_SLIDES}
-          buttonVariant="ghost"
-          buttonSize="sm"
-        />
+        {!isPlannerRoute && !isMobileFab && newPlanButton}
+      </header>
+      {isMobileFab && !isPlannerRoute && (
+        <div className="topbar-fab-wrapper">{newPlanButton}</div>
       )}
+    </>
+  )
+}
 
-      {/* New Plan CTA — shown on all non-planner routes */}
-      {!isPlannerRoute && (
-        <Link
-          href="/planner"
-          className="inline-flex items-center justify-center gap-1.5 rounded-full min-h-[44px] md:min-h-0 md:h-9 px-4 text-xs font-semibold transition-all duration-150 flex-shrink-0"
-          style={{ background: "#1A1612", color: "#FFFFFF" }}
-        >
-          + New Plan
-        </Link>
-      )}
-    </header>
+function BreadcrumbNav({ breadcrumb }: { breadcrumb: Array<{ label: string; href?: string }> }) {
+  const lastIdx = breadcrumb.length - 1
+
+  return (
+    <nav className="topbar-breadcrumb" aria-label="Breadcrumb">
+      {breadcrumb.map((item, i) => {
+        const isLast = i === lastIdx
+        return (
+          <span key={i} className="topbar-breadcrumb-item">
+            {i > 0 && <span className="topbar-breadcrumb-sep" aria-hidden="true">/</span>}
+            {item.href ? (
+              <Link href={item.href} className="topbar-breadcrumb-link">
+                {item.label}
+              </Link>
+            ) : (
+              <span className={`topbar-breadcrumb-current${isLast ? " topbar-breadcrumb-last" : ""}`}>
+                {item.label}
+              </span>
+            )}
+          </span>
+        )
+      })}
+    </nav>
   )
 }
 
 function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
   return (
-    <div className="flex min-h-0 items-center gap-2 px-2 py-1.5 pr-4" aria-label="Schedule controls">
+    <div className="flex min-h-0 items-center gap-2 px-2 py-0.5 pr-4" aria-label="Schedule controls">
       {/* Navigation — segmented pill */}
       <div
         className="flex shrink-0 items-center gap-0.5 rounded-full p-1"
@@ -319,7 +353,7 @@ function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
         <select
           value={state.statusFilter}
           onChange={(event) => state.onStatusFilterChange(event.target.value as ScheduleTopbarState["statusFilter"])}
-          className="min-h-[44px] cursor-pointer rounded-full border border-border-subtle bg-surface-panel px-3 text-xs font-medium text-text-secondary outline-none transition hover:border-border-strong md:h-8 md:min-h-8 md:text-[11px]"
+          className="min-h-[44px] cursor-pointer rounded-full border border-border-subtle bg-surface-panel px-3 text-xs font-medium text-text-secondary outline-none transition hover:border-border-strong md:h-7 md:min-h-7 md:text-[10px]"
           aria-label="Filter by completion status"
         >
           <option value="all">All statuses</option>
@@ -331,7 +365,7 @@ function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
           type="button"
           onClick={state.onImportPlanner}
           disabled={state.isImportingPlanner}
-          className="min-h-[44px] rounded-full border border-border-subtle bg-surface-panel px-3 text-xs font-medium text-text-secondary transition hover:bg-surface-hover disabled:opacity-50 md:h-8 md:min-h-8 md:text-[11px]"
+          className="min-h-[44px] rounded-full border border-border-subtle bg-surface-panel px-3 text-xs font-medium text-text-secondary transition hover:bg-surface-hover disabled:opacity-50 md:h-7 md:min-h-7 md:text-[10px]"
         >
           {state.isImportingPlanner ? "Syncing" : "Import"}
         </button>
@@ -339,7 +373,7 @@ function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
         <button
           type="button"
           onClick={state.onAddEvent}
-          className="min-h-[44px] rounded-full bg-black px-4 text-xs font-semibold text-white transition hover:bg-[--action-primary-bg-hover] md:h-8 md:min-h-8 md:text-[11px]"
+          className="min-h-[44px] rounded-full bg-black px-3 text-xs font-semibold text-white transition hover:bg-[--action-primary-bg-hover] md:h-7 md:min-h-7 md:text-[10px]"
         >
           + Add Event
         </button>
@@ -354,7 +388,7 @@ function NavPill({ children, onClick, disabled, ...rest }: React.ButtonHTMLAttri
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="relative z-10 min-h-[44px] rounded-full px-3 text-xs font-medium text-text-secondary transition hover:text-text-primary disabled:opacity-40 md:min-h-0 md:py-1 md:text-[11px]"
+      className="relative z-10 min-h-[44px] rounded-full px-2.5 text-[10px] font-medium text-text-secondary transition hover:text-text-primary disabled:opacity-40 md:min-h-0 md:py-0.5 md:text-[10px]"
       {...rest}
     >
       {children}
