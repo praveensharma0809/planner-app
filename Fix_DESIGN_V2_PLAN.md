@@ -535,8 +535,11 @@ Defer until F11 signed off. After 1 cycle of stable usage, drop the deprecated t
 - OpenCode model share: ≥75% (target was 80%; tradeoff explained §5).
 - Validation: 11 gates, each with explicit pass criteria.
 
-F8.5 � G3 � PASS
-Gate F8 � G3 � PASS
+F8.5 · G3 · PASS
+Gate F8 · G3 · PASS
 
-F9.6 � G3 � PASS
-Gate F9 � G3 � PASS
+F9.6 · G3 · PASS
+Gate F9 · G3 · PASS
+
+F10.6 · G3 · PASS
+Gate F10 · G3 · PASS
