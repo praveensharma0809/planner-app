@@ -8,33 +8,31 @@
 
 /*
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  F1.5 — WCAG AA Contrast Ratio Audit (Design V2 warm-cream palette)         ║
-║  Reference: WCAG 2.1 AA = 4.5:1 for normal text, 3:1 for large text         ║
-║  Card bg: #FFFFFF (L=1.000)    Canvas bg: #F4F1EA (L=0.881)                 ║
+║  F1.5+ R3 — WCAG AA Contrast Ratio Audit (Design V2 warm-cream palette)    ║
+║  Reference: WCAG 2.1 AA = 4.5:1 for normal text, 3:1 for large text        ║
+║  Card bg: #FFFFFF (L=1.000)    Canvas bg: #F4F1EA (L=0.8815)              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
-║  Pair            FG        BG        FG/BG(self)  FG/White  FG/Cream  Note  ║
+║  Pair               FG        BG        FG/Card   FG/Cream  Note            ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
-║  chip-mint       #0E5E58   #D7F0E6     6.34:1      7.61:1    6.74:1   PASS  ║
-║  chip-sky        #1A5BB0   #E1ECF7     5.54:1      6.63:1    5.88:1   PASS  ║
-║  chip-lilac      #5B1E8F   #EFE4F7     8.44:1     10.36:1    9.18:1   PASS  ║
-║  chip-peach      #7A3F12   #F8DCC2     6.28:1      8.24:1    7.31:1   PASS  ║
-║  chip-butter     #665007   #F4E9B8     6.33:1      7.73:1    6.86:1   PASS  ║
-║  chip-rose       #8C0F32   #F5DCE5     7.29:1      9.42:1    8.35:1   PASS  ║
-║  chip-neutral    #3A352B   #EDEAE1    10.13:1     12.18:1   10.80:1   PASS  ║
-║  alert-info      #1A5BB0   #E1ECF7     5.54:1      6.63:1    5.88:1   PASS  ║
-║  alert-warn      #665007   #F4E9B8     6.33:1      7.73:1    6.86:1   PASS  ║
-║  alert-critical  #8C0F32   #F5DCE5     7.29:1      9.42:1    8.35:1   PASS  ║
-║  selected        #2A2418   #EBE2D2    11.98:1     15.40:1   13.65:1   PASS  ║
+║  text-primary       #111827   #FFFFFF   17.56:1   15.60:1   PASS            ║
+║  text-secondary     #596577   #FFFFFF    5.83:1    5.18:1   PASS            ║
+║  text-muted         #5F6B7A   #FFFFFF    5.37:1    4.76:1   PASS (R3 fix)   ║
+║  chip-mint-fg       #0E5E58   #D7F0E6    7.61:1    6.74:1   PASS            ║
+║  chip-sky-fg        #1A5BB0   #E1ECF7    6.63:1    5.88:1   PASS            ║
+║  chip-lilac-fg      #5B1E8F   #EFE4F7   10.36:1    9.18:1   PASS            ║
+║  chip-peach-fg      #7A3F12   #F8DCC2    8.24:1    7.31:1   PASS            ║
+║  chip-butter-fg     #665007   #F4E9B8    7.73:1    6.86:1   PASS            ║
+║  chip-rose-fg       #8C0F32   #F5DCE5    9.42:1    8.35:1   PASS            ║
+║  chip-neutral-fg    #3A352B   #EDEAE1   12.18:1   10.80:1   PASS            ║
+║  alert-info         #1A5BB0   #E1ECF7    6.63:1    5.88:1   PASS            ║
+║  alert-warn         #665007   #F4E9B8    7.73:1    6.86:1   PASS            ║
+║  alert-critical     #8C0F32   #F5DCE5    9.42:1    8.35:1   PASS            ║
+║  selected-fg        #2A2418   #EBE2D2   15.33:1   13.60:1   PASS            ║
+║  sidebar-nav-active #5E4FD9   #F4F1EA        —    5.17:1   PASS            ║
+║  sidebar-nav-inact  #596577   #F4F1EA        —    5.18:1   PASS (R3 fix)   ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
-║  BG/White separation (light BGs on white card — intentionally low):          ║
-║    chip/mint:1.20  sky:1.20  lilac:1.23  peach:1.31  butter:1.22           ║
-║    rose:1.29       neutral:1.20  selected:1.29  — all non-failing (non-text)║
-║  BG/Cream separation (light BGs on cream canvas — intentionally low):        ║
-║    chip/mint:1.06  sky:1.06  lilac:1.09  peach:1.16  butter:1.08           ║
-║    rose:1.15       neutral:1.07  selected:1.14  — all non-failing (non-text)║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  VERDICT: All 11 FG/BG pairs pass WCAG AA (≥4.5:1). No failures.            ║
-║  FG readability against both #FFFFFF and #F4F1EA exceeds 4.5:1 everywhere.   ║
+║  VERDICT: All 16 FG/BG pairs pass WCAG AA (≥4.5:1). No failures.           ║
+║  R3 changes: text-muted #8D95A5→#5F6B7A, nav-item-color rgba→#596577       ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 */
 
@@ -93,7 +91,7 @@
   /* Text tokens */
   --text-primary: #111827;
   --text-secondary: #596577;
-  --text-muted: #8D95A5;
+  --text-muted: #5F6B7A;
   --text-on-dark: #FFFFFF;
 
   /* Border tokens */
@@ -137,7 +135,7 @@
   --action-secondary-bg: #FFFFFF;
   --action-secondary-fg: #111827;
   --action-secondary-border: #E5E7EB;
-  --focus-ring: #111827;
+  --focus-ring: #3B5CFF;
 }
 
 @theme inline {
@@ -208,7 +206,7 @@
   --color-action-secondary-bg: #FFFFFF;
   --color-action-secondary-fg: #111827;
   --color-action-secondary-border: #E5E7EB;
-  --color-focus-ring: #111827;
+  --color-focus-ring: #3B5CFF;
 
   /* ── Design v2: Radii ── */
   --radius-app: 28px;
@@ -752,7 +750,7 @@ summary:focus-visible,
   --sidebar-divider-color:   rgba(0, 0, 0, 0.07);
 
   /* ── Nav item states ── */
-  --nav-item-color:        rgba(0, 0, 0, 0.45);
+  --nav-item-color:        var(--text-secondary);
   --nav-item-hover-color:  rgba(0, 0, 0, 0.85);
   --nav-item-hover-bg:     rgba(0, 0, 0, 0.05);
   --nav-item-active-color: #5E4FD9;

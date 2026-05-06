@@ -713,8 +713,31 @@ function WeeklyCalendarGrid({
         onDragCancel={onDragCancel}
         onDragEnd={onDragEnd}
       >
-        {/* Desktop header */}
-        <div className="hidden border-b border-border-hairline lg:grid lg:grid-cols-7">
+        {/* Desktop header — lg (5 cols) */}
+        <div className="hidden border-b border-border-hairline lg:grid xl:hidden lg:grid-cols-5">
+          {DAY_LABELS.slice(0, 5).map((label, index) => {
+            const dateStr = weekDates[index]
+            const isToday = dateStr === getTodayLocalDate()
+            return (
+            <div
+              key={label}
+              className={`flex flex-col items-center gap-0.5 py-2 text-center text-xs ${index < 4 ? "border-r border-border-hairline" : ""}`}
+              style={
+                isToday
+                  ? { background: "var(--accent-selected-bg)" }
+                  : undefined
+              }
+            >
+              <span className={`font-semibold ${isToday ? "text-[--accent-selected-fg]" : "text-text-secondary"}`}>{label}</span>
+              <span className={`text-[11px] ${isToday ? "text-[--accent-selected-fg]" : "text-text-muted"}`}>
+                {formatDayDateLabel(dateStr)}
+              </span>
+            </div>
+            )
+          })}
+        </div>
+        {/* Desktop header — xl+ (7 cols) */}
+        <div className="hidden border-b border-border-hairline xl:grid xl:grid-cols-7">
           {DAY_LABELS.map((label, index) => {
             const dateStr = weekDates[index]
             const isToday = dateStr === getTodayLocalDate()
@@ -774,8 +797,26 @@ function WeeklyCalendarGrid({
           })}
         </div>
 
-        {/* Desktop: full 7-day grid */}
-        <div className="hidden min-h-0 flex-1 lg:grid lg:grid-cols-7">
+        {/* Desktop: 5-day grid (lg) */}
+        <div className="hidden min-h-0 flex-1 lg:grid xl:hidden lg:grid-cols-5">
+          {[0, 1, 2, 3, 4].map((day) => (
+            <DayColumn
+              key={day}
+              day={day}
+              events={eventsByDay[day]}
+              eventElementMapRef={eventElementMapRef}
+              isLast={day === 4}
+              busyTaskIds={busyTaskIds}
+              onQuickAdd={onQuickAdd}
+              onEditEvent={onEditEvent}
+              onDeleteEvent={onDeleteEvent}
+              onToggleComplete={onToggleComplete}
+            />
+          ))}
+        </div>
+
+        {/* Desktop: full 7-day grid (xl+) */}
+        <div className="hidden min-h-0 flex-1 xl:grid xl:grid-cols-7">
           {DAY_LABELS.map((_, day) => (
             <DayColumn
               key={day}

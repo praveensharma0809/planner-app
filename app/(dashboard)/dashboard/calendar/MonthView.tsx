@@ -495,7 +495,7 @@ export function MonthView({
                           </div>
                         )
                       })}
-                      {/* Event 2 — desktop only (lg+) */}
+                      {/* Event 2 — desktop (lg+) */}
                       {[1].map((idx) => {
                         const task = dayTasks[idx]
                         if (!task) return null
@@ -516,16 +516,64 @@ export function MonthView({
                           </div>
                         )
                       })}
-                      {/* Overflow count — tablet (md–lg) shows +N after 1 event */}
+                      {/* Event 3 — xl+ only */}
+                      {[2].map((idx) => {
+                        const task = dayTasks[idx]
+                        if (!task) return null
+                        const isDone = task.completed
+                        const color = getColor(task.subject_id)
+                        return (
+                          <div
+                            key={task.id}
+                            className="hidden xl:block truncate rounded-[6px] px-1.5 py-0.5 text-[10px] font-medium leading-tight"
+                            style={{
+                              background: isDone ? "transparent" : color.bg,
+                              color: isDone ? "var(--text-muted)" : color.text,
+                              textDecoration: isDone ? "line-through" : "none",
+                              opacity: isDone ? 0.5 : 1,
+                            }}
+                          >
+                            {task.title}
+                          </div>
+                        )
+                      })}
+                      {/* Event 4 — xl+ only */}
+                      {[3].map((idx) => {
+                        const task = dayTasks[idx]
+                        if (!task) return null
+                        const isDone = task.completed
+                        const color = getColor(task.subject_id)
+                        return (
+                          <div
+                            key={task.id}
+                            className="hidden xl:block truncate rounded-[6px] px-1.5 py-0.5 text-[10px] font-medium leading-tight"
+                            style={{
+                              background: isDone ? "transparent" : color.bg,
+                              color: isDone ? "var(--text-muted)" : color.text,
+                              textDecoration: isDone ? "line-through" : "none",
+                              opacity: isDone ? 0.5 : 1,
+                            }}
+                          >
+                            {task.title}
+                          </div>
+                        )
+                      })}
+                      {/* Overflow count — tablet (<lg) shows +N after 1 event */}
                       {dayTasks.length > 1 && (
                         <p className="shrink-0 pl-1.5 text-[10px] font-medium lg:hidden" style={{ color: "var(--text-muted)" }}>
                           +{dayTasks.length - 1} more
                         </p>
                       )}
-                      {/* Overflow count — desktop (lg+) shows +N after 2 events */}
+                      {/* Overflow count — lg (1024–1279) shows +N after 2 events */}
                       {dayTasks.length > 2 && (
-                        <p className="shrink-0 pl-1.5 text-[10px] font-medium hidden lg:block" style={{ color: "var(--text-muted)" }}>
+                        <p className="shrink-0 pl-1.5 text-[10px] font-medium hidden lg:block xl:hidden" style={{ color: "var(--text-muted)" }}>
                           +{dayTasks.length - 2} more
+                        </p>
+                      )}
+                      {/* Overflow count — xl+ (≥1280) shows +N after 4 events */}
+                      {dayTasks.length > 4 && (
+                        <p className="shrink-0 pl-1.5 text-[10px] font-medium hidden xl:block" style={{ color: "var(--text-muted)" }}>
+                          +{dayTasks.length - 4} more
                         </p>
                       )}
                     </div>
