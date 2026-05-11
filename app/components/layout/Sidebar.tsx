@@ -462,7 +462,7 @@ export function Sidebar({ className, style }: { className?: string; style?: Reac
       <div className="sidebar-header">
         <Link
           href="/dashboard"
-          className="sidebar-logo group"
+          className={`sidebar-logo group ${isCollapsed ? "mx-auto flex-none" : ""}`}
           aria-label="PrepVeda home"
           onClick={closeMobile}
         >
@@ -476,7 +476,7 @@ export function Sidebar({ className, style }: { className?: string; style?: Reac
 
         {/* F3.2: Two-button controls — pin lock + collapse chevron */}
         <div className="flex items-center gap-0.5 flex-shrink-0">
-          {/* Manual collapse toggle — only visible when locked-open */}
+          {/* Manual collapse toggle — only visible when locked-open (expanded) */}
           {isPinned && (
             <button
               onClick={handleManualCollapse}
@@ -487,7 +487,7 @@ export function Sidebar({ className, style }: { className?: string; style?: Reac
             </button>
           )}
 
-          {/* Lock/unlock pin — toggles locked-open ↔ unlocked-collapsed */}
+          {/* Lock/unlock pin — always visible */}
           <button
             onClick={handlePinToggle}
             aria-label={isPinned ? "Unpin sidebar" : "Pin sidebar"}
