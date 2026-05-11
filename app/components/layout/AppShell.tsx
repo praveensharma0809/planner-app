@@ -153,19 +153,19 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       if (mod && e.key === "b") {
         e.preventDefault()
-        setModeState((prev) =>
-          prev === "locked-open" ? "unlocked-collapsed" : "locked-open"
+        setMode(
+          mode === "locked-open" ? "unlocked-collapsed" : "locked-open"
         )
       }
 
       if (e.key === "Escape" && mode === "unlocked-hover") {
-        setModeState("unlocked-collapsed")
+        setMode("unlocked-collapsed")
       }
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [mode])
+  }, [mode, setMode])
 
   // Sidebar overlays content when in unlocked-hover mode
   const sidebarOverlaying = mode === "unlocked-hover"
