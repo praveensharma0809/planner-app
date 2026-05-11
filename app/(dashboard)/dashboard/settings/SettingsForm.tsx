@@ -118,7 +118,7 @@ export function SettingsForm({ profile }: Props) {
           variant="primary"
           size="lg"
           disabled={saving || !isDirty}
-          className="min-h-[44px]"
+          className="min-h-[44px] !bg-black"
         >
           {saving ? (
             <>
