@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react"
+import { useId, useMemo, type ReactNode } from "react"
 import {
   DndContext,
   closestCenter,
@@ -231,6 +231,7 @@ export function NavigationColumn({
   onToggleSort,
   sortEnabled = false,
 }: NavigationColumnProps) {
+  const dndId = useId()
   const canReorder = reorderEnabled && Boolean(onReorder) && items.length > 1
   const itemIds = useMemo(() => items.map((item) => item.id), [items])
 
@@ -299,6 +300,7 @@ export function NavigationColumn({
 
         {canReorder ? (
           <DndContext
+            id={dndId}
             sensors={localSensors}
             collisionDetection={closestCenter}
             onDragEnd={handleColumnDragEnd}

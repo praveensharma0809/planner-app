@@ -1,4 +1,4 @@
-import { memo, useCallback, type CSSProperties, type ReactNode } from "react"
+import { memo, useCallback, useId, type CSSProperties, type ReactNode } from "react"
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core"
 import type { useSensors } from "@dnd-kit/core"
 import { arrayMove, rectSortingStrategy, SortableContext } from "@dnd-kit/sortable"
@@ -172,6 +172,7 @@ const NavigationColumn = memo(function NavigationColumn({
   onToggleSort,
   sortEnabled = false,
 }: NavigationColumnProps) {
+  const dndId = useId()
   const handleDragEnd = (event: DragEndEvent) => {
     if (!onReorder) return
     const { active, over } = event
@@ -246,6 +247,7 @@ const NavigationColumn = memo(function NavigationColumn({
 
         {items.length > 0 && onReorder && sensors ? (
           <DndContext
+            id={dndId}
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}

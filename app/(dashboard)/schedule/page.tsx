@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -644,6 +645,7 @@ function WeeklyCalendarGrid({
   onDeleteEvent,
   onToggleComplete,
 }: WeeklyCalendarGridProps) {
+  const dndId = useId()
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -707,6 +709,7 @@ function WeeklyCalendarGrid({
       className="flex min-h-0 flex-1 flex-col overflow-hidden surface-card"
     >
       <DndContext
+        id={dndId}
         collisionDetection={collisionDetectionStrategy}
         sensors={sensors}
         onDragStart={onDragStart}
@@ -768,7 +771,7 @@ function WeeklyCalendarGrid({
             return (
             <div
               key={day}
-              className={`surface-card rounded-xl flex flex-col h-[320px] md:h-[360px] ${isToday ? "border-[--accent-selected-bar]" : ""}`}
+              className={`surface-card rounded-xl flex flex-col min-h-0 flex-1 ${isToday ? "border-[--accent-selected-bar]" : ""}`}
               style={isToday ? { borderLeftWidth: "3px" } : undefined}
             >
               <div className={`flex items-center gap-2 px-3 pt-3 pb-2 border-b border-border-hairline`}

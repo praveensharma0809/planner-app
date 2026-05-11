@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, useTransition, type FormEvent } from "react"
+import { useCallback, useEffect, useId, useMemo, useState, useTransition, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core"
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable"
@@ -108,6 +108,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
   const { addToast } = useToast()
   const { mode } = useSidebar()
   const sidebarExpanded = mode === "locked-open"
+  const tasksDndId = useId()
   const [, startBackgroundRefresh] = useTransition()
   const refreshInBackground = useCallback(() => {
     startBackgroundRefresh(() => {
@@ -1062,7 +1063,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
       />
 
       <div
-        className="flex min-h-0 flex-1 flex-col overflow-hidden surface-card p-3 sm:p-4"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4"
       >
         {displaySubjects.length === 0 && (
           <div className="mb-3 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border-hairline bg-surface-card-muted px-6 py-10 text-center">
@@ -1109,7 +1110,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
            <div className="flex h-full min-h-0 flex-1 flex-col gap-[var(--gap-card)] md:gap-[var(--gap-card-md)] md:flex-row overflow-hidden">
             {/* Subjects pane */}
-            <div className={`${mobilePane === "subjects" ? "flex" : "hidden"} md:flex md:w-[40%] lg:w-[200px] flex-col min-h-0 overflow-y-auto`}>
+            <div className={`${mobilePane === "subjects" ? "flex" : "hidden"} md:flex md:w-[40%] lg:w-[200px] flex-col min-h-0 overflow-y-auto surface-card shadow-[var(--shadow-card-soft)]`}>
               <NavigationColumn
                 title="Subjects"
                 items={subjectColumnItems}
@@ -1127,7 +1128,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                   <>
                     <Button
                       variant="primary"
-                      size="md"
+                      size="sm"
                       className="w-full justify-center min-h-[44px] md:min-h-0"
                       onClick={openCreateSubject}
                       disabled={showArchived}
@@ -1159,7 +1160,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
             </div>
 
             {/* Chapters pane */}
-            <div className={`${mobilePane === "chapters" ? "flex" : "hidden"} md:flex md:w-[40%] lg:w-[200px] flex-col min-h-0 overflow-y-auto`}>
+            <div className={`${mobilePane === "chapters" ? "flex" : "hidden"} md:flex md:w-[40%] lg:w-[200px] flex-col min-h-0 overflow-y-auto surface-card shadow-[var(--shadow-card-soft)]`}>
               <NavigationColumn
                 title="Chapters"
                 items={chapterColumnItems}
@@ -1172,7 +1173,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                   <>
                     <Button
                       variant="primary"
-                      size="md"
+                      size="sm"
                       className="w-full justify-center min-h-[44px] md:min-h-0"
                       onClick={openCreateChapter}
                       disabled={!selectedSubject || showArchived || showArchivedChapters}
@@ -1209,7 +1210,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
             {/* Tasks pane */}
             <div className={`${mobilePane === "tasks" ? "flex" : "hidden"} md:flex flex-1 flex-col min-h-0`}>
               <section
-                className="h-full flex-1 surface-card px-4 py-4 sm:px-5 sm:py-5 overflow-hidden flex flex-col"
+                className="h-full flex-1 surface-card shadow-[var(--shadow-card-soft)] px-4 py-4 sm:px-5 sm:py-5 overflow-hidden flex flex-col"
               >
                 {selectedSubject && selectedChapter ? (
                   <div className="flex h-full min-h-0 flex-col">
@@ -1305,6 +1306,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
 
                         {visibleTasks.length > 0 && !manageMode && (
                           <DndContext
+                            id={tasksDndId}
                             sensors={sensors}
                             collisionDetection={closestCenter}
                             onDragEnd={handleTasksDragEnd}
@@ -1403,7 +1405,7 @@ export function SubjectsDataTable({ initialSubjects, initialTasksByChapter }: Pr
                     </div>
                   </div>
                 ) : (
-                  <div className="flex min-h-[180px] flex-col items-center justify-center rounded-xl border border-dashed border-border-hairline text-center">
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-border-hairline text-center">
                     <svg className="mb-2 h-10 w-10 text-text-muted" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                       <path d="M4 6h16M4 10h16M4 14h16M4 18h16" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>

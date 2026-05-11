@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react"
 import {
   DndContext,
   closestCenter,
@@ -200,6 +200,7 @@ export function SubjectsDataTable({
   const { addToast } = useToast()
   const { mode } = useSidebar()
   const sidebarExpanded = mode === "locked-open"
+  const tasksDndId = useId()
   const [subjects, setSubjects] = useState<SubjectNavItem[]>(initialSubjects)
   const [tasksByChapter, setTasksByChapter] =
     useState<Record<string, TopicTaskItem[]>>(initialTasksByChapter)
@@ -2518,6 +2519,7 @@ export function SubjectsDataTable({
 
                         {visibleTasks.length > 0 && !isManageOpen && (
                           <DndContext
+                            id={tasksDndId}
                             sensors={sensors}
                             collisionDetection={closestCenter}
                             onDragEnd={handleTasksDragEnd}
@@ -2526,18 +2528,6 @@ export function SubjectsDataTable({
                               items={visibleTasks.map((task) => task.id)}
                               strategy={rectSortingStrategy}
                             >
-                              <div className="mb-1 grid grid-cols-1 gap-1.5 xl:grid-cols-2">
-                                <div className="flex justify-end pr-[76px]">
-                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                                    Duration
-                                  </span>
-                                </div>
-                                <div className="hidden xl:flex justify-end pr-[76px]">
-                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                                    Duration
-                                  </span>
-                                </div>
-                              </div>
                               <div className="mb-1 grid grid-cols-1 gap-1.5 xl:grid-cols-2">
                                 <div className="flex justify-end pr-[76px]">
                                   <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
