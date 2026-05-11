@@ -84,8 +84,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // Sidebar always initialises locked-open on desktop.
   // User may toggle via pin/collapse buttons; that choice is persisted
-  // to localStorage but NOT restored on remount — the default is
-  // hardcoded so every route sees the same initial state.
+  // to localStorage for potential future restore, but is intentionally
+  // NOT read on mount — hardcoded initial state ensures every fresh page
+  // load and every route sees the same locked-open sidebar. Restoring
+  // from localStorage here caused per-route drift (R6.1-fix).
 
   // setMode: persists locked-open / unlocked-collapsed to localStorage;
   // unlocked-hover is transient and never persisted.
