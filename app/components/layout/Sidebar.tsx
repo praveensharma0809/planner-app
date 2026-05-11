@@ -279,7 +279,7 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
   const initial = displayName ? displayName.trim()[0]?.toUpperCase() ?? "·" : "·"
 
   return (
-    <div className="sidebar-footer hidden md:flex">
+    <div className="sidebar-footer hidden lg:flex">
       <div className="flex items-center gap-3 px-3 py-3 min-w-0">
         <div className="sidebar-avatar shrink-0" aria-hidden="true">
           {initial}
