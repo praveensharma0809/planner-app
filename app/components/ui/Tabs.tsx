@@ -42,7 +42,7 @@ export function Tabs({ tabs, defaultTab, className = "", onTabChange }: TabsProp
   }, [active, updateIndicator])
 
   return (
-    <div className={`ui-tabs-root ${className}`}>
+    <div className={`ui-tabs-root min-h-0 flex-1 ${className}`}>
       <div className="ui-tabs-list relative" role="tablist" ref={listRef}>
         <div
           className="absolute top-1 bottom-1 rounded-full bg-surface-card shadow-[var(--shadow-card)] transition-all duration-200 ease-out"
