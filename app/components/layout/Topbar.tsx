@@ -316,22 +316,20 @@ function BreadcrumbNav({ breadcrumb }: { breadcrumb: Array<{ label: string; href
 
 function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
   return (
-    <div className="flex min-h-0 items-center gap-2 px-2 py-0.5 pr-4" aria-label="Schedule controls">
-      {/* Navigation — segmented pill */}
-      <div
-        className="flex shrink-0 items-center gap-0.5 rounded-full p-1"
-        style={{ background: "var(--canvas)" }}
-        aria-label="Week and month navigation"
-      >
-        <NavPill onClick={state.onPrevMonth} aria-label="Previous month">Month-</NavPill>
-        <NavPill onClick={state.onPrevWeek} aria-label="Previous week">Week-</NavPill>
-        <NavPill onClick={state.onCurrentWeek} aria-label="Current week" disabled={state.isCurrentWeek}>Current</NavPill>
-        <NavPill onClick={state.onNextWeek} aria-label="Next week">Week+</NavPill>
-        <NavPill onClick={state.onNextMonth} aria-label="Next month">Month+</NavPill>
-      </div>
+    <div className="flex flex-col md:flex-row min-h-0 gap-2 px-2 py-0.5 pr-4" aria-label="Schedule controls">
+      {/* Row 1: Navigation + Subject chips (scroll together on mobile) */}
+      <div className="schedule-topbar-chip-scroll" aria-label="Week and month navigation and subject filters">
+        <div
+          className="flex shrink-0 items-center gap-0.5 rounded-full p-1"
+          style={{ background: "var(--canvas)" }}
+        >
+          <NavPill onClick={state.onPrevMonth} aria-label="Previous month">Month-</NavPill>
+          <NavPill onClick={state.onPrevWeek} aria-label="Previous week">Week-</NavPill>
+          <NavPill onClick={state.onCurrentWeek} aria-label="Current week" disabled={state.isCurrentWeek}>Current</NavPill>
+          <NavPill onClick={state.onNextWeek} aria-label="Next week">Week+</NavPill>
+          <NavPill onClick={state.onNextMonth} aria-label="Next month">Month+</NavPill>
+        </div>
 
-      {/* Subject chips */}
-      <div className="flex min-w-0 items-center gap-1.5 flex-wrap" aria-label="Subject filters">
         {state.chips.map((chip) => {
           const isActive = chip.id === state.activeChipId
           return (
@@ -348,8 +346,8 @@ function ScheduleTopbarControls({ state }: { state: ScheduleTopbarState }) {
         })}
       </div>
 
-      {/* Actions */}
-      <div className="ml-auto flex shrink-0 items-center gap-1.5" aria-label="Schedule actions">
+      {/* Row 2: Actions (second row below md, inline above md) */}
+      <div className="flex shrink-0 items-center gap-1.5 md:ml-auto" aria-label="Schedule actions">
         <select
           value={state.statusFilter}
           onChange={(event) => state.onStatusFilterChange(event.target.value as ScheduleTopbarState["statusFilter"])}
