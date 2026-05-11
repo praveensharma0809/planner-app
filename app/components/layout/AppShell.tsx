@@ -82,17 +82,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<SidebarMode>("locked-open")
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Restore persisted mode from localStorage on mount
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("sh-sidebar-mode")
-      if (stored === "unlocked-collapsed") {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setModeState("unlocked-collapsed")
-      }
-      // Default remains "locked-open" if nothing stored or invalid value
-    }
-  }, [])
+  // Sidebar always initialises locked-open on desktop.
+  // User may toggle via pin/collapse buttons; that choice is persisted
+  // to localStorage but NOT restored on remount — the default is
+  // hardcoded so every route sees the same initial state.
 
   // setMode: persists locked-open / unlocked-collapsed to localStorage;
   // unlocked-hover is transient and never persisted.
