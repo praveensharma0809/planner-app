@@ -16,7 +16,7 @@ export function PageTransition({ children }: { children: ReactNode }) {
   return (
     <div
       key={pathname}
-      className="motion-safe:animate-[page-enter_300ms_ease-out_both]"
+      className="motion-safe:animate-[page-enter_300ms_ease-out_both] h-full"
     >
       {children}
     </div>
