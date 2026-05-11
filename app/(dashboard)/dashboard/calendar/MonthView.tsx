@@ -328,7 +328,7 @@ export function MonthView({
               />
 
               <div
-                className="flex items-center gap-1 rounded-full px-3 py-1.5"
+                className="hidden md:flex items-center gap-1 rounded-full px-3 py-1.5"
                 style={{ background: "var(--canvas)", border: "1px solid var(--border-hairline)" }}
               >
                 <Link
@@ -587,11 +587,7 @@ export function MonthView({
 
       {/* Agenda list (<lg) */}
       <div className="lg:hidden flex flex-col gap-4 overflow-y-auto flex-1 min-h-0 px-1 pb-2">
-        {/* Month label for mobile context */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium" style={{ color: "var(--text-primary)" }}>
-            {monthLabel}
-          </h2>
+        <div className="flex items-center justify-end">
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>
             {taskRows.length} task{taskRows.length !== 1 ? "s" : ""}
           </span>
