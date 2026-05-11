@@ -179,8 +179,9 @@ function NavItemRow({
   collapsed: boolean
   onClick?: () => void
 }) {
+  const roundedClass = collapsed && active ? "rounded-r-lg" : "rounded-full"
   const baseClass =
-    "group relative flex items-center gap-3 w-full px-3 py-2.5 rounded-full text-[13.5px] font-medium transition-all duration-150 select-none"
+    `group relative flex items-center gap-3 w-full px-3 py-2.5 ${roundedClass} text-[13.5px] font-medium transition-all duration-150 select-none`
 
   const inactiveClass = "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
   const activeClass = "text-[--accent-selected-fg] bg-[--accent-selected-bg] border-l-[3px] border-l-[--accent-selected-bar] font-semibold"
@@ -278,7 +279,7 @@ function SidebarFooter({ collapsed }: { collapsed: boolean }) {
   const initial = displayName ? displayName.trim()[0]?.toUpperCase() ?? "·" : "·"
 
   return (
-    <div className="sidebar-footer">
+    <div className="sidebar-footer hidden md:flex">
       <div className="flex items-center gap-3 px-3 py-3 min-w-0">
         <div className="sidebar-avatar shrink-0" aria-hidden="true">
           {initial}
