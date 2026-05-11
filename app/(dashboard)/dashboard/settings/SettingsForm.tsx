@@ -25,11 +25,6 @@ export function SettingsForm({ profile }: Props) {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
-  const isDirty =
-    fullName !== savedValues.fullName
-    || email !== savedValues.email
-    || phoneNumber !== savedValues.phoneNumber
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -117,8 +112,8 @@ export function SettingsForm({ profile }: Props) {
           type="submit"
           variant="primary"
           size="lg"
-          disabled={saving || !isDirty}
-          className="min-h-[44px] !bg-black"
+          disabled={saving}
+          className="min-h-[44px]"
         >
           {saving ? (
             <>
